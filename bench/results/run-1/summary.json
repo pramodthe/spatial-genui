@@ -1,0 +1,113 @@
+{
+  "summary": [
+    {
+      "model": "claude-sonnet-5-5",
+      "family": "Anthropic",
+      "n": 24,
+      "apiErrors": 0,
+      "passAt1": 1,
+      "successWithRepair": 1,
+      "failedScenes": 0,
+      "meanAttempts": 1,
+      "mountedClean": 1,
+      "grabWorks": 0.8235294117647058,
+      "pressWorks": 1,
+      "panelButtonsWork": null,
+      "qualityPrimary": 4.18,
+      "quality1to5": 4.33,
+      "qualityOtherJudges": 4.53,
+      "qualityOtherJudgesAdjusted": 4.32,
+      "medianFirstAttemptS": 39.7,
+      "medianTotalS": 39.8,
+      "meanOutputTokens": 6946,
+      "costUSD": 1.79,
+      "costPerSuccessUSD": 0.0746,
+      "meanCrowdedGrabPairs": 0.13
+    },
+    {
+      "model": "muse-spark-1.3",
+      "family": "Meta",
+      "n": 24,
+      "apiErrors": 0,
+      "passAt1": 1,
+      "successWithRepair": 1,
+      "failedScenes": 0,
+      "meanAttempts": 1,
+      "mountedClean": 1,
+      "grabWorks": 0.9583333333333334,
+      "pressWorks": 1,
+      "panelButtonsWork": null,
+      "qualityPrimary": 4.13,
+      "quality1to5": 4.25,
+      "qualityOtherJudges": 4.01,
+      "qualityOtherJudgesAdjusted": 4.25,
+      "medianFirstAttemptS": 98.2,
+      "medianTotalS": 98.2,
+      "meanOutputTokens": 11400,
+      "costUSD": null,
+      "costPerSuccessUSD": null,
+      "meanCrowdedGrabPairs": 0.54
+    },
+    {
+      "model": "deepseek-v4.1-flash",
+      "family": "DeepSeek",
+      "n": 24,
+      "apiErrors": 0,
+      "passAt1": 0.875,
+      "successWithRepair": 0.9583333333333334,
+      "failedScenes": 1,
+      "meanAttempts": 1.08,
+      "mountedClean": 0.9583333333333334,
+      "grabWorks": 1,
+      "pressWorks": 1,
+      "panelButtonsWork": null,
+      "qualityPrimary": 3.84,
+      "quality1to5": 3.96,
+      "qualityOtherJudges": 3.95,
+      "qualityOtherJudgesAdjusted": 3.92,
+      "medianFirstAttemptS": 46.7,
+      "medianTotalS": 46.7,
+      "meanOutputTokens": 16934,
+      "costUSD": 0.251,
+      "costPerSuccessUSD": 0.0109,
+      "meanCrowdedGrabPairs": 0.04
+    }
+  ],
+  "taxonomy": [
+    {
+      "model": "claude-sonnet-5-5",
+      "syntax": 0,
+      "truncated": 0
+    },
+    {
+      "model": "muse-spark-1.3",
+      "syntax": 0,
+      "truncated": 0
+    },
+    {
+      "model": "deepseek-v4.1-flash",
+      "syntax": 1,
+      "truncated": 1
+    }
+  ],
+  "byTier": [
+    {
+      "model": "claude-sonnet-5-5",
+      "T1": "8/8",
+      "T2": "8/8",
+      "T3": "8/8"
+    },
+    {
+      "model": "muse-spark-1.3",
+      "T1": "8/8",
+      "T2": "8/8",
+      "T3": "8/8"
+    },
+    {
+      "model": "deepseek-v4.1-flash",
+      "T1": "8/8",
+      "T2": "7/8",
+      "T3": "8/8"
+    }
+  ]
+}

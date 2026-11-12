@@ -1,0 +1,41 @@
+{
+  "summary": [
+    {
+      "model": "kimi-k3.1-pro-fw",
+      "family": "Moonshot",
+      "n": 24,
+      "apiErrors": 0,
+      "passAt1": 1,
+      "successWithRepair": 1,
+      "failedScenes": 0,
+      "meanAttempts": 1,
+      "mountedClean": 1,
+      "grabWorks": 0.8333333333333334,
+      "pressWorks": 1,
+      "panelButtonsWork": null,
+      "qualityPrimary": 4.05,
+      "quality1to5": null,
+      "qualityOtherJudges": null,
+      "qualityOtherJudgesAdjusted": null,
+      "medianFirstAttemptS": 148.8,
+      "medianTotalS": 148.9,
+      "meanOutputTokens": 9378,
+      "costUSD": 2.337,
+      "costPerSuccessUSD": 0.0974,
+      "meanCrowdedGrabPairs": 0.63
+    }
+  ],
+  "taxonomy": [
+    {
+      "model": "kimi-k3.1-pro-fw"
+    }
+  ],
+  "byTier": [
+    {
+      "model": "kimi-k3.1-pro-fw",
+      "T1": "8/8",
+      "T2": "8/8",
+      "T3": "8/8"
+    }
+  ]
+}

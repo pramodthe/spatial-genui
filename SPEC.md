@@ -210,7 +210,7 @@ _Scoring rule (since Nov 12, after code review): a scene counts as a success onl
 |---|---|---|---|---|---|---|---|---|
 | Sonnet 5.5 | 100% | 100% | 24/24 | 14/17 | **4.18** | **4.32** | **40 s** | $0.075 |
 | Muse Spark 1.3 | 100% | 100% | 24/24 | **23/24** | 4.13 | 4.25 | 98 s | unknown (no price listed) |
-| DeepSeek V4.1 Flash | 88% | 96% | 23/24 | 14/14 | 3.84 | 3.98 | 47 s | **$0.010** |
+| DeepSeek V4.1 Flash | 88% | 96% | 23/24 | 14/14 | 3.84 | 3.92 | 47 s | **$0.010** |
 
 The main quality score comes from **Claude Opus 5.5 as an independent judge** (not a contestant, though it's made by Anthropic like Sonnet). It agrees with all three contestant judges on the order Sonnet ≥ Muse > DeepSeek. Sonnet and Muse are effectively tied (0.05 apart; with Opus, Sonnet had the best version of 12 of 23 requests and Muse 11). By criterion, **clarity is every model's weakest score (3.3–3.5 / 5)**: overlapping or crowded panels. That's the clearest target for improving the system prompt and host layout.
 

@@ -1,0 +1,41 @@
+{
+  "summary": [
+    {
+      "model": "muse-ember-1.0-max",
+      "family": "Meta",
+      "n": 24,
+      "apiErrors": 0,
+      "passAt1": 1,
+      "successWithRepair": 1,
+      "failedScenes": 0,
+      "meanAttempts": 1,
+      "mountedClean": 1,
+      "grabWorks": 1,
+      "pressWorks": 1,
+      "panelButtonsWork": 0.86,
+      "qualityPrimary": 4.3,
+      "quality1to5": null,
+      "qualityOtherJudges": null,
+      "qualityOtherJudgesAdjusted": null,
+      "medianFirstAttemptS": 27.6,
+      "medianTotalS": 27.6,
+      "meanOutputTokens": 17063,
+      "costUSD": null,
+      "costPerSuccessUSD": null,
+      "meanCrowdedGrabPairs": 0.29
+    }
+  ],
+  "taxonomy": [
+    {
+      "model": "muse-ember-1.0-max"
+    }
+  ],
+  "byTier": [
+    {
+      "model": "muse-ember-1.0-max",
+      "T1": "8/8",
+      "T2": "8/8",
+      "T3": "8/8"
+    }
+  ]
+}

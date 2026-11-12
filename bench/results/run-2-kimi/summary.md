@@ -2,11 +2,11 @@
 
 Source: `bench/results/run-2-kimi` · 24 generations · 24 of 24 mounted in the emulator · 24 judge scores
 
-Success and pass@1 count a scene only if it passed the checks **and** ran in the emulator without errors. Failed scenes score 1/5 in every quality column, so each model's average covers all its scenes.
+Success and pass@1 count a scene only if it passed the checks **and** ran in the emulator without errors. Quality is averaged per scene: a failed scene counts once as 1/5, a working scene as the mean of its judges, so each model's average covers all its scenes.
 
-| Model | n | pass@1 | Success (≤2 repairs) | Failed scenes | Mounted clean | Grab works | Press works | Quality: claude-opus-5-5 (1–5) | Panel quality (all) | Panel, other-provider judges | Panel, adjusted for strictness | Median first try | Median total | Output tokens | Cost | Cost / success |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| kimi-k3.1-pro-fw | 24 | 100% | 100% | 0 | 100% | 83% | 100% | 4.05 | – | – | – | 148.8 s | 148.9 s | 9378 | $2.337 | $0.0974 |
+| Model | n | pass@1 | Success (≤2 repairs) | Failed scenes | Mounted clean | Grab works | Press works | Panel buttons work | Quality: claude-opus-5-5 (1–5) | Panel quality (all) | Panel, other-provider judges | Panel, adjusted for strictness | Median first try | Median total | Output tokens | Cost | Cost / success |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| kimi-k3.1-pro-fw | 24 | 100% | 100% | 0 | 100% | 83% | 100% | – | 4.05 | – | – | – | 148.8 s | 148.9 s | 9378 | $2.337 | $0.0974 |
 
 ## Mean score each judge gave each model (rows = judge; judges grade on different curves)
 

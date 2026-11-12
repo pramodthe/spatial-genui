@@ -16,7 +16,8 @@ export const config = {
   anthropicWorkspaceId: process.env.ANTHROPIC_WORKSPACE_ID || undefined,
   port: Number(process.env.GENUI_PORT || 8787),
   maxRepairs: 2,
-  // Thinking counts against this budget on reasoning models; 16k truncated 3 of 16 attempts.
-  maxCompletionTokens: 32000,
+  // Thinking counts against this budget on reasoning models (16k truncated 3 of 16 attempts; Ember at
+  // max reasoning needed ~40k on hard requests). Same limit for every model keeps the benchmark fair.
+  maxCompletionTokens: 64000,
   runsDir: fileURLToPath(new URL('../runs/', import.meta.url)),
 };

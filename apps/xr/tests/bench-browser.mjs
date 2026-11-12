@@ -63,9 +63,12 @@ export default async function run({ frame, page }) {
     }, { code: row.code, head: HEAD });
 
     // Screenshot of the app view (emulator chrome included, our overlay hidden).
-    const element = target === page ? null : await target.frameElement();
+    // GENUI_KEEP_SHOTS=1 re-probes a run without replacing the screenshots its judge scores refer to.
+    const keepShot = process.env.GENUI_KEEP_SHOTS && existsSync(join(dir, shot));
+    const element = keepShot || target === page ? null : await target.frameElement();
     // CSS-pixel scale keeps images ~1200 px wide: enough for the judge, a quarter of the tokens.
-    if (element) await element.screenshot({ path: join(dir, shot), scale: 'css' });
+    if (keepShot) { /* keep the judged screenshot */ }
+    else if (element) await element.screenshot({ path: join(dir, shot), scale: 'css' });
     else await page.screenshot({ path: join(dir, shot), scale: 'css' });
 
     probes = await target.evaluate(async () => {
@@ -73,7 +76,7 @@ export default async function run({ frame, page }) {
       const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
       const hand = 'hand-right';
       const info = window.genui.inspect();
-      const result = { grab: { tested: false }, press: { tested: false } };
+      const result = { grab: { tested: false }, press: { tested: false }, panelPress: { tested: 0, worked: 0, buttons: [] } };
       if (!info) return result;
       const at = (c) => ({ x: c[0], y: c[1], z: c[2] });
       const aimFromNear = async (c) => {
@@ -81,22 +84,28 @@ export default async function run({ frame, page }) {
         await r.dispatch('look_at', { device: hand, target: at(c) });
       };
 
-      // Grab: prefer a touch-grab object (near pinch); ray-grab objects are aimed at and pinched.
-      const gIndex = Math.max(0, info.grabbables.findIndex((g) => g.mode === 'touch'));
-      const g = info.grabbables[gIndex];
-      if (g) {
-        if (g.mode === 'touch') {
-          await r.dispatch('run_sequence', { device: hand, steps: [{ anchor: 'grasp', position: at(g.center) }, { pinch: 1, duration: 0.3 }] });
-        } else {
-          await aimFromNear(g.center);
-          await r.dispatch('run_sequence', { device: hand, steps: [{ pinch: 1, duration: 0.3 }] });
-        }
-        await sleep(150);
-        result.grab = { tested: true, mode: g.mode, name: g.name, held: window.genui.inspect().grabbables[gIndex]?.held ?? false };
-        await r.dispatch('run_sequence', { device: hand, steps: [{ pinch: 0, duration: 0.15 }] });
-        await r.dispatch('set_transform', { device: hand, position: { x: 0.35, y: 0.9, z: 0.1 } });
+      // Order matters: after a grab, the emulated hand's ray stops delivering clicks (the grab keeps
+      // the hand's pointer), so test panel buttons and 3D presses on the fresh scene and grab last.
+      // Panel buttons: complex UIs are driven by them (Next, Add to cart, Confirm). Point the hand ray
+      // at up to 3 different buttons from the user's side and pinch; success = the generated handler ran.
+      const head = window.IWER_DEVICE.position;
+      const tried = [];
+      for (const id of [...new Set(window.genui.inspect().panelButtons.map((b) => b.id))].slice(0, 3)) {
+        const b = window.genui.inspect().panelButtons.find((x) => x.id === id); // re-read: earlier presses may move things
+        if (!b) continue;
+        const c = b.center;
+        const d = [head.x - c[0], head.y - c[1], head.z - c[2]];
+        const len = Math.hypot(...d) || 1;
+        await r.dispatch('set_transform', { device: hand, position: { x: c[0] + (d[0] / len) * 0.3 + 0.05, y: c[1] + (d[1] / len) * 0.3 - 0.05, z: c[2] + (d[2] / len) * 0.3 } });
+        await r.dispatch('look_at', { device: hand, target: at(c) });
+        const calls = window.genui.inspect().handlerCalls;
+        await r.dispatch('select', { device: hand, duration: 0.2 });
+        await sleep(250);
+        // Size (cm) lets us tell tiny targets from blocked ones when a press fails.
+        tried.push({ id, worked: window.genui.inspect().handlerCalls > calls, sizeCm: b.size ? [Math.round(b.size[0] * 1000) / 10, Math.round(b.size[1] * 1000) / 10] : null });
       }
-
+      result.panelPress = { tested: tried.length, worked: tried.filter((t) => t.worked).length, buttons: tried };
+      await r.dispatch('set_transform', { device: hand, position: { x: 0.35, y: 0.9, z: 0.1 } });
       // Press: like a person would, first point the hand ray and pinch-select; if something else is
       // in the way, reach out and pinch the object itself. Success = a generated handler ran.
       const p = window.genui.inspect().pressables[0]; // re-read: the grab test may have moved things
@@ -118,6 +127,24 @@ export default async function run({ frame, page }) {
         result.press = { tested: true, name: p.name, fired: via !== null, via };
         await r.dispatch('set_transform', { device: hand, position: { x: 0.35, y: 0.9, z: 0.1 } });
       }
+
+      // Grab: prefer a touch-grab object (near pinch); ray-grab objects are aimed at and pinched.
+      const grabbables = window.genui.inspect().grabbables; // re-read: panel presses may have moved things
+      const gIndex = Math.max(0, grabbables.findIndex((g) => g.mode === 'touch'));
+      const g = grabbables[gIndex];
+      if (g) {
+        if (g.mode === 'touch') {
+          await r.dispatch('run_sequence', { device: hand, steps: [{ anchor: 'grasp', position: at(g.center) }, { pinch: 1, duration: 0.3 }] });
+        } else {
+          await aimFromNear(g.center);
+          await r.dispatch('run_sequence', { device: hand, steps: [{ pinch: 1, duration: 0.3 }] });
+        }
+        await sleep(150);
+        result.grab = { tested: true, mode: g.mode, name: g.name, held: window.genui.inspect().grabbables[gIndex]?.held ?? false };
+        await r.dispatch('run_sequence', { device: hand, steps: [{ pinch: 0, duration: 0.15 }] });
+        await r.dispatch('set_transform', { device: hand, position: { x: 0.35, y: 0.9, z: 0.1 } });
+      }
+
       window.genui.clear();
       return result;
     });

@@ -252,10 +252,44 @@ The main quality score comes from **Claude Opus 5.5 as an independent judge** (n
 | First try | 21/24 | 22/24 | **24/24** |
 | Median time | 27 s | 29 s | 28 s |
 
-In the emulator, run 3 had 24/24 clean mounts, 16/16 grabs and 17/17 presses. Data: [`run-3-ember-max`](bench/results/run-3-ember-max/gallery.md). All five models side by side: [`compare-all/gallery.md`](bench/results/compare-all/gallery.md). That page is **not like-for-like**: the run-1/run-2 models used the original system, which also cost them points. A fair final ranking needs them re-run with the improved system. Clarity's remaining issue is overlapping elements.
+In the emulator, run 3 had 24/24 clean mounts, 16/16 grabs and 17/17 presses. Data: [`run-3-ember-max`](bench/results/run-3-ember-max/gallery.md). The fair 5-model comparison on the improved system is run 4 below. Clarity's remaining issue is overlapping elements.
+
+**Run 4 (Nov 12): fair comparison, all five models on the improved system.** Sonnet, Muse Spark, DeepSeek and Kimi were re-run with the same system prompt, checks and 64k output limit as Ember's run 3 (verified identical), on the same 12 requests × 2, judged by Opus 5.5. The emulator stage now also presses up to 3 **panel buttons** per scene. Side by side: [`compare-fair/gallery.md`](bench/results/compare-fair/gallery.md).
+
+| Model (improved system) | Quality | Clarity | Hands-on | Panel buttons work | Median time | Cost / scene |
+|---|---|---|---|---|---|---|
+| Ember 1.0 max | **4.30** | 3.67 | **4.25** | 43/50 (86%) | **28 s** | – |
+| Kimi K3.1 Pro | **4.30** | 3.75 | 4.04 | 32/36 (89%) | 159 s | $0.104 |
+| Sonnet 5.5 | 4.29 | **3.79** | 3.88 | 36/39 (92%) | 42 s | $0.070 |
+| Muse Spark 1.3 | 4.29 | 3.58 | 4.12 | 37/52 (71%) | 119 s | – |
+| DeepSeek V4.1 Flash | 4.22 | 3.67 | 4.00 | 35/37 (**95%**) | 49 s | **$0.010** |
+
+**Main finding: the system matters more than the model.** The improved system raised every model by +0.11 to +0.53, and closed the gap between them from 0.53 to 0.08: all five now score 4.22-4.30. With quality tied, the choice comes down to **speed** (Ember, 28 s), **cost** (DeepSeek, $0.01) and **interaction reliability** (DeepSeek and Sonnet have the most working panel buttons; Muse Spark the fewest). For the live app, Ember is the strongest default: tied-best quality at the lowest latency.
+
+**Two harness bugs found while adding the panel-button probe:**
+- uikit computes element world matrices lazily, so button positions were up to 30 cm stale; the host now forces an update before measuring.
+- After a grab, the emulated hand's ray stopped delivering clicks; probes now run panel buttons → 3D press → grab.
+
+**Run 5 (Nov 12): complex apps.** 12 harder held-out requests ([`hard-12.json`](bench/prompts/hard-12.json), tier T4): recipe coach, pendulum lab, headphone shop with cart, sprint board with filter and burndown, smart-home controller, arm bones with quiz, Paris trip planner, chess puzzle, linked-chart budget dashboard, solar-system simulator with modes, 3-step registration form, escape-room puzzle. All 5 models on the improved system, 1 repetition, Opus 5.5 judge. Side by side: [`run-5-hard/gallery.md`](bench/results/run-5-hard/gallery.md).
+
+| Model (complex apps) | Quality | Panel buttons work | Median time | Cost / scene |
+|---|---|---|---|---|
+| Sonnet 5.5 | **4.00** | 69% | 187 s | $0.26 |
+| Kimi K3.1 Pro | 3.98 | 76% | 296 s | $0.20 |
+| Ember 1.0 max | 3.92 | **91%** | **47 s** | – |
+| Muse Spark 1.3 | 3.67 | 75% | 270 s | – |
+| DeepSeek V4.1 Flash | 3.63 | 82% | 110 s | **$0.02** |
+
+**Findings:**
+- **All 60 complex apps succeeded** within ≤2 repairs and ran in the emulator without errors.
+- **Complexity separates the models.** The quality spread grows from 0.08 (run 4) to 0.37. Sonnet, Kimi and Ember lead; Muse Spark and DeepSeek trail.
+- **Clarity falls for everyone** (3.0-3.4): more panels means more crowding and overlap. That's the next system improvement.
+- **Ember remains the best fit for a live app:** within 0.08 of the top quality, 4× faster than Sonnet, and the most reliable buttons. Sonnet's buttons were the least reliable on complex layouts (69%).
+
+**Provider errors fixed:** Node's built-in fetch abandons a request after 5 minutes without response headers, and a non-streaming reasoning model sends none while it thinks. Kimi needed up to 9.5 minutes, and both Kimi and DeepSeek requests failed this way. The client now uses an undici agent that waits up to the 30-minute request timeout; transient rate-limit (429) rows are retried, not scored.
 
 **Known gaps in the harness:**
-- Panel buttons (e.g. quiz answers) aren't probed yet, only trait-based press/grab.
+- Panel-button probe covers up to 3 buttons per scene by ray; pokes don't trigger uikit clicks in the emulator.
 - Ray-grab probes can hit a neighbouring object first, e.g. nested Earth shells.
 
 **Candidates.** Pin exact model IDs on benchmark day and record them.

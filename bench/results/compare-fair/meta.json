@@ -1,0 +1,18 @@
+{
+  "combinedFrom": [
+    "../../bench/results/run-4-fair:claude-sonnet-5-5",
+    "../../bench/results/run-4-fair:muse-spark-1.3",
+    "../../bench/results/run-4-fair:deepseek-v4.1-flash",
+    "../../bench/results/run-4-fair:kimi-k3.1-pro-fw",
+    "../../bench/results/run-3-ember-max:muse-ember-1.0-max"
+  ],
+  "promptsFile": "bench/prompts/test-12.json",
+  "note": "All five models used the same improved system (plain-text rule, panel width and text-size checks, 23-degree turn limit, 64k output), the same 12 requests x 2 repetitions, and the same judge (Claude Opus 5.5).",
+  "models": [
+    "claude-sonnet-5-5",
+    "muse-spark-1.3",
+    "deepseek-v4.1-flash",
+    "kimi-k3.1-pro-fw",
+    "muse-ember-1.0-max"
+  ]
+}

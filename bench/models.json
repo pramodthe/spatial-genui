@@ -56,8 +56,7 @@
       "apiKeyEnv": "META_API_KEY",
       "model": "muse-ember-1.0",
       "extraBody": {
-        "reasoning_effort": "max",
-        "max_completion_tokens": 64000
+        "reasoning_effort": "max"
       },
       "enabled": true
     },

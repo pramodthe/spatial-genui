@@ -39,6 +39,8 @@ type PanelRecord = {
   pendingProps: { id: string; props: ElementProps }[];
   document: UIKitDocument | null;
   url: string;
+  /** Elements that got a generated click handler, for tests that press panel buttons. */
+  boundElements: { id: string; element: Object3D }[];
 };
 
 type Mounted = {
@@ -105,6 +107,8 @@ export type MountedInspection = {
   panels: number;
   panelsLoaded: number;
   handlerCalls: number;
+  /** Panel elements with a generated click handler, with their world-space centers. */
+  panelButtons: { id: string; center: [number, number, number]; size: [number, number, number] }[];
 };
 
 /** What the host wired up for the current generation, for tests and the benchmark. */
@@ -124,7 +128,24 @@ export function inspectMounted(): MountedInspection | null {
     panels: mounted.panels.size,
     panelsLoaded: [...mounted.panels.values()].filter((p) => p.document).length,
     handlerCalls: mounted.handlerCalls,
+    panelButtons: [...mounted.panels.values()].flatMap((p) =>
+      // uikit draws in batches, so the element mesh's own .visible says nothing; ask uikit whether
+      // the element is shown (display, ancestors) and not clipped, i.e. whether a user could press it.
+      p.boundElements
+        .filter((b) => isPressableNow(b.element))
+        .map((b) => {
+          // Force uikit to recompute this element's world matrix before measuring it.
+          b.element.updateWorldMatrix(true, false);
+          const box = new Box3().setFromObject(b.element);
+          return { id: b.id, center: box.getCenter(new Vector3()).toArray() as [number, number, number], size: box.getSize(new Vector3()).toArray() as [number, number, number] };
+        }),
+    ),
   };
+}
+
+function isPressableNow(element: Object3D): boolean {
+  const ui = element as unknown as { isVisible?: { peek(): boolean }; isClipped?: { peek(): boolean } };
+  return (ui.isVisible?.peek() ?? true) && !(ui.isClipped?.peek() ?? false);
 }
 
 /** Load an agent-written module and mount what it builds. Throws nothing; failures come back as a report. */
@@ -291,6 +312,7 @@ function createPanelRecord(markup: string, options: PanelOptions): PanelRecord {
     pendingProps: [],
     document: null,
     url: URL.createObjectURL(new Blob([markup], { type: 'text/plain' })),
+    boundElements: [],
   };
 }
 
@@ -301,6 +323,7 @@ function bindHandler(panel: PanelRecord, handler: PanelRecord['handlers'][number
     return;
   }
   element.addEventListener(handler.event as 'click', handler.fn);
+  if (handler.event === 'click') panel.boundElements.push({ id: handler.id, element: element as unknown as Object3D });
 }
 
 function applyProps(document: UIKitDocument, id: string, props: ElementProps) {

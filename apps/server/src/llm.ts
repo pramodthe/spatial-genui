@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { Agent, fetch as undiciFetch } from 'undici';
 import { config } from './config.js';
 
 export type ContentPart = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } };
@@ -38,6 +39,13 @@ export const defaultTarget: LlmTarget = {
 };
 
 const clients = new Map<string, OpenAI>();
+const REQUEST_TIMEOUT_MS = 30 * 60 * 1000;
+// Node's built-in fetch gives up if response headers take more than 5 minutes, and a non-streaming
+// request sends none until the model is done thinking (Kimi can think for 10+ minutes on a complex
+// app). This agent waits as long as the SDK timeout instead.
+const longWaitAgent = new Agent({ headersTimeout: REQUEST_TIMEOUT_MS, bodyTimeout: REQUEST_TIMEOUT_MS });
+const longWaitFetch = ((url: string, init?: RequestInit) =>
+  undiciFetch(url, { ...(init as object), dispatcher: longWaitAgent } as Parameters<typeof undiciFetch>[1])) as unknown as typeof fetch;
 
 function clientFor(target: LlmTarget): OpenAI {
   const key = `${target.baseURL}\n${target.apiKey}`;
@@ -45,7 +53,11 @@ function clientFor(target: LlmTarget): OpenAI {
   if (!client) {
     // The SDK retries 429s, 5xx and dropped connections itself, so transient
     // provider trouble isn't counted as a model failure.
-    client = new OpenAI({ baseURL: target.baseURL, apiKey: target.apiKey, defaultHeaders: target.headers, maxRetries: 3 });
+    // Reasoning models can think for over 10 minutes on complex apps (the SDK's default timeout).
+    client = new OpenAI({
+      baseURL: target.baseURL, apiKey: target.apiKey, defaultHeaders: target.headers,
+      maxRetries: 3, timeout: REQUEST_TIMEOUT_MS, fetch: longWaitFetch,
+    });
     clients.set(key, client);
   }
   return client;

@@ -1,0 +1,188 @@
+{
+  "summary": [
+    {
+      "model": "muse-ember-1.0-max",
+      "family": "Meta",
+      "n": 24,
+      "apiErrors": 0,
+      "passAt1": 1,
+      "successWithRepair": 1,
+      "failedScenes": 0,
+      "meanAttempts": 1,
+      "mountedClean": 1,
+      "grabWorks": 1,
+      "pressWorks": 1,
+      "panelButtonsWork": 0.86,
+      "qualityPrimary": 4.3,
+      "quality1to5": null,
+      "qualityOtherJudges": null,
+      "qualityOtherJudgesAdjusted": null,
+      "medianFirstAttemptS": 27.6,
+      "medianTotalS": 27.6,
+      "meanOutputTokens": 17063,
+      "costUSD": null,
+      "costPerSuccessUSD": null,
+      "meanCrowdedGrabPairs": 0.29
+    },
+    {
+      "model": "kimi-k3.1-pro-fw",
+      "family": "Moonshot",
+      "n": 24,
+      "apiErrors": 0,
+      "passAt1": 0.9583333333333334,
+      "successWithRepair": 1,
+      "failedScenes": 0,
+      "meanAttempts": 1.04,
+      "mountedClean": 1,
+      "grabWorks": 0.9166666666666666,
+      "pressWorks": 0.9090909090909091,
+      "panelButtonsWork": 0.8888888888888888,
+      "qualityPrimary": 4.3,
+      "quality1to5": null,
+      "qualityOtherJudges": null,
+      "qualityOtherJudgesAdjusted": null,
+      "medianFirstAttemptS": 159.3,
+      "medianTotalS": 159.3,
+      "meanOutputTokens": 9983,
+      "costUSD": 2.504,
+      "costPerSuccessUSD": 0.1043,
+      "meanCrowdedGrabPairs": 0.13
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "family": "Anthropic",
+      "n": 24,
+      "apiErrors": 0,
+      "passAt1": 1,
+      "successWithRepair": 1,
+      "failedScenes": 0,
+      "meanAttempts": 1,
+      "mountedClean": 1,
+      "grabWorks": 1,
+      "pressWorks": 1,
+      "panelButtonsWork": 0.9230769230769231,
+      "qualityPrimary": 4.29,
+      "quality1to5": null,
+      "qualityOtherJudges": null,
+      "qualityOtherJudgesAdjusted": null,
+      "medianFirstAttemptS": 41.7,
+      "medianTotalS": 41.7,
+      "meanOutputTokens": 6399,
+      "costUSD": 1.682,
+      "costPerSuccessUSD": 0.0701,
+      "meanCrowdedGrabPairs": 0.08
+    },
+    {
+      "model": "muse-spark-1.3",
+      "family": "Meta",
+      "n": 24,
+      "apiErrors": 0,
+      "passAt1": 0.7916666666666666,
+      "successWithRepair": 1,
+      "failedScenes": 0,
+      "meanAttempts": 1.21,
+      "mountedClean": 1,
+      "grabWorks": 0.9565217391304348,
+      "pressWorks": 1,
+      "panelButtonsWork": 0.7115384615384616,
+      "qualityPrimary": 4.29,
+      "quality1to5": null,
+      "qualityOtherJudges": null,
+      "qualityOtherJudgesAdjusted": null,
+      "medianFirstAttemptS": 119.3,
+      "medianTotalS": 119.4,
+      "meanOutputTokens": 12264,
+      "costUSD": null,
+      "costPerSuccessUSD": null,
+      "meanCrowdedGrabPairs": 0.29
+    },
+    {
+      "model": "deepseek-v4.1-flash",
+      "family": "DeepSeek",
+      "n": 24,
+      "apiErrors": 0,
+      "passAt1": 1,
+      "successWithRepair": 1,
+      "failedScenes": 0,
+      "meanAttempts": 1,
+      "mountedClean": 1,
+      "grabWorks": 0.9166666666666666,
+      "pressWorks": 1,
+      "panelButtonsWork": 0.9459459459459459,
+      "qualityPrimary": 4.22,
+      "quality1to5": null,
+      "qualityOtherJudges": null,
+      "qualityOtherJudgesAdjusted": null,
+      "medianFirstAttemptS": 48.6,
+      "medianTotalS": 48.6,
+      "meanOutputTokens": 16816,
+      "costUSD": 0.25,
+      "costPerSuccessUSD": 0.0104,
+      "meanCrowdedGrabPairs": 0.17
+    }
+  ],
+  "taxonomy": [
+    {
+      "model": "claude-sonnet-5-5",
+      "panel-markup": 0,
+      "panel-text-size": 0,
+      "syntax": 0
+    },
+    {
+      "model": "muse-spark-1.3",
+      "panel-markup": 1,
+      "panel-text-size": 4,
+      "syntax": 0
+    },
+    {
+      "model": "deepseek-v4.1-flash",
+      "panel-markup": 0,
+      "panel-text-size": 0,
+      "syntax": 0
+    },
+    {
+      "model": "kimi-k3.1-pro-fw",
+      "panel-markup": 0,
+      "panel-text-size": 0,
+      "syntax": 1
+    },
+    {
+      "model": "muse-ember-1.0-max",
+      "panel-markup": 0,
+      "panel-text-size": 0,
+      "syntax": 0
+    }
+  ],
+  "byTier": [
+    {
+      "model": "claude-sonnet-5-5",
+      "T1": "8/8",
+      "T2": "8/8",
+      "T3": "8/8"
+    },
+    {
+      "model": "muse-spark-1.3",
+      "T1": "8/8",
+      "T2": "8/8",
+      "T3": "8/8"
+    },
+    {
+      "model": "deepseek-v4.1-flash",
+      "T1": "8/8",
+      "T2": "8/8",
+      "T3": "8/8"
+    },
+    {
+      "model": "kimi-k3.1-pro-fw",
+      "T1": "8/8",
+      "T2": "8/8",
+      "T3": "8/8"
+    },
+    {
+      "model": "muse-ember-1.0-max",
+      "T1": "8/8",
+      "T2": "8/8",
+      "T3": "8/8"
+    }
+  ]
+}

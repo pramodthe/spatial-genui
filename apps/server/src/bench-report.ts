@@ -12,6 +12,7 @@ type BrowserRow = {
   mounted: boolean; runtimeErrors: string[]; harnessError?: string;
   grab?: { tested: boolean; held?: boolean; mode?: string };
   press?: { tested: boolean; fired?: boolean };
+  panelPress?: { tested: number; worked: number };
 };
 type JudgeRow = { model: string; promptId: string; rep: number; judge: string; judgeFamily?: string; scores?: Record<string, number>; error?: string };
 
@@ -83,6 +84,8 @@ const summary = models.map((model) => {
     mountedClean: b.length ? rate(b.filter((x) => x.mounted && x.runtimeErrors.length === 0).length, b.length) : null,
     grabWorks: grabTests.length ? rate(grabTests.filter((x) => x.grab!.held).length, grabTests.length) : null,
     pressWorks: pressTests.length ? rate(pressTests.filter((x) => x.press!.fired).length, pressTests.length) : null,
+    // Share of probed panel buttons (up to 3 per scene) whose generated click handler ran.
+    panelButtonsWork: b.some((x) => x.panelPress?.tested) ? rate(sum(b.map((x) => x.panelPress?.worked ?? 0)), sum(b.map((x) => x.panelPress?.tested ?? 0))) : null,
     qualityPrimary: primary.length ? round(mean(withFailures(primary.map(judgeScore), failed)), 2) : null,
     quality1to5: quality.length ? round(mean(withFailures(quality, failed)), 2) : null,
     qualityOtherJudges: crossQuality.length ? round(mean(withFailures(crossQuality, failed)), 2) : null,
@@ -121,10 +124,10 @@ const md = [
   ``,
   `Success and pass@1 count a scene only if it passed the checks **and** ran in the emulator without errors. Failed scenes score ${FAILED_SCENE_SCORE}/5 in every quality column, so each model's average covers all its scenes.${primaryIsContestant ? ` ${primaryJudge} is also a contestant; its own scenes are not given a headline score.` : ''}`,
   ``,
-  `| Model | n | pass@1 | Success (≤2 repairs) | Failed scenes | Mounted clean | Grab works | Press works | Quality: ${primaryJudge ?? 'independent judge'} (1–5) | Panel quality (all) | Panel, other-provider judges | Panel, adjusted for strictness | Median first try | Median total | Output tokens | Cost | Cost / success |`,
-  `|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|`,
+  `| Model | n | pass@1 | Success (≤2 repairs) | Failed scenes | Mounted clean | Grab works | Press works | Panel buttons work | Quality: ${primaryJudge ?? 'independent judge'} (1–5) | Panel quality (all) | Panel, other-provider judges | Panel, adjusted for strictness | Median first try | Median total | Output tokens | Cost | Cost / success |`,
+  `|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|`,
   ...summary.map((s) =>
-    `| ${s.model} | ${s.n}${s.apiErrors ? ` (+${s.apiErrors} API err)` : ''} | ${pct(s.passAt1)} | ${pct(s.successWithRepair)} | ${s.failedScenes} | ${pct(s.mountedClean)} | ${pct(s.grabWorks)} | ${pct(s.pressWorks)} | ${s.qualityPrimary ?? '–'} | ${s.quality1to5 ?? '–'} | ${s.qualityOtherJudges ?? '–'} | ${s.qualityOtherJudgesAdjusted ?? '–'} | ${s.medianFirstAttemptS} s | ${s.medianTotalS} s | ${s.meanOutputTokens} | ${s.costUSD == null ? '–' : `$${s.costUSD}`} | ${s.costPerSuccessUSD == null ? '–' : `$${s.costPerSuccessUSD}`} |`),
+    `| ${s.model} | ${s.n}${s.apiErrors ? ` (+${s.apiErrors} API err)` : ''} | ${pct(s.passAt1)} | ${pct(s.successWithRepair)} | ${s.failedScenes} | ${pct(s.mountedClean)} | ${pct(s.grabWorks)} | ${pct(s.pressWorks)} | ${pct(s.panelButtonsWork)} | ${s.qualityPrimary ?? '–'} | ${s.quality1to5 ?? '–'} | ${s.qualityOtherJudges ?? '–'} | ${s.qualityOtherJudgesAdjusted ?? '–'} | ${s.medianFirstAttemptS} s | ${s.medianTotalS} s | ${s.meanOutputTokens} | ${s.costUSD == null ? '–' : `$${s.costUSD}`} | ${s.costPerSuccessUSD == null ? '–' : `$${s.costPerSuccessUSD}`} |`),
   ``,
   `## Mean score each judge gave each model (rows = judge; judges grade on different curves)`,
   ``,
@@ -159,6 +162,9 @@ async function readJsonl<T>(file: string): Promise<T[]> {
 }
 function mean(xs: number[]) {
   return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
+}
+function sum(xs: number[]) {
+  return xs.reduce((a, b) => a + b, 0);
 }
 function median(xs: number[]) {
   if (!xs.length) return 0;

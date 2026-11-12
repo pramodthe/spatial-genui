@@ -9,7 +9,8 @@ import { basename, dirname, join, resolve } from 'node:path';
 
 type Row = { model: string; family: string; promptId: string; tier: string; rep: number; ok: boolean; firstTryOk: boolean; stages: string[]; totalMs: number; costUSD: number | null };
 type Browser = { model: string; promptId: string; rep: number; mounted: boolean; runtimeErrors: string[]; harnessError?: string; shot?: string;
-  grab?: { tested: boolean; held?: boolean; mode?: string }; press?: { tested: boolean; fired?: boolean } };
+  grab?: { tested: boolean; held?: boolean; mode?: string }; press?: { tested: boolean; fired?: boolean };
+  panelPress?: { tested: number; worked: number } };
 type Judge = { model: string; promptId: string; rep: number; judge: string; judgeFamily?: string; scores?: Record<string, number>; notes?: string };
 
 const dir = resolve(process.argv[2] ?? '');
@@ -75,6 +76,7 @@ function cell(model: string, promptId: string, rep: number) {
 
     b?.grab?.tested ? (b.grab.held ? `<b class="ok">grab ✓</b>` : `<b class="bad">grab ✗</b>`) : '',
     b?.press?.tested ? (b.press.fired ? `<b class="ok">press ✓</b>` : `<b class="bad">press ✗</b>`) : '',
+    b?.panelPress?.tested ? `<b class="${b.panelPress.worked === b.panelPress.tested ? 'ok' : 'bad'}">buttons ${b.panelPress.worked}/${b.panelPress.tested}</b>` : '',
     Number.isFinite(q) ? `<b class="q">quality ${q.toFixed(1)}/5</b>` : '',
   ].filter(Boolean).join(' ');
   const notes = js.map((j) => {
@@ -160,6 +162,7 @@ function markdownGallery(): string {
 
       b?.grab?.tested ? (b.grab.held ? 'grab ✓' : 'grab ✗') : '',
       b?.press?.tested ? (b.press.fired ? 'press ✓' : 'press ✗') : '',
+      b?.panelPress?.tested ? `buttons ${b.panelPress.worked}/${b.panelPress.tested}` : '',
       Number.isFinite(q) ? `**${q.toFixed(1)}/5**` : '',
     ].filter(Boolean).join(' · ');
     const img = jpg && existsSync(join(dir, jpg))

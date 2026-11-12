@@ -65,6 +65,9 @@ export default async function run({ frame, page }) {
       await r.dispatch('set_transform', { device: 'headset', ...head });
       const report = await window.genui.mount(code);
       await sleep(2500); // panels load, update() runs
+      // Library lessons: the host lays panels out once they have all loaded (many label panels take longer);
+      // probing before that would aim at buttons that are about to move.
+      for (let i = 0; i < 40 && window.genui.inspect() && !window.genui.inspect().layoutSettled; i++) await sleep(250);
       const runtimeErrors = [...window.genui.state.runtimeErrors];
       const info = window.genui.inspect();
       return { report, runtimeErrors, info };

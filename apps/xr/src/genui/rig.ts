@@ -133,6 +133,9 @@ export class TeachingRig {
     geometry.setAttribute('position', new BufferAttribute(new Float32Array(6), 3));
     const line = new Line(geometry, new LineBasicMaterial({ color: 0xe6edf5 }));
     line.frustumCulled = false;
+    // Decoration only: three.js counts a ray within 1 unit (a metre here) as hitting a line, so leader
+    // lines would swallow hand rays meant for buttons, even while hidden.
+    line.raycast = () => {};
     parent.add(line);
     // The anchor rides on the part, so the leader line follows it when the part moves.
     this.model.updateMatrixWorld(true);
@@ -153,7 +156,10 @@ export class TeachingRig {
       object3D: label.ui.object3D,
       set: (text: string) => label.ui.set('text', { text }),
       setVisible: (visible: boolean) => {
+        // Hidden is not enough: a hidden panel can still be hit by a hand ray, and lessons that make
+        // a label for every part and show a few at a time would bury their buttons. Collapse it too.
         label.ui.object3D.visible = visible;
+        label.ui.object3D.scale.setScalar(visible ? 1 : 1e-4);
         label.line.visible = visible;
       },
     };

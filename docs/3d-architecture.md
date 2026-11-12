@@ -296,6 +296,10 @@ Rebuild the assets: download BodyParts3D into `data/bodyparts3d/` (see the build
 - Found and fixed on the way: the comfort fit scaled whole lessons (text included) below the readable size the server had checked; library labels caught hand rays meant for buttons; inside-out reconstructed walls looked see-through.
 - Open: in one skull lesson the agent's panel sits over the model and a hand ray from below hits the skull before the buttons (the host lifts panels at most 15 cm); the grab probe aims at an object's centre, which misses hollow models such as the skull.
 
+**Lesson layout (Nov 13).** For library lessons the host now places the lesson's own panels too (`layoutLessonPanels` in `host.ts`): the main panel centred above the model and its label columns, in front of the model's front face; other panels stacked beyond the label columns. It runs once all panels have their real sizes and reports `layoutSettled` for tests. Two real input bugs found while chasing failed presses: leader lines caught hand rays (three.js counts a ray within 1 unit of a line as a hit, even when hidden), and hidden labels stayed hittable. Both fixed (lines ignore rays, hidden labels collapse).
+- Result on the same 6 lessons: fidelity 4.0, correctness 3.8, clarity 3.2, hands-on 4.2; panel buttons 15/18. Clarity did not move: the judge sees only the first step and now mostly asks for a larger model and for the quiz to be visible.
+- Open: in one skull lesson all panel presses fail even with labels removed, the per-frame explode removed and the layout pass disabled, so the cause is in that lesson's own panel. `tests/debug-buttons.mjs` (with `genui.debugRay`) reproduces it.
+
 ## 10. Sources
 
 - SceneCraft: An LLM Agent for Synthesizing 3D Scene as Blender Code. https://arxiv.org/abs/2403.01248

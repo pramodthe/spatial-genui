@@ -58,8 +58,10 @@ type Mounted = {
   startTime: number;
   /** Teaching rigs of library models in the scene; ticked every frame. */
   rigs: TeachingRig[];
-  /** Frames since every panel loaded; the one-time label declutter runs a few frames in (null = done). */
+  /** Frames until the one-time lesson layout runs, once every panel has loaded (null = done). */
   declutterIn: number | null;
+  /** The module's root, once mounted. */
+  root: Object3D | null;
 };
 
 export type MountReport = { ok: true; warnings: string[]; credits: string[] } | { ok: false; error: string };
@@ -88,8 +90,6 @@ function toPanelText(text: string): string {
 const REACH_DISTANCE_M = 0.55;
 const BELOW_EYES_M = 0.35;
 const MAX_CONTENT_SIZE_M = 0.8;
-const MAX_DECLUTTER_SHIFT_M = 0.35;
-const MAX_DECLUTTER_LIFT_M = 0.15;
 // A near-hand pinch grabs everything within a few centimetres of the pinch point.
 const MIN_GRAB_GAP_M = 0.04;
 
@@ -121,9 +121,26 @@ export type MountedInspection = {
   panels: number;
   panelsLoaded: number;
   handlerCalls: number;
+  /** False until the host's one-time lesson layout has moved the panels (library lessons only). */
+  layoutSettled: boolean;
   /** Panel elements with a generated click handler, with their world-space centers. */
   panelButtons: { id: string; center: [number, number, number]; size: [number, number, number] }[];
 };
+
+/** Test-only: what a ray from `from` toward `to` passes through, nearest first (debugging blocked presses). */
+export function debugRay(from: [number, number, number], to: [number, number, number]) {
+  if (!world) return [];
+  const origin = new Vector3(...from);
+  const direction = new Vector3(...to).sub(origin).normalize();
+  const ray = new IWSDK.Raycaster(origin, direction);
+  return ray.intersectObject(world.scene, true).slice(0, 8).map((hit) => {
+    const chain: string[] = [];
+    for (let o: Object3D | null = hit.object; o && chain.length < 5; o = o.parent) chain.push(`${o.name || o.type}${o.visible ? '' : '(hidden)'}`);
+    const at = hit.object.getWorldPosition(new Vector3());
+    return { distance: Math.round(hit.distance * 1000) / 1000, chain: chain.join(' < '), type: hit.object.constructor.name,
+      instance: hit.instanceId ?? null, objectAt: [at.x, at.y, at.z].map((v) => Math.round(v * 1000) / 1000) };
+  });
+}
 
 /** What the host wired up for the current generation, for tests and the benchmark. */
 export function inspectMounted(): MountedInspection | null {
@@ -141,6 +158,7 @@ export function inspectMounted(): MountedInspection | null {
     pressables: mounted.pressTargets.map((object) => ({ name: object.name, center: center(object) })),
     panels: mounted.panels.size,
     panelsLoaded: [...mounted.panels.values()].filter((p) => p.document).length,
+    layoutSettled: mounted.rigs.length === 0 || mounted.declutterIn === null,
     handlerCalls: mounted.handlerCalls,
     panelButtons: [...mounted.panels.values()].flatMap((p) =>
       // uikit draws in batches, so the element mesh's own .visible says nothing; ask uikit whether
@@ -202,6 +220,7 @@ export async function mountGenerated(code: string): Promise<MountReport> {
     startTime: performance.now() / 1000,
     rigs: [],
     declutterIn: 3,
+    root: null,
   };
 
   const api = {
@@ -251,6 +270,7 @@ export async function mountGenerated(code: string): Promise<MountReport> {
   }
 
   const warnings: string[] = [];
+  mounted.root = root;
   const anchor = new Group();
   anchor.name = 'GenUI Anchor';
   placeInSeatedReach(anchor);
@@ -329,7 +349,7 @@ class GenUISystem extends createSystem({
       // UIKit lays panels out over a few frames; measure once their sizes are real.
       if (mounted.declutterIn-- <= 0) {
         mounted.declutterIn = null;
-        declutterPanels(mounted);
+        layoutLessonPanels(mounted);
       }
     }
     for (const rig of mounted.rigs) {
@@ -473,57 +493,72 @@ function guard(mounted: Mounted, fn: () => void): () => void {
 }
 
 /**
- * Keep the lesson's own panels off the rig's labels: the agent places its panels, the host places
- * labels, and they can collide. Each overlapping panel moves the shorter way clear, left or right
- * (at most MAX_DECLUTTER_SHIFT_M), measured in root's frame with the panels' real, laid-out sizes.
- * Runs once after mounting.
+ * Lesson layout for library models (SceneCraft's split: the agent says what panels exist, code says
+ * where). Runs once, after every panel has laid out and has its real size, in root's frame:
+ * - the model and its label columns stay where the rig put them;
+ * - the lesson's main panel (the one the agent placed highest, or the only one) goes centred above
+ *   them, its bottom edge clear of the model and labels;
+ * - any other panels stack beyond the label column on the side the agent put them.
+ * Panels sit in front of the model's front face. Nothing overlaps by construction, and no hand ray
+ * to a button has to cross the model.
  */
-function declutterPanels(mounted: Mounted) {
-  const labels = new Set(mounted.rigs.flatMap((rig) => rig.labelHolders()));
-  if (labels.size === 0) return;
-  const root = [...labels][0].parent;
-  if (!root) return;
+function layoutLessonPanels(mounted: Mounted) {
+  const root = mounted.root;
+  if (!root || mounted.rigs.length === 0) return;
   root.updateMatrixWorld(true);
   const boxIn = (object: Object3D) => {
     const world = new Box3().setFromObject(object);
     const local = new Box3();
+    if (world.isEmpty()) return local;
     const { min, max } = world;
     for (const x of [min.x, max.x]) for (const y of [min.y, max.y]) for (const z of [min.z, max.z]) local.expandByPoint(root.worldToLocal(new Vector3(x, y, z)));
     return local;
   };
-  const labelBoxes = [...labels].map(boxIn).filter((b) => !b.isEmpty());
-  const modelBoxes = mounted.rigs.map((rig) => {
-    const box = new Box3();
-    for (const part of rig.partObjects()) box.union(boxIn(part));
-    return box;
-  }).filter((b) => !b.isEmpty());
-  const gap = 0.02;
-  for (const panel of mounted.panels.values()) {
-    if (labels.has(panel.holder) || panel.holder.parent !== root) continue;
-    // Off the model first: a panel overlapping its top sits behind it, and a hand ray from below
-    // hits the model before the buttons. Up only a little, so the panel stays in view.
-    for (const model of modelBoxes) {
-      const box = boxIn(panel.holder);
-      const overlaps = model.min.x < box.max.x && model.max.x > box.min.x && model.min.y < box.max.y && model.max.y > box.min.y;
-      const up = model.max.y + gap - box.min.y;
-      if (!box.isEmpty() && overlaps && box.min.y > model.min.y && up <= MAX_DECLUTTER_LIFT_M) {
-        panel.holder.position.y += up;
-        panel.holder.updateMatrixWorld(true);
-      }
-    }
-    for (let attempt = 0; attempt < 4; attempt++) {
-      const box = boxIn(panel.holder);
-      const hits = labelBoxes.filter((l) => l.min.x < box.max.x && l.max.x > box.min.x && l.min.y < box.max.y && l.max.y > box.min.y);
-      if (box.isEmpty() || hits.length === 0) break;
-      // Sideways only, and not far: moving a panel up can push it out of a seated user's view.
-      const left = box.max.x - Math.min(...hits.map((l) => l.min.x)) + gap;
-      const right = Math.max(...hits.map((l) => l.max.x)) + gap - box.min.x;
-      const move = Math.min(left, right);
-      if (move > MAX_DECLUTTER_SHIFT_M) break;
-      panel.holder.position.x += move === left ? -left : right;
-      panel.holder.updateMatrixWorld(true);
+  const labels = new Set(mounted.rigs.flatMap((rig) => rig.labelHolders()));
+  const model = new Box3();
+  for (const rig of mounted.rigs) for (const part of rig.partObjects()) model.union(boxIn(part));
+  if (model.isEmpty()) return;
+  const occupied = model.clone();
+  for (const label of labels) if (label.visible) occupied.union(boxIn(label));
+
+  const panels = [...mounted.panels.values()]
+    .filter((p) => !labels.has(p.holder) && p.holder.parent === root)
+    .map((p) => ({ holder: p.holder, box: boxIn(p.holder) }))
+    .filter((p) => !p.box.isEmpty());
+  if (panels.length === 0) return;
+  const gap = 0.025;
+  const modelCenterX = (model.min.x + model.max.x) / 2;
+  // Panels also come forward of the model's front face: a hand ray from chest height up to a
+  // button behind that plane would pass through the model (and a grabbable model catches it).
+  const frontZ = model.max.z + gap;
+  const moveTo = (panel: { holder: Object3D; box: Box3 }, minX: number, minY: number) => {
+    panel.holder.position.x += minX - panel.box.min.x;
+    panel.holder.position.y += minY - panel.box.min.y;
+    if (panel.box.min.z < frontZ) panel.holder.position.z += frontZ - panel.box.min.z;
+  };
+
+  // The main panel: the highest one the agent placed (lessons put their main panel on top).
+  panels.sort((a, b) => b.box.max.y - a.box.max.y);
+  const [main, ...others] = panels;
+  const mainWidth = main.box.max.x - main.box.min.x;
+  moveTo(main, modelCenterX - mainWidth / 2, occupied.max.y + gap);
+
+  // The rest beside the label columns, on the side the agent chose, stacked downwards from the top.
+  let rightTop = occupied.max.y;
+  let leftTop = occupied.max.y;
+  for (const panel of others) {
+    const width = panel.box.max.x - panel.box.min.x;
+    const height = panel.box.max.y - panel.box.min.y;
+    const right = (panel.box.min.x + panel.box.max.x) / 2 >= modelCenterX;
+    if (right) {
+      moveTo(panel, occupied.max.x + gap, rightTop - height);
+      rightTop -= height + gap;
+    } else {
+      moveTo(panel, occupied.min.x - gap - width, leftTop - height);
+      leftTop -= height + gap;
     }
   }
+  root.updateMatrixWorld(true);
 }
 
 function describe(err: unknown): string {

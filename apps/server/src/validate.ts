@@ -18,6 +18,19 @@ const BANNED_GLOBALS = new Set([
 ]);
 const BANNED_PROPERTIES = new Set(['constructor', '__proto__', '__defineGetter__', '__defineSetter__']);
 
+/** The string value of an expression built only from literals (e.g. "constr" + "uctor"), else null. */
+function constantString(node: any): string | null {
+  if (!node) return null;
+  if (node.type === 'Literal') return String(node.value);
+  if (node.type === 'TemplateLiteral' && node.expressions.length === 0) return node.quasis.map((q: any) => q.value.cooked ?? '').join('');
+  if (node.type === 'BinaryExpression' && node.operator === '+') {
+    const left = constantString(node.left);
+    const right = constantString(node.right);
+    return left != null && right != null ? left + right : null;
+  }
+  return null;
+}
+
 /** Extract the module source from the model's reply (first fenced code block, or the raw text). */
 export function extractCode(reply: string): string | null {
   const fence = reply.match(/```(?:js|javascript|ts|typescript)?\s*\n([\s\S]*?)```/);
@@ -76,9 +89,9 @@ export function validateModule(code: string): ValidationResult {
         exportDefault = node;
         break;
       case 'MemberExpression': {
-        const name = node.computed
-          ? node.property.type === 'Literal' ? String(node.property.value) : null
-          : node.property.name;
+        // Catches literal and string-built keys; keys held in variables can't be caught statically,
+        // which is why the dry run executes in a locked-down process (sandbox.ts).
+        const name = node.computed ? constantString(node.property) : node.property.name;
         if (name && BANNED_PROPERTIES.has(name)) problems.push(`Accessing \`.${name}\` is not allowed${where}`);
         break;
       }

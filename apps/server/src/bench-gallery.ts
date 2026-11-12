@@ -7,7 +7,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 
-type Row = { model: string; family: string; promptId: string; tier: string; rep: number; ok: boolean; firstTryOk: boolean; stages: string[]; totalMs: number; costUSD: number | null };
+type Row = { model: string; family: string; promptId: string; tier: string; rep: number; ok: boolean; firstTryOk: boolean; stages: string[]; totalMs: number; costUSD: number | null; apiError?: string };
 type Browser = { model: string; promptId: string; rep: number; mounted: boolean; runtimeErrors: string[]; harnessError?: string; shot?: string;
   grab?: { tested: boolean; held?: boolean; mode?: string }; press?: { tested: boolean; fired?: boolean };
   panelPress?: { tested: number; worked: number } };
@@ -55,10 +55,20 @@ const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.le
 // Per-model overall: mean quality from judges of other families (self-preference excluded).
 const overall = models.map((m) => {
   const family = rows.find((r) => r.model === m)?.family;
-  const mine = rows.filter((r) => r.model === m);
-  const failed = mine.filter((r) => !r.ok || crashedRow(r)).length;
-  const scores = judges.filter((j) => j.model === m && headline(j, family)).map((j) => avg(Object.values(j.scores!)));
-  const cross = scores.length ? [...scores, ...Array(failed).fill(FAILED_SCENE_SCORE)] : [];
+  // Same rules as bench-report: provider (API) errors aren't scenes; quality is averaged per scene,
+  // a failed scene counting once as FAILED_SCENE_SCORE and a working one as its judges' mean.
+  const mine = rows.filter((r) => r.model === m && !r.apiError);
+  const cross: number[] = [];
+  if (judges.some((j) => j.model === m && headline(j, family))) {
+    for (const r of mine) {
+      if (!r.ok || crashedRow(r)) {
+        cross.push(FAILED_SCENE_SCORE);
+        continue;
+      }
+      const js = judges.filter((j) => key(j) === key(r) && headline(j, family));
+      if (js.length) cross.push(avg(js.map((j) => avg(Object.values(j.scores!)))));
+    }
+  }
   return { m, quality: avg(cross), medianS: median(mine.map((r) => r.totalMs / 1000)) };
 });
 

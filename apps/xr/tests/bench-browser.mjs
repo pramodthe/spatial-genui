@@ -24,7 +24,15 @@ export default async function run({ frame, page }) {
   const limit = Number(process.env.GENUI_LIMIT || 10);
   const deadline = Date.now() + Number(process.env.GENUI_BUDGET_MS || 90000);
 
-  const done = new Set((await readJsonl(join(dir, 'browser.jsonl'))).map(key));
+  // A scene is done once it has a real result, or after two harness errors (retry transient
+  // glitches once, but don't loop forever on a scene the harness can't handle).
+  const previous = await readJsonl(join(dir, 'browser.jsonl'));
+  const harnessErrors = new Map();
+  for (const r of previous.filter((r) => r.harnessError)) harnessErrors.set(key(r), (harnessErrors.get(key(r)) ?? 0) + 1);
+  const done = new Set([
+    ...previous.filter((r) => !r.harnessError).map(key),
+    ...[...harnessErrors].filter(([, n]) => n >= 2).map(([k]) => k),
+  ]);
   const todo = (await readJsonl(join(dir, 'results.jsonl'))).filter((r) => r.ok && r.code && !done.has(key(r)));
   await mkdir(join(dir, 'shots'), { recursive: true });
   await target.waitForFunction(() => Boolean(window.genui?.inspect && window.IWER_DEVICE?.remote), null, { timeout: 30000 });

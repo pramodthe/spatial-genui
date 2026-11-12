@@ -6,6 +6,7 @@ import { existsSync } from 'node:fs';
 import { appendFile, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { config } from './config.js';
+import { parseCli } from './args.js';
 import { complete, type LlmTarget } from './llm.js';
 
 type ModelEntry = LlmTarget & { family: string; apiKeyEnv: string; priceIn?: number; priceOut?: number; enabled?: boolean };
@@ -30,8 +31,12 @@ Score the generated component from 1 (very poor) to 5 (excellent) on:
 
 Reply with only a JSON object: {"fidelity": n, "clarity": n, "correctness": n, "handsOn": n, "notes": "one sentence"}`;
 
-const args = parseArgs(process.argv.slice(2));
-const dir = resolve(args._ ?? '');
+const cli = parseCli(process.argv.slice(2), {
+  values: ['judges', 'concurrency'],
+  usage: 'npm run bench:judge -- <results dir> [--judges id,id] [--concurrency n]',
+});
+const args = cli.flags;
+const dir = resolve(cli.positional[0] ?? '');
 if (!existsSync(join(dir, 'browser.jsonl'))) {
   console.error('Usage: npm run bench:judge -- <results dir with browser.jsonl> [--judges id,id]');
   process.exit(1);
@@ -95,11 +100,3 @@ await Promise.all(Array.from({ length: concurrency }, async () => {
   }
 }));
 
-function parseArgs(argv: string[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i].startsWith('--')) out[argv[i].slice(2)] = argv[++i] ?? '';
-    else out._ ??= argv[i];
-  }
-  return out;
-}

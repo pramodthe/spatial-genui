@@ -13,7 +13,10 @@ import type { JudgeRow } from './judge3d.js';
 import { PIPELINES, type AssetRequest, type Pipeline } from './prompts.js';
 
 const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));
-const cli = parseCli(process.argv.slice(2), { values: ['judge'], usage: 'npm run bench3d:report -- <results dir> [--judge model-id]' });
+const cli = parseCli(process.argv.slice(2), {
+  values: ['judge', 'baseline'],
+  usage: 'npm run bench3d:report -- <results dir> [--judge model-id] [--baseline <another results dir>]',
+});
 const dir = cli.positional[0] ? resolve(repoRoot, cli.positional[0]) : '';
 if (!dir || !existsSync(join(dir, 'results.jsonl'))) {
   console.error('Usage: npm run bench3d:report -- <results dir with results.jsonl> [--judge model-id]');
@@ -26,10 +29,25 @@ const readJsonl = async <T>(file: string): Promise<T[]> =>
   existsSync(file) ? (await readFile(file, 'utf8')).split('\n').filter(Boolean).map((l) => JSON.parse(l) as T) : [];
 
 const meta = JSON.parse(await readFile(join(dir, 'meta.json'), 'utf8')) as { objectsFile: string; model: string; criticModel: string; criticRounds: number; passScore: number };
+type RunMeta = { model: string; criticModel: string; criticRounds: number; passScore: number | null; backend?: string };
+const describeRun = (m: RunMeta) => m.backend === 'external'
+  ? `imported models: ${m.model}`
+  : `generator \`${m.model}\` · critic \`${m.criticModel}\` (≤${m.criticRounds} rounds, stops at ${m.passScore}/10 with all parts named)`;
 const objects = JSON.parse(await readFile(resolve(repoRoot, meta.objectsFile), 'utf8')) as AssetRequest[];
 const objectById = new Map(objects.map((o) => [o.id, o]));
-const rows = (await readJsonl<JobRow>(join(dir, 'results.jsonl'))).filter((r) => !r.apiError);
+// Each row remembers its run folder, so a baseline run's renders are found in its own folder.
+type SourcedRow = JobRow & { sourceDir: string };
+const ownRows: SourcedRow[] = (await readJsonl<JobRow>(join(dir, 'results.jsonl'))).filter((r) => !r.apiError).map((r) => ({ ...r, sourceDir: dir }));
 const verdicts = (await readJsonl<JudgeRow>(join(dir, 'judge.jsonl'))).filter((v) => v.judge === JUDGE && !v.error);
+// --baseline: compare against another run on the same objects (e.g. imported Tripo models vs the agent's pipelines).
+const baselineDir = cli.flags.baseline ? resolve(repoRoot, cli.flags.baseline) : null;
+const ownObjects = new Set(ownRows.map((r) => r.objectId));
+const baselineRows: SourcedRow[] = baselineDir
+  ? (await readJsonl<JobRow>(join(baselineDir, 'results.jsonl'))).filter((r) => !r.apiError && ownObjects.has(r.objectId)).map((r) => ({ ...r, sourceDir: baselineDir }))
+  : [];
+if (baselineDir) verdicts.push(...(await readJsonl<JudgeRow>(join(baselineDir, 'judge.jsonl'))).filter((v) => v.judge === JUDGE && !v.error && ownObjects.has(v.objectId)));
+const rows: SourcedRow[] = [...baselineRows, ...ownRows];
+const baselineMeta = baselineDir ? (JSON.parse(await readFile(join(baselineDir, 'meta.json'), 'utf8')) as RunMeta) : null;
 const verdictFor = (r: JobRow, round: number | null) =>
   round === null ? undefined : verdicts.find((v) => v.objectId === r.objectId && v.pipeline === r.pipeline && v.variant === r.variant && v.round === round);
 
@@ -56,11 +74,13 @@ function roundFor(r: JobRow, c: Condition): Round | undefined {
 
 /** Wall time until the user has the condition's model: reference image first, then the build (and critic loop). */
 function timeFor(r: JobRow, c: Condition): number {
+  if (r.external) return NaN;
   const loop = r.rounds.reduce((sum, rd) => sum + rd.gen.ms + rd.ms, 0);
   return (c.variant === 'ref' ? r.refMs ?? 0 : 0) + (c.critic ? loop : r.firstMs ?? loop);
 }
 
 function costFor(r: JobRow, c: Condition): number {
+  if (r.external) return NaN;
   const gen = c.critic
     ? tokenCost(r.model, r.usage.promptTokens, r.usage.completionTokens) + tokenCost(r.criticModel, r.criticUsage.promptTokens, r.criticUsage.completionTokens)
     : tokenCost(r.model, r.rounds[0]?.gen.promptTokens ?? 0, r.rounds[0]?.gen.completionTokens ?? 0);
@@ -87,7 +107,8 @@ type Cell = {
 
 /** One pipeline under one condition. A job without a model scores 1/5 and 0 parts, so every mean covers all jobs. */
 function cell(pipeline: Pipeline, c: Condition, subset = rows): Cell {
-  const jobs = subset.filter((r) => r.pipeline === pipeline && r.variant === c.variant);
+  // Imported models have no critic rounds, so they only appear in the conditions without the critic.
+  const jobs = subset.filter((r) => r.pipeline === pipeline && r.variant === c.variant && !(c.critic && r.external));
   const delivered = jobs.map((r) => ({ r, round: roundFor(r, c) }));
   const ok = delivered.filter((d) => d.round?.ok);
   const judged = ok.map((d) => ({ ...d, v: verdictFor(d.r, d.round!.round) })).filter((d) => d.v);
@@ -119,15 +140,15 @@ function cell(pipeline: Pipeline, c: Condition, subset = rows): Cell {
   };
 }
 
-const pipelines = PIPELINES.filter((p) => rows.some((r) => r.pipeline === p));
-const cells = pipelines.flatMap((p) => CONDITIONS.filter((c) => rows.some((r) => r.variant === c.variant)).map((c) => cell(p, c)));
+const pipelines = [...PIPELINES, ...new Set(rows.map((r) => r.pipeline).filter((p) => !PIPELINES.includes(p)))];
+const cells = pipelines.flatMap((p) => CONDITIONS.filter((c) => rows.some((r) => r.variant === c.variant)).map((c) => cell(p, c))).filter((c) => c.jobs > 0);
 const condLabel = (id: string) => CONDITIONS.find((c) => c.id === id)!.label;
 
 // Critic effect on the same starting model: final (critic-selected) vs round 0, per job.
 const criticEffect = pipelines.flatMap((p) => (['base', 'ref'] as const).filter((v) => rows.some((r) => r.variant === v)).map((variant) => {
   const pairs = rows.filter((r) => r.pipeline === p && r.variant === variant && r.rounds[0]?.ok)
     .map((r) => ({ r, before: verdictFor(r, 0)?.overall, after: verdictFor(r, r.finalRound)?.overall }))
-    .filter((x): x is { r: JobRow; before: number; after: number } => x.before !== undefined && x.after !== undefined);
+    .filter((x): x is { r: SourcedRow; before: number; after: number } => x.before !== undefined && x.after !== undefined);
   return {
     pipeline: p, variant, pairs: pairs.length,
     improved: pairs.filter((x) => x.after > x.before).length,
@@ -136,7 +157,7 @@ const criticEffect = pipelines.flatMap((p) => (['base', 'ref'] as const).filter(
     roundsUsed: mean(pairs.map((x) => x.r.rounds.length - 1)),
     revisionFailures: rows.filter((r) => r.pipeline === p && r.variant === variant && r.rounds.slice(1).some((rd) => !rd.ok)).length,
   };
-}));
+})).filter((e) => e.pairs > 0);
 
 // Does the in-loop critic agree with the independent judge? (critic 1-10 vs judge 1-5, same render)
 const agreement = verdicts.map((v) => {
@@ -167,7 +188,7 @@ const failures = rows.flatMap((r) => r.rounds.filter((rd) => !rd.ok).map((rd) =>
 const md: string[] = [
   `# Phase 3 benchmark: 3D generation pipelines`,
   ``,
-  `Source: \`${relative(repoRoot, dir)}\` · ${rows.length} jobs (${objects.length} objects × ${pipelines.length} pipelines × ${new Set(rows.map((r) => r.variant)).size} variants) · generator \`${meta.model}\` · critic \`${meta.criticModel}\` (≤${meta.criticRounds} rounds, stops at ${meta.passScore}/10 with all parts named) · judge \`${JUDGE}\` on four-view renders`,
+  `Source: \`${relative(repoRoot, dir)}\`${baselineDir ? ` compared with \`${relative(repoRoot, baselineDir)}\` on the same ${ownObjects.size} objects` : ''} · ${rows.length} jobs (${new Set(rows.map((r) => r.objectId)).size} objects × ${pipelines.length} pipelines × ${new Set(rows.map((r) => r.variant)).size} variants) · ${describeRun(meta)}${baselineMeta ? ` · baseline: ${describeRun(baselineMeta)}` : ''} · judge \`${JUDGE}\` on four-view renders`,
   ``,
   `A job that produced no model counts as 1/5 in the judge average and 0 in the parts columns, so every average covers all jobs. "Parts named" is checked in the GLB file (required parts present as separately named nodes); "parts visible" is the judge's call from the renders. With the critic, the delivered model is the round the critic scored highest; time and cost include the whole loop.`,
   ``,
@@ -202,20 +223,26 @@ await writeFile(join(dir, 'summary.json'), JSON.stringify({ meta, judge: JUDGE, 
 // Gallery: every object, every pipeline, each condition's delivered model (hero view) with its judge score.
 await mkdir(join(dir, 'gallery'), { recursive: true });
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-async function heroFor(r: JobRow, c: Condition): Promise<{ img: string; caption: string } | null> {
+async function heroFor(r: SourcedRow, c: Condition): Promise<{ img: string; caption: string } | null> {
+  if (c.critic && r.external) return null;
   const round = roundFor(r, c);
   if (!round?.ok || !round.hero) return null;
   const name = `${r.pipeline}__${r.objectId}__${c.id}.jpg`;
-  await copyFile(join(dir, round.hero), join(dir, 'gallery', name));
+  // A committed run has no jobs/ folder; its gallery holds the same image under this name.
+  const heroFile = [join(r.sourceDir, round.hero), join(r.sourceDir, 'gallery', name)].find((f) => existsSync(f));
+  if (!heroFile) return null;
+  await copyFile(heroFile, join(dir, 'gallery', name));
   const v = verdictFor(r, round.round);
   return { img: `gallery/${name}`, caption: `${v ? `**${v.overall}/5**` : 'not judged'} · round ${round.round} · ${round.stats!.triangles.toLocaleString('en-US')} tris · ${round.missing?.length ? `missing ${round.missing.join(', ')}` : 'all parts named'}` };
 }
 const galleryMd: string[] = [`# Phase 3 gallery`, ``, `Each cell is the model a pipeline delivers under that condition, seen from above at three-quarters, with the judge's score (${JUDGE}). Four-view renders are in each job folder.`, ``];
 const html: string[] = [];
-for (const obj of objects) {
-  const refFile = join(dir, 'refs', `${obj.id}.jpg`);
+for (const obj of objects.filter((o) => rows.some((r) => r.objectId === o.id))) {
+  // The reference image: this run's, else the baseline's (full size, or the copy in its committed gallery).
+  const refFile = [join(dir, 'refs', `${obj.id}.jpg`), ...(baselineDir ? [join(baselineDir, 'refs', `${obj.id}.jpg`), join(baselineDir, 'gallery', `ref__${obj.id}.jpg`)] : [])]
+    .find((f) => existsSync(f));
   let refImg = '';
-  if (existsSync(refFile)) {
+  if (refFile) {
     refImg = `gallery/ref__${obj.id}.jpg`;
     // References are 1024 px (~0.5 MB); 512 px is plenty next to the 512 px renders. sips is macOS-only.
     const shrunk = spawnSync('sips', ['-Z', '512', '-s', 'formatOptions', '75', refFile, '--out', join(dir, refImg)]);

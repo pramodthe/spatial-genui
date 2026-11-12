@@ -16,7 +16,8 @@
     "bench:combine": "tsx src/bench-combine.ts",
     "bench3d": "tsx src/three-d/bench3d.ts",
     "bench3d:judge": "tsx src/three-d/judge3d.ts",
-    "bench3d:report": "tsx src/three-d/report3d.ts"
+    "bench3d:report": "tsx src/three-d/report3d.ts",
+    "bench3d:import": "tsx src/three-d/import-external.ts"
   },
   "engines": {
     "node": ">=22.12.0"

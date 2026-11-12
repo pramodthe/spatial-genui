@@ -80,6 +80,8 @@ export type JobRow = {
   firstMs?: number;
   totalMs: number;
   apiError?: string;
+  /** Made outside the harness and imported (no time, cost or critic data). */
+  external?: boolean;
 };
 
 function bestRound(rounds: Round[]): number | null {

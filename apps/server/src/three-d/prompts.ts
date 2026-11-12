@@ -2,8 +2,10 @@
 // named parts, Quest budget) in its own tool's terms, so only the way of building differs.
 
 export type AssetRequest = { id: string; category: string; prompt: string; parts: string[] };
-export type Pipeline = 'p1-threejs' | 'p2-cadquery' | 'p3-blender';
+/** p4-tripo is imported from outside (Tripo's website), not run by the harness. */
+export type Pipeline = 'p1-threejs' | 'p2-cadquery' | 'p3-blender' | 'p4-tripo';
 
+/** The pipelines the harness can run itself. */
 export const PIPELINES: Pipeline[] = ['p1-threejs', 'p2-cadquery', 'p3-blender'];
 
 const CONTRACT = `The model is a learning object that sits on a desk in mixed reality: people pick it up, look at it from every side, and the app labels and highlights its parts. So:

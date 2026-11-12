@@ -1,8 +1,9 @@
 import { appendFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { config } from './config.js';
-import { dryRun, type SceneStats } from './dryrun.js';
-import { complete, type ChatMessage } from './llm.js';
+import type { SceneStats } from './dryrun.js';
+import { dryRun } from './sandbox.js';
+import { complete, defaultTarget, type ChatMessage, type LlmTarget } from './llm.js';
 import { SYSTEM_PROMPT, repairMessage } from './prompt.js';
 import { extractCode, validateModule } from './validate.js';
 
@@ -36,9 +37,9 @@ export type GenerationResult = {
  */
 export async function generate(
   prompt: string,
-  options: { previousCode?: string; clientError?: string; model?: string } = {},
+  options: { previousCode?: string; clientError?: string; target?: LlmTarget; log?: boolean } = {},
 ): Promise<GenerationResult> {
-  const model = options.model ?? config.model;
+  const target = options.target ?? defaultTarget;
   const started = performance.now();
   const messages: ChatMessage[] = [
     { role: 'system', content: SYSTEM_PROMPT },
@@ -56,14 +57,14 @@ export async function generate(
     id: `${new Date().toISOString().replace(/[:.]/g, '-')}-${Math.random().toString(36).slice(2, 6)}`,
     ok: false,
     prompt,
-    model,
-    provider: new URL(config.baseURL).host,
+    model: target.id,
+    provider: new URL(target.baseURL).host,
     attempts,
     totalMs: 0,
   };
 
   for (let i = 0; i <= config.maxRepairs; i++) {
-    const reply = await complete(messages, model);
+    const reply = await complete(messages, target);
     const attempt: Attempt = {
       ms: reply.ms,
       promptTokens: reply.promptTokens,
@@ -93,7 +94,7 @@ export async function generate(
       continue;
     }
 
-    const run = dryRun(validation.transformed);
+    const run = await dryRun(validation.transformed);
     if (!run.ok) {
       attempt.stage = 'dry-run';
       attempt.error = run.error;
@@ -109,7 +110,7 @@ export async function generate(
 
   if (!result.ok) result.error = attempts.at(-1)?.error ?? 'Generation failed.';
   result.totalMs = Math.round(performance.now() - started);
-  await logRun(result);
+  if (options.log !== false) await logRun(result);
   return result;
 }
 

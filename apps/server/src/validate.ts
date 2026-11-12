@@ -1,5 +1,6 @@
 import { parse, type Node } from 'acorn';
 import { full } from 'acorn-walk';
+import { unsupportedGlyphs } from './glyphs.js';
 
 export type ValidationResult =
   | { ok: true; transformed: string }
@@ -16,6 +17,19 @@ const BANNED_GLOBALS = new Set([
   'process', 'require', 'module',
 ]);
 const BANNED_PROPERTIES = new Set(['constructor', '__proto__', '__defineGetter__', '__defineSetter__']);
+
+/** The string value of an expression built only from literals (e.g. "constr" + "uctor"), else null. */
+function constantString(node: any): string | null {
+  if (!node) return null;
+  if (node.type === 'Literal') return String(node.value);
+  if (node.type === 'TemplateLiteral' && node.expressions.length === 0) return node.quasis.map((q: any) => q.value.cooked ?? '').join('');
+  if (node.type === 'BinaryExpression' && node.operator === '+') {
+    const left = constantString(node.left);
+    const right = constantString(node.right);
+    return left != null && right != null ? left + right : null;
+  }
+  return null;
+}
 
 /** Extract the module source from the model's reply (first fenced code block, or the raw text). */
 export function extractCode(reply: string): string | null {
@@ -40,6 +54,15 @@ export function validateModule(code: string): ValidationResult {
   const declared = new Set<string>();
   const references: { name: string; line?: number }[] = [];
   let exportDefault: (Node & { declaration: Node }) | null = null;
+  // Text the panel font can't draw shows up as empty boxes; collect it from every string in the module.
+  const badGlyphs = new Map<string, { replacement: string; lines: Set<number> }>();
+  const noteGlyphs = (text: string, line?: number) => {
+    for (const [ch, replacement] of unsupportedGlyphs(text)) {
+      const entry = badGlyphs.get(ch) ?? { replacement, lines: new Set<number>() };
+      if (line) entry.lines.add(line);
+      badGlyphs.set(ch, entry);
+    }
+  };
 
   full(ast, (node: any, _state, walkType) => {
     const where = node.loc ? ` (line ${node.loc.start.line})` : '';
@@ -49,6 +72,8 @@ export function validateModule(code: string): ValidationResult {
       else references.push({ name: node.name, line: node.loc?.start.line });
       return;
     }
+    if (node.type === 'Literal' && typeof node.value === 'string') noteGlyphs(node.value, node.loc?.start.line);
+    if (node.type === 'TemplateElement') noteGlyphs(node.value.cooked ?? node.value.raw, node.loc?.start.line);
     switch (node.type) {
       case 'ImportDeclaration':
       case 'ImportExpression':
@@ -64,9 +89,9 @@ export function validateModule(code: string): ValidationResult {
         exportDefault = node;
         break;
       case 'MemberExpression': {
-        const name = node.computed
-          ? node.property.type === 'Literal' ? String(node.property.value) : null
-          : node.property.name;
+        // Catches literal and string-built keys; keys held in variables can't be caught statically,
+        // which is why the dry run executes in a locked-down process (sandbox.ts).
+        const name = node.computed ? constantString(node.property) : node.property.name;
         if (name && BANNED_PROPERTIES.has(name)) problems.push(`Accessing \`.${name}\` is not allowed${where}`);
         break;
       }
@@ -82,6 +107,17 @@ export function validateModule(code: string): ValidationResult {
     if (BANNED_GLOBALS.has(ref.name) && !declared.has(ref.name)) {
       problems.push(`\`${ref.name}\` is not available${ref.line ? ` (line ${ref.line})` : ''}`);
     }
+  }
+  if (badGlyphs.size > 0) {
+    const list = [...badGlyphs].slice(0, 12).map(([ch, { replacement, lines }]) => {
+      const code = `U+${ch.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}`;
+      const at = lines.size ? ` (line ${[...lines].slice(0, 3).join(', ')})` : '';
+      return `"${ch}" ${code}${at} → ${replacement ? `"${replacement}"` : 'remove it (draw icons as 3D shapes instead)'}`;
+    });
+    problems.push(
+      `Panel text can only use plain ASCII plus ° § ä ö ü Ä Ö Ü ß; other characters render as empty boxes. Replace: ${list.join('; ')}` +
+        `${badGlyphs.size > 12 ? ` and ${badGlyphs.size - 12} more` : ''}.`,
+    );
   }
   if (!exportDefault) problems.push('The module must `export default function build(api) { … }`.');
   if (problems.length > 0) {

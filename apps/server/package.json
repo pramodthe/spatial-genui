@@ -8,7 +8,12 @@
     "start": "tsx src/server.ts",
     "gen": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
-    "batch": "tsx src/batch.ts"
+    "batch": "tsx src/batch.ts",
+    "bench": "tsx src/bench.ts",
+    "bench:report": "tsx src/bench-report.ts",
+    "bench:judge": "tsx src/judge.ts",
+    "bench:gallery": "tsx src/bench-gallery.ts",
+    "bench:combine": "tsx src/bench-combine.ts"
   },
   "engines": {
     "node": ">=22.12.0"
@@ -17,8 +22,10 @@
     "@drawcall/uikitml": "^0.1.8",
     "acorn": "^8.19.0",
     "acorn-walk": "^8.3.5",
+    "esbuild": "0.28.2",
     "openai": "^7.55.0",
-    "three": "npm:super-three@^0.185.0"
+    "three": "npm:super-three@^0.185.0",
+    "undici": "6.29.1"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

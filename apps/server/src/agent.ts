@@ -1,7 +1,8 @@
 import { appendFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { config } from './config.js';
-import { dryRun, type SceneStats } from './dryrun.js';
+import type { SceneStats } from './dryrun.js';
+import { dryRun } from './sandbox.js';
 import { complete, defaultTarget, type ChatMessage, type LlmTarget } from './llm.js';
 import { SYSTEM_PROMPT, repairMessage } from './prompt.js';
 import { extractCode, validateModule } from './validate.js';
@@ -93,7 +94,7 @@ export async function generate(
       continue;
     }
 
-    const run = dryRun(validation.transformed);
+    const run = await dryRun(validation.transformed);
     if (!run.ok) {
       attempt.stage = 'dry-run';
       attempt.error = run.error;

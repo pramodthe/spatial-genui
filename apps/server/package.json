@@ -22,6 +22,7 @@
     "@drawcall/uikitml": "^0.1.8",
     "acorn": "^8.19.0",
     "acorn-walk": "^8.3.5",
+    "esbuild": "0.28.2",
     "openai": "^7.55.0",
     "three": "npm:super-three@^0.185.0",
     "undici": "6.29.1"

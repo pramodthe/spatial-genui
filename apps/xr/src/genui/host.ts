@@ -61,10 +61,14 @@ export type MountReport = { ok: true; warnings: string[] } | { ok: false; error:
 // The panel font (Inter atlas in @pmndrs/msdfonts) has plain ASCII plus these; anything else renders
 // as an empty box. Keep in sync with apps/server/src/glyphs.ts, which makes the agent fix its text.
 const PANEL_GLYPHS = new Set([...Array.from({ length: 95 }, (_, i) => String.fromCharCode(32 + i)), ...'§°ÄÖÜßäöü\n\r\t']);
+// Copied from REPLACEMENTS in apps/server/src/glyphs.ts.
 const GLYPH_FALLBACKS: Record<string, string> = {
-  '–': '-', '—': '-', '−': '-', '‘': "'", '’': "'", '“': '"', '”': '"', '…': '...', '·': '-', '•': '-',
-  '×': 'x', '÷': '/', '→': '->', '←': '<-', '≈': '~', '≤': '<=', '≥': '>=', '±': '+/-', '²': '^2', '³': '^3',
-  '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', 'µ': 'u', 'é': 'e', '€': 'EUR ', '£': 'GBP ', '\u00a0': ' ',
+  '–': '-', '—': '-', '−': '-', '‐': '-', '‑': '-',
+  '‘': "'", '’': "'", '“': '"', '”': '"', '…': '...', '·': '-', '•': '-', '×': 'x', '÷': '/',
+  '→': '->', '←': '<-', '↔': '<->', '⇒': '=>', '≈': '~', '≤': '<=', '≥': '>=', '±': '+/-', '≠': '!=',
+  '²': '^2', '³': '^3', '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6',
+  'µ': 'u', 'é': 'e', 'è': 'e', 'á': 'a', 'í': 'i', 'ó': 'o', 'ñ': 'n', 'ç': 'c', '€': 'EUR ', '£': 'GBP ',
+  ' ': ' ', ' ': ' ', ' ': ' ',
 };
 
 /** Safety net for text that slipped past the server checks: swap or drop characters the font lacks. */

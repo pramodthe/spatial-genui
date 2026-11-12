@@ -37,7 +37,23 @@ const works = (r: BenchRow) => r.ok && !crashed(r);
 // Failed scenes have nothing to judge; they score the minimum so every model's quality average
 // covers all of its scenes (otherwise failing on hard requests would raise a model's average).
 const FAILED_SCENE_SCORE = 1;
-const withFailures = (scores: number[], failed: number) => [...scores, ...Array(failed).fill(FAILED_SCENE_SCORE)];
+/**
+ * Quality per scene, then averaged over scenes: a failed scene counts once as FAILED_SCENE_SCORE
+ * (replacing any judge scores it got), a working scene counts once as the mean of its matching
+ * judgements. Scenes with no matching judgement are left out (e.g. not judged yet).
+ */
+function sceneQuality(scenes: BenchRow[], pick: (j: JudgeRow) => boolean, adjust: (j: JudgeRow) => number = () => 0): number | null {
+  const perScene: number[] = [];
+  for (const r of scenes) {
+    if (!works(r)) {
+      perScene.push(FAILED_SCENE_SCORE);
+      continue;
+    }
+    const js = scoredJudgements.filter((j) => key(j) === key(r) && pick(j));
+    if (js.length) perScene.push(mean(js.map((j) => judgeScore(j) + adjust(j))));
+  }
+  return perScene.length ? round(mean(perScene), 2) : null;
+}
 
 const models = [...new Set(rows.map((r) => r.model))];
 // Judges grade on different curves (one may give everything ~4.7, another ~3.8). Shift each judge's
@@ -63,13 +79,10 @@ const summary = models.map((model) => {
   const b = scored.map((r) => browserBy.get(key(r))).filter((x): x is BrowserRow => Boolean(x) && !x!.harnessError);
   const grabTests = b.filter((x) => x.grab?.tested);
   const pressTests = b.filter((x) => x.press?.tested);
-  const judgedHere = panel.filter((j) => j.model === model);
-  const primary = primaryJudge && model !== primaryJudge ? scoredJudgements.filter((j) => j.judge === primaryJudge && j.model === model) : [];
-  const quality = judgedHere.map((j) => mean(Object.values(j.scores!)));
+  const family = all[0]?.family;
+  const inPanel = (j: JudgeRow) => j.judge !== primaryJudge;
   // Self-preference control: only judges from a different provider family than the model.
-  const crossJudged = judgedHere.filter((j) => j.judgeFamily && j.judgeFamily !== all[0]?.family);
-  const crossQuality = crossJudged.map(judgeScore);
-  const crossAdjusted = crossJudged.map((j) => judgeScore(j) + (judgeShift.get(j.judge) ?? 0));
+  const otherFamily = (j: JudgeRow) => inPanel(j) && Boolean(j.judgeFamily) && j.judgeFamily !== family;
   const priced = scored.filter((r) => r.costUSD != null);
   return {
     model,
@@ -86,10 +99,12 @@ const summary = models.map((model) => {
     pressWorks: pressTests.length ? rate(pressTests.filter((x) => x.press!.fired).length, pressTests.length) : null,
     // Share of probed panel buttons (up to 3 per scene) whose generated click handler ran.
     panelButtonsWork: b.some((x) => x.panelPress?.tested) ? rate(sum(b.map((x) => x.panelPress?.worked ?? 0)), sum(b.map((x) => x.panelPress?.tested ?? 0))) : null,
-    qualityPrimary: primary.length ? round(mean(withFailures(primary.map(judgeScore), failed)), 2) : null,
-    quality1to5: quality.length ? round(mean(withFailures(quality, failed)), 2) : null,
-    qualityOtherJudges: crossQuality.length ? round(mean(withFailures(crossQuality, failed)), 2) : null,
-    qualityOtherJudgesAdjusted: crossAdjusted.length ? round(mean(withFailures(crossAdjusted, failed)), 2) : null,
+    qualityPrimary: primaryJudge && model !== primaryJudge ? sceneQuality(scored, (j) => j.judge === primaryJudge) : null,
+    quality1to5: panel.some((j) => j.model === model) ? sceneQuality(scored, inPanel) : null,
+    qualityOtherJudges: panel.some((j) => j.model === model && otherFamily(j)) ? sceneQuality(scored, otherFamily) : null,
+    qualityOtherJudgesAdjusted: panel.some((j) => j.model === model && otherFamily(j))
+      ? sceneQuality(scored, otherFamily, (j) => judgeShift.get(j.judge) ?? 0)
+      : null,
     medianFirstAttemptS: round(median(scored.map((r) => r.firstAttemptMs / 1000)), 1),
     medianTotalS: round(median(scored.map((r) => r.totalMs / 1000)), 1),
     meanOutputTokens: Math.round(mean(scored.map((r) => r.completionTokens))),
@@ -122,7 +137,7 @@ const md = [
   ``,
   `Source: \`${relative(resolve(import.meta.dirname, '../../..'), dir)}\` · ${rows.length} generations · ${browser.filter((b) => b.mounted).length} of ${browser.length} mounted in the emulator · ${scoredJudgements.length} judge scores`,
   ``,
-  `Success and pass@1 count a scene only if it passed the checks **and** ran in the emulator without errors. Failed scenes score ${FAILED_SCENE_SCORE}/5 in every quality column, so each model's average covers all its scenes.${primaryIsContestant ? ` ${primaryJudge} is also a contestant; its own scenes are not given a headline score.` : ''}`,
+  `Success and pass@1 count a scene only if it passed the checks **and** ran in the emulator without errors. Quality is averaged per scene: a failed scene counts once as ${FAILED_SCENE_SCORE}/5, a working scene as the mean of its judges, so each model's average covers all its scenes.${primaryIsContestant ? ` ${primaryJudge} is also a contestant; its own scenes are not given a headline score.` : ''}`,
   ``,
   `| Model | n | pass@1 | Success (≤2 repairs) | Failed scenes | Mounted clean | Grab works | Press works | Panel buttons work | Quality: ${primaryJudge ?? 'independent judge'} (1–5) | Panel quality (all) | Panel, other-provider judges | Panel, adjusted for strictness | Median first try | Median total | Output tokens | Cost | Cost / success |`,
   `|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|`,

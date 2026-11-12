@@ -30,11 +30,12 @@ const MAX_PANEL_YAW = 0.4; // ~23°: at 40° judges already saw text as steeply 
 const MIN_TEXT_CM = 1.1;
 
 /**
- * Execute a validated, transformed module in an isolated VM context with real Three.js
- * and stub host APIs, so crashes, infinite loops, bad UI markup and over-budget scenes
- * are caught before the code ever reaches the headset.
+ * Execute a validated, transformed module in a VM context with real Three.js and stub host APIs,
+ * so crashes, infinite loops, bad UI markup and over-budget scenes are caught before the code ever
+ * reaches the headset. Node's vm is NOT a security boundary: only call this inside the sandbox
+ * process (sandbox.ts); everywhere else use `dryRun` from sandbox.ts.
  */
-export function dryRun(transformed: string): DryRunResult {
+export function dryRunUnsafe(transformed: string): DryRunResult {
   const traitTargets: { object: unknown; grab: boolean; press: boolean }[] = [];
   const panels: { markup: string; options: any; holder: THREE.Group }[] = [];
 

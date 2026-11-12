@@ -9,6 +9,7 @@ WebXR passthrough scene on Meta Quest, with hand interaction. See `SPEC.md` for 
 ```
 apps/server/   agent server: OpenAI-compatible LLM client, safety check, dry run, repair loop
 apps/xr/       IWSDK WebXR app: GenUI host (src/genui/), desktop prompt box, test scripts (tests/)
+apps/worker3d/ Python 3D backend: CadQuery runner, Blender MCP server, Modal app (modal_app.py)
 docs/paper/    research notes
 ```
 
@@ -71,3 +72,29 @@ emulator, grab works and press works (emulated hand), quality 1–5 from a cross
 On a Quest on the same Wi-Fi, open the `network` URL from `npx @iwsdk/cli dev status` and accept the
 local certificate warning. The desktop prompt box is not visible inside an immersive session yet
 (in-headset input is Phase 4).
+
+## 3D generation (Phase 3)
+
+**See the results: [every object from every pipeline](bench/results/3d-run-1/gallery.md)** · [numbers](bench/results/3d-run-1/summary.md)
+
+Three ways for the agent to build a 3D learning object with named parts, compared on 12 objects: **P1** writes
+Three.js code (runs in the browser), **P2** writes a CadQuery (Python CAD) script, **P3** is an agent with Blender
+tools served by a Blender MCP server. Add-ons: a reference image from Muse Image (M1) and a vision critic that
+reviews four rendered views and asks for fixes (M2). Every GLB is rendered the same way and judged by Opus 5.5.
+
+Agent-written Python runs on the 3D backend in `apps/worker3d/`: on Modal, each CadQuery script and each Blender
+session gets its own Modal Sandbox (network blocked, no secrets); without `WORKER3D_URL` the same workers run
+locally under a macOS sandbox profile.
+
+```bash
+cd apps/worker3d && uv sync                                          # Python 3.12 env with CadQuery, MCP, Modal
+uv run modal setup                                                   # log in to Modal (once per machine)
+uv run modal secret create genui-worker3d WORKER3D_TOKEN=<from .env> # once per Modal workspace
+uv run modal deploy modal_app.py                                     # then set WORKER3D_URL in .env
+cd ../server
+npm run bench3d -- --out ../../bench/results/3d-run-2                # build: 12 objects x 3 pipelines x 2 variants
+npm run bench3d:judge -- ../../bench/results/3d-run-2                # Opus 5.5 scores the renders
+npm run bench3d:report -- ../../bench/results/3d-run-2               # summary.md + gallery
+```
+
+Local runs need Blender at `/Applications/Blender.app` (or `BLENDER_BIN`). `--backend local|modal` overrides the default.

@@ -1,0 +1,17 @@
+{
+  "objectsFile": "bench/prompts/objects-12.json",
+  "pipelines": [
+    "p1-threejs",
+    "p2-cadquery",
+    "p3-blender"
+  ],
+  "variants": [
+    "base",
+    "ref"
+  ],
+  "criticRounds": 3,
+  "passScore": 8,
+  "model": "muse-ember-1.0-max",
+  "criticModel": "muse-ember-1.0-max",
+  "updatedAt": "2026-11-12T11:18:43.087Z"
+}

@@ -20,4 +20,7 @@ export const config = {
   // max reasoning needed ~40k on hard requests). Same limit for every model keeps the benchmark fair.
   maxCompletionTokens: 64000,
   runsDir: fileURLToPath(new URL('../runs/', import.meta.url)),
+  // Python 3D backend (apps/worker3d/modal_app.py on Modal). Unset: run the 3D workers locally.
+  worker3dUrl: process.env.WORKER3D_URL || '',
+  worker3dToken: process.env.WORKER3D_TOKEN || '',
 };

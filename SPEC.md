@@ -79,7 +79,7 @@ Spatial GenUI is **not empty territory**. The closest work:
 |---|---|---|
 | XR platform | WebXR with Meta's Immersive Web SDK (IWSDK), passthrough (`immersive-ar`) | Content can load at runtime, which GenUI needs; a native Quest APK can't compile new C# at runtime. Submission is a hosted link, with no APK or release channel. |
 | Agent framework | **TypeScript + Vercel AI SDK, no LangChain** | Same language as the client and the shared SDK schema (Zod types used by both agents and renderer). Works with any provider: Anthropic, OpenAI, and OpenAI-compatible endpoints for Kimi and Qwen, which the benchmark needs. Built-in structured output, tool calling and streaming. A thin layer, so prompts stay fully visible and controllable for a fair benchmark. Orchestration is plain async code. *Alternative:* LangGraph (Python) if the team is Python-first. |
-| 3D workers | Python service in a container | CadQuery and Blender's Python API (`bpy`) are Python-only. |
+| 3D workers | Python service on Modal (`apps/worker3d/modal_app.py`); every CadQuery script and Blender session runs in its own Modal Sandbox | CadQuery and Blender's Python API (`bpy`) are Python-only; agent-written code needs a real isolation boundary. |
 | Agent ↔ XR client connection | **AG-UI protocol** (`@ag-ui/client`, `@ag-ui/core`, v1.0.4 on npm) | CopilotKit's standard connection between an agent and a frontend. It supports every GenUI type, so all versions share one connection, and it makes ours the first AG-UI client for XR. |
 | Model access | Direct provider APIs, or one gateway (OpenRouter or Vercel AI Gateway) | One key and one interface for the benchmark. |
 | Speech-to-text | Server-side (e.g. Deepgram or Whisper) | The Quest Browser's built-in speech recognition is unreliable. |
@@ -375,10 +375,34 @@ Prompts span learning, commerce, productivity and data visualization, so we can 
 
 **Hypothesis:** code-based pipelines (P1–P3) win on named parts, which interactive learning needs (e.g. "grab Saturn's ring" or a "left ventricle" label). Generated meshes (P4/P5) win on how realistic organic shapes look. The production answer is probably a **router that picks a pipeline by object type**.
 
-**Sandbox:** a Docker image with Python, CadQuery, headless Blender and the Blender MCP server. Limits on CPU time and memory, and no network beyond an allowlist. Run it locally first; choose a cloud host in Phase 6.
+**Sandbox:** ~~a Docker image~~ built on Modal instead (Nov 12): one image with Python, CadQuery and headless Blender; each job runs in a Modal Sandbox (gVisor) with networking blocked, no secrets and a time limit. Locally, the same workers run under a macOS `sandbox-exec` profile.
 
 **Exit gate (Sun Nov 15, end of day):** production pipelines and router rules chosen.
 **Fallback:** P1 plus a curated library of licensed models.
+
+#### Phase 3 results (Nov 12, `bench/results/3d-run-1`)
+
+**Setup.** 12 learning objects (`bench/prompts/objects-12.json`: astronomy, biology, mechanical, everyday, architecture, earth science), each with 4–7 parts that must be separately named. 3 pipelines × {no reference, reference image (M1)}, and every job then runs the critic loop (M2, up to 3 rounds), so "pipeline alone" (round 0) and "pipeline + critic" (the round the critic scored highest) are measured on the same starting model. 72 jobs, 0 failures. Generator and critic: Muse Ember 1.0 at max reasoning. Judge: Opus 5.5 on a four-view render; every pipeline's GLB goes through the same Three.js renderer. P4/P5 (mesh generators) were not run: code pipelines only, decided Nov 12.
+
+| Pipeline | Judge (1–5) | + critic | + reference | + both | Parts named | Triangles | Meshes | Time to model | Cost / model |
+|---|---|---|---|---|---|---|---|---|---|
+| P1 Three.js code | **3.75** | 3.75 | 3.75 | 3.92 | 100% | 6.1k | 37 | **28 s** | **$0.009** |
+| P2 CadQuery | 3.42 | 3.67 | 3.25 | 3.50 | 100% | 21.6k | 12 | 55 s | $0.013 |
+| P3 Blender agent (MCP) | 3.58 | 3.67 | 3.42 | 3.67 | 100% | 6.4k | 18 | 39 s | $0.013 |
+
+Triangles, meshes, time and cost are for the pipeline alone (medians; cost is the mean, at Ember's $0.10/$0.50 per million tokens). The critic loop roughly doubles time and costs 2–4× (still under $0.06 per model, except P3 with both add-ons at $0.13).
+
+**Findings.**
+1. **No pipeline is clearly better on quality.** Paired over the 12 objects: P1 − P2 = +0.33 (95% bootstrap CI −0.08 to +0.75), P1 − P3 = +0.17 (−0.17 to +0.50). P1 is the fastest and cheapest and needs no backend: it runs in the browser as part of the GenUI module. CadQuery trails on organic shapes (biology 3.08 vs 3.58 for P1) and makes the densest meshes (curved CAD surfaces tessellate finely), but the fewest draw calls.
+2. **The critic helps a little, safely.** +0.11 pooled over all pipelines (CI +0.03 to +0.22). Because the loop keeps the round the critic scored highest, a revision made the delivered model worse in only 1 of 72 jobs. Critic and judge agree moderately (Pearson r = 0.54 on the same renders).
+3. **Reference images don't help.** −0.11 pooled (CI −0.31 to +0.08), and they slow things down: the image takes ~17 s (median) and the time to a model rises by 8–28 s. Generated references also contain mistakes (a test image mislabeled the heart's chambers), so they are requested without labels.
+4. **The named-part contract works:** 100% of required parts are separate, named nodes in every pipeline, which is what labelling, highlighting and grabbing a single part need.
+5. **Routing isn't worth it yet:** picking the best pipeline per object after the fact would score 3.83, against 3.75 for P1 alone.
+6. **Harness lessons:** a literal critic asked for true astronomical scale (Titan shrank to a dot), fixed by stating that classroom models compress scale; a revision can be worse than its input, fixed by best-round selection; a truncated tool reply was miscounted as a failed export, fixed and re-run.
+
+**Decision (exit gate).** Live requests use P1 (Three.js inside the GenUI module), without a reference image. The critic loop is used for pre-generated demo lessons, where time doesn't matter. P2 and P3 stay deployed on the Modal 3D backend as options (precise mechanical parts, reusable GLB assets) and for the paper. **Caveats:** one generator model, 12 objects, one run each, integer judge scores: directional, not conclusive. The paper run needs more objects, runs and a human rating pass.
+
+**Built.** `apps/server/src/three-d/` (pipelines, critic, reference images, shared renderer, judge, report, gallery); `apps/worker3d/` (CadQuery runner, Blender MCP server with tools `execute_blender_code`, `get_scene_info` and `export_glb`, macOS sandbox profile, Modal app). The Modal backend serves `POST /cadquery` and the Blender MCP server over streamable HTTP at `/mcp`, behind a bearer token; each MCP session gets its own Blender sandbox. Gallery: [`bench/results/3d-run-1/gallery.md`](bench/results/3d-run-1/gallery.md).
 
 ### Phase 4: XR integration and hand interaction
 
@@ -535,7 +559,7 @@ The schedule assumes 2 people. With 3, split Lane B into "XR" and "3D".
 apps/xr/                IWSDK WebXR client
 apps/server/            agent server (TS, Vercel AI SDK)
 packages/genui-host/    host runtime: loader, safety check, interaction bridge, guards
-workers/3d/             Python 3D worker: CadQuery, Blender + MCP (Docker)
+apps/worker3d/          Python 3D backend: CadQuery runner, Blender MCP server, Modal app, sandbox
 bench/                  prompts, harness, raw outputs, results, reports
 docs/paper/             research notes and draft
 ```

@@ -1,5 +1,5 @@
 {
-  "_note": "Benchmark candidates (enabled = in the run). IDs/prices for OpenRouter-listed models from its public catalog on 2026-11-12; DeepSeek V4.1 Flash runs on Fireworks, priced here at OpenRouter's listing for the same model version (estimate). Muse Spark (Meta API) has no listed price. Anthropic models reuse the app's key. Kimi K3.1 Pro runs on Fireworks, priced at OpenRouter's listing for the same model (estimate). Muse Ember's reasoning_effort must be confirmed against Meta's API.",
+  "_note": "Benchmark candidates (enabled = in the run). IDs/prices for OpenRouter-listed models from its public catalog on 2026-11-12; DeepSeek V4.1 Flash runs on Fireworks, priced here at OpenRouter's listing for the same model version (estimate). Muse Spark (Meta API) has no listed price. Anthropic models reuse the app's key. Kimi K3.1 Pro runs on Fireworks, priced at OpenRouter's listing for the same model (estimate). Muse Ember's reasoning_effort must be confirmed against Meta's API. Muse Ember is priced from Meta's pricing page (Nov 2026): $0.10 in / $0.50 out per million tokens up to 200K input tokens.",
   "models": [
     {
       "id": "claude-opus-5-5",
@@ -58,7 +58,9 @@
       "extraBody": {
         "reasoning_effort": "max"
       },
-      "enabled": true
+      "enabled": true,
+      "priceIn": 0.1,
+      "priceOut": 0.5
     },
     {
       "id": "kimi-k3.1-pro-fw",

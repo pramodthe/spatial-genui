@@ -90,3 +90,48 @@ export async function complete(messages: ChatMessage[], target: LlmTarget = defa
     ms: Math.round(performance.now() - started),
   };
 }
+
+export type ToolCall = { id: string; name: string; arguments: string };
+export type ToolCompletion = Completion & {
+  toolCalls: ToolCall[];
+  /** The assistant message to append to the history before the tool results. */
+  message: OpenAI.Chat.ChatCompletionMessageParam;
+};
+
+/** A chat completion that may call tools (OpenAI function-calling format). */
+export async function completeWithTools(
+  messages: OpenAI.Chat.ChatCompletionMessageParam[],
+  tools: OpenAI.Chat.ChatCompletionTool[],
+  target: LlmTarget = defaultTarget,
+): Promise<ToolCompletion> {
+  if (!target.apiKey) {
+    throw new Error(`No API key for ${target.id}. Add it to the .env file at the repo root.`);
+  }
+  const started = performance.now();
+  const res = await clientFor(target).chat.completions.create({
+    model: target.model,
+    messages,
+    tools,
+    [target.maxTokensParam ?? 'max_completion_tokens']: config.maxCompletionTokens,
+    ...target.extraBody,
+  } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming);
+  const choice = res.choices[0];
+  const toolCalls = (choice?.message?.tool_calls ?? [])
+    .filter((c): c is OpenAI.Chat.ChatCompletionMessageFunctionToolCall => c.type === 'function')
+    .map((c) => ({ id: c.id, name: c.function.name, arguments: c.function.arguments }));
+  return {
+    text: choice?.message?.content ?? '',
+    finishReason: choice?.finish_reason ?? null,
+    promptTokens: res.usage?.prompt_tokens ?? 0,
+    completionTokens: res.usage?.completion_tokens ?? 0,
+    ms: Math.round(performance.now() - started),
+    toolCalls,
+    message: {
+      role: 'assistant',
+      content: choice?.message?.content ?? '',
+      ...(toolCalls.length
+        ? { tool_calls: toolCalls.map((c) => ({ id: c.id, type: 'function' as const, function: { name: c.name, arguments: c.arguments } })) }
+        : {}),
+    },
+  };
+}

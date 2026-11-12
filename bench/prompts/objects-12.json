@@ -1,0 +1,14 @@
+[
+  { "id": "saturn", "category": "astronomy", "prompt": "Saturn with its rings and its largest moon, Titan", "parts": ["planet", "inner_ring", "outer_ring", "titan"] },
+  { "id": "lunar-lander", "category": "astronomy", "prompt": "An Apollo-style lunar lander standing on its legs", "parts": ["descent_stage", "ascent_stage", "leg", "footpad", "engine_nozzle", "ladder"] },
+  { "id": "heart", "category": "biology", "prompt": "A human heart showing its four chambers and the main blood vessels", "parts": ["left_ventricle", "right_ventricle", "left_atrium", "right_atrium", "aorta", "pulmonary_artery"] },
+  { "id": "plant-cell", "category": "biology", "prompt": "A plant cell cut open to show the organelles inside", "parts": ["cell_wall", "cell_membrane", "nucleus", "chloroplast", "vacuole", "mitochondrion"] },
+  { "id": "flower", "category": "biology", "prompt": "A flower with the parts a biology class labels", "parts": ["petal", "sepal", "stem", "leaf", "stamen", "pistil"] },
+  { "id": "gear-train", "category": "mechanical", "prompt": "A simple gear train: a hand crank turning a small gear that drives a larger gear, on a base plate", "parts": ["base_plate", "crank_handle", "drive_gear", "driven_gear", "axle"] },
+  { "id": "bicycle", "category": "mechanical", "prompt": "A bicycle", "parts": ["frame", "front_wheel", "rear_wheel", "handlebar", "saddle", "pedal", "chain"] },
+  { "id": "engine-cylinder", "category": "mechanical", "prompt": "A cut-away of one cylinder of a car engine", "parts": ["cylinder", "piston", "connecting_rod", "crankshaft", "spark_plug", "intake_valve", "exhaust_valve"] },
+  { "id": "guitar", "category": "everyday", "prompt": "An acoustic guitar", "parts": ["body", "sound_hole", "neck", "headstock", "bridge", "string", "tuning_peg"] },
+  { "id": "office-chair", "category": "everyday", "prompt": "An office chair on wheels", "parts": ["seat", "backrest", "armrest", "gas_lift", "star_base", "caster"] },
+  { "id": "greek-temple", "category": "architecture", "prompt": "An ancient Greek temple like the Parthenon", "parts": ["stylobate", "column", "entablature", "pediment", "roof"] },
+  { "id": "volcano", "category": "earth-science", "prompt": "A volcano cut in half to show what is inside", "parts": ["magma_chamber", "main_vent", "crater", "lava_flow", "rock_layer", "ash_cloud"] }
+]

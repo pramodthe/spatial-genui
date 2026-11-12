@@ -1,0 +1,379 @@
+{
+  "meta": {
+    "objectsFile": "bench/prompts/objects-12.json",
+    "pipelines": [
+      "p1-threejs",
+      "p2-cadquery",
+      "p3-blender"
+    ],
+    "variants": [
+      "base",
+      "ref"
+    ],
+    "criticRounds": 3,
+    "passScore": 8,
+    "model": "muse-ember-1.0-max",
+    "criticModel": "muse-ember-1.0-max",
+    "updatedAt": "2026-11-12T11:18:43.087Z"
+  },
+  "judge": "claude-opus-5-5",
+  "cells": [
+    {
+      "pipeline": "p1-threejs",
+      "condition": "none",
+      "jobs": 12,
+      "works": 12,
+      "judged": 12,
+      "overall": 3.75,
+      "recognizable": 4.583333333333333,
+      "accuracy": 3.5833333333333335,
+      "craft": 3.75,
+      "partsNamed": 1,
+      "partsVisible": 1,
+      "triangles": 6072,
+      "meshes": 37,
+      "glbKB": 280,
+      "medianTimeS": 27.772,
+      "costPerModel": 0.008663483333333334
+    },
+    {
+      "pipeline": "p1-threejs",
+      "condition": "critic",
+      "jobs": 12,
+      "works": 12,
+      "judged": 12,
+      "overall": 3.75,
+      "recognizable": 4.666666666666667,
+      "accuracy": 3.5833333333333335,
+      "craft": 3.9166666666666665,
+      "partsNamed": 1,
+      "partsVisible": 1,
+      "triangles": 6072,
+      "meshes": 41.5,
+      "glbKB": 323.173828125,
+      "medianTimeS": 53.497,
+      "costPerModel": 0.022086008333333334
+    },
+    {
+      "pipeline": "p1-threejs",
+      "condition": "ref",
+      "jobs": 12,
+      "works": 12,
+      "judged": 12,
+      "overall": 3.75,
+      "recognizable": 4.583333333333333,
+      "accuracy": 3.5833333333333335,
+      "craft": 3.6666666666666665,
+      "partsNamed": 1,
+      "partsVisible": 0.9880952380952381,
+      "triangles": 7646,
+      "meshes": 51,
+      "glbKB": 306.408203125,
+      "medianTimeS": 53.4315,
+      "costPerModel": 0.020375608333333337
+    },
+    {
+      "pipeline": "p1-threejs",
+      "condition": "ref+critic",
+      "jobs": 12,
+      "works": 12,
+      "judged": 12,
+      "overall": 3.9166666666666665,
+      "recognizable": 4.666666666666667,
+      "accuracy": 3.75,
+      "craft": 3.6666666666666665,
+      "partsNamed": 1,
+      "partsVisible": 1,
+      "triangles": 8254,
+      "meshes": 50,
+      "glbKB": 398.732421875,
+      "medianTimeS": 72.3955,
+      "costPerModel": 0.03547436666666667
+    },
+    {
+      "pipeline": "p2-cadquery",
+      "condition": "none",
+      "jobs": 12,
+      "works": 12,
+      "judged": 12,
+      "overall": 3.4166666666666665,
+      "recognizable": 4.333333333333333,
+      "accuracy": 3.3333333333333335,
+      "craft": 3.5,
+      "partsNamed": 1,
+      "partsVisible": 0.9880952380952381,
+      "triangles": 21640,
+      "meshes": 11.5,
+      "glbKB": 475.060546875,
+      "medianTimeS": 55.177,
+      "costPerModel": 0.013022116666666665
+    },
+    {
+      "pipeline": "p2-cadquery",
+      "condition": "critic",
+      "jobs": 12,
+      "works": 12,
+      "judged": 12,
+      "overall": 3.6666666666666665,
+      "recognizable": 4.416666666666667,
+      "accuracy": 3.4166666666666665,
+      "craft": 3.4166666666666665,
+      "partsNamed": 1,
+      "partsVisible": 0.9880952380952381,
+      "triangles": 24077.5,
+      "meshes": 13.5,
+      "glbKB": 552.455078125,
+      "medianTimeS": 112.277,
+      "costPerModel": 0.03829152499999999
+    },
+    {
+      "pipeline": "p2-cadquery",
+      "condition": "ref",
+      "jobs": 12,
+      "works": 12,
+      "judged": 12,
+      "overall": 3.25,
+      "recognizable": 4.166666666666667,
+      "accuracy": 3.1666666666666665,
+      "craft": 3.0833333333333335,
+      "partsNamed": 1,
+      "partsVisible": 0.9623015873015873,
+      "triangles": 21696,
+      "meshes": 15,
+      "glbKB": 516.240234375,
+      "medianTimeS": 63.137,
+      "costPerModel": 0.023532891666666667
+    },
+    {
+      "pipeline": "p2-cadquery",
+      "condition": "ref+critic",
+      "jobs": 12,
+      "works": 12,
+      "judged": 12,
+      "overall": 3.5,
+      "recognizable": 4.416666666666667,
+      "accuracy": 3.4166666666666665,
+      "craft": 3.3333333333333335,
+      "partsNamed": 1,
+      "partsVisible": 1,
+      "triangles": 19097.5,
+      "meshes": 13,
+      "glbKB": 457.912109375,
+      "medianTimeS": 158.8075,
+      "costPerModel": 0.047994658333333336
+    },
+    {
+      "pipeline": "p3-blender",
+      "condition": "none",
+      "jobs": 12,
+      "works": 12,
+      "judged": 12,
+      "overall": 3.5833333333333335,
+      "recognizable": 4.333333333333333,
+      "accuracy": 3.5833333333333335,
+      "craft": 3.5833333333333335,
+      "partsNamed": 1,
+      "partsVisible": 0.9742063492063493,
+      "triangles": 6410,
+      "meshes": 18,
+      "glbKB": 190.677734375,
+      "medianTimeS": 39.4765,
+      "costPerModel": 0.013108791666666668
+    },
+    {
+      "pipeline": "p3-blender",
+      "condition": "critic",
+      "jobs": 12,
+      "works": 12,
+      "judged": 12,
+      "overall": 3.6666666666666665,
+      "recognizable": 4.5,
+      "accuracy": 3.6666666666666665,
+      "craft": 3.5833333333333335,
+      "partsNamed": 1,
+      "partsVisible": 1,
+      "triangles": 6540,
+      "meshes": 17.5,
+      "glbKB": 190.677734375,
+      "medianTimeS": 70.6585,
+      "costPerModel": 0.05397088333333334
+    },
+    {
+      "pipeline": "p3-blender",
+      "condition": "ref",
+      "jobs": 12,
+      "works": 12,
+      "judged": 12,
+      "overall": 3.4166666666666665,
+      "recognizable": 4.166666666666667,
+      "accuracy": 3.3333333333333335,
+      "craft": 3.1666666666666665,
+      "partsNamed": 1,
+      "partsVisible": 0.9742063492063492,
+      "triangles": 7880,
+      "meshes": 29.5,
+      "glbKB": 265.39453125,
+      "medianTimeS": 66.5925,
+      "costPerModel": 0.037317608333333335
+    },
+    {
+      "pipeline": "p3-blender",
+      "condition": "ref+critic",
+      "jobs": 12,
+      "works": 12,
+      "judged": 12,
+      "overall": 3.6666666666666665,
+      "recognizable": 4.333333333333333,
+      "accuracy": 3.5833333333333335,
+      "craft": 3.5,
+      "partsNamed": 1,
+      "partsVisible": 0.9880952380952381,
+      "triangles": 7946,
+      "meshes": 29.5,
+      "glbKB": 227.861328125,
+      "medianTimeS": 126.4985,
+      "costPerModel": 0.1315831083333333
+    }
+  ],
+  "criticEffect": [
+    {
+      "pipeline": "p1-threejs",
+      "variant": "base",
+      "pairs": 12,
+      "improved": 0,
+      "worse": 0,
+      "meanDelta": 0,
+      "roundsUsed": 0.9166666666666666,
+      "revisionFailures": 0
+    },
+    {
+      "pipeline": "p1-threejs",
+      "variant": "ref",
+      "pairs": 12,
+      "improved": 2,
+      "worse": 0,
+      "meanDelta": 0.16666666666666666,
+      "roundsUsed": 0.9166666666666666,
+      "revisionFailures": 0
+    },
+    {
+      "pipeline": "p2-cadquery",
+      "variant": "base",
+      "pairs": 12,
+      "improved": 3,
+      "worse": 0,
+      "meanDelta": 0.25,
+      "roundsUsed": 1.3333333333333333,
+      "revisionFailures": 0
+    },
+    {
+      "pipeline": "p2-cadquery",
+      "variant": "ref",
+      "pairs": 12,
+      "improved": 3,
+      "worse": 0,
+      "meanDelta": 0.25,
+      "roundsUsed": 1.6666666666666667,
+      "revisionFailures": 0
+    },
+    {
+      "pipeline": "p3-blender",
+      "variant": "base",
+      "pairs": 12,
+      "improved": 1,
+      "worse": 0,
+      "meanDelta": 0.08333333333333333,
+      "roundsUsed": 1.1666666666666667,
+      "revisionFailures": 0
+    },
+    {
+      "pipeline": "p3-blender",
+      "variant": "ref",
+      "pairs": 12,
+      "improved": 4,
+      "worse": 1,
+      "meanDelta": 0.25,
+      "roundsUsed": 1.5833333333333333,
+      "revisionFailures": 0
+    }
+  ],
+  "criticJudgeAgreement": {
+    "r": 0.5442856797378186,
+    "n": 110
+  },
+  "byCategory": [
+    {
+      "category": "astronomy",
+      "objects": [
+        "saturn",
+        "lunar-lander"
+      ],
+      "scores": {
+        "p1-threejs": 3.75,
+        "p2-cadquery": 3.625,
+        "p3-blender": 3.75
+      }
+    },
+    {
+      "category": "biology",
+      "objects": [
+        "heart",
+        "plant-cell",
+        "flower"
+      ],
+      "scores": {
+        "p1-threejs": 3.583333333333333,
+        "p2-cadquery": 3.0833333333333335,
+        "p3-blender": 3.3333333333333335
+      }
+    },
+    {
+      "category": "mechanical",
+      "objects": [
+        "gear-train",
+        "bicycle",
+        "engine-cylinder"
+      ],
+      "scores": {
+        "p1-threejs": 3.9166666666666665,
+        "p2-cadquery": 3.666666666666667,
+        "p3-blender": 3.9166666666666665
+      }
+    },
+    {
+      "category": "everyday",
+      "objects": [
+        "guitar",
+        "office-chair"
+      ],
+      "scores": {
+        "p1-threejs": 3.75,
+        "p2-cadquery": 3.5,
+        "p3-blender": 3.25
+      }
+    },
+    {
+      "category": "architecture",
+      "objects": [
+        "greek-temple"
+      ],
+      "scores": {
+        "p1-threejs": 4,
+        "p2-cadquery": 4,
+        "p3-blender": 4
+      }
+    },
+    {
+      "category": "earth-science",
+      "objects": [
+        "volcano"
+      ],
+      "scores": {
+        "p1-threejs": 4,
+        "p2-cadquery": 3,
+        "p3-blender": 3.25
+      }
+    }
+  ],
+  "failures": []
+}

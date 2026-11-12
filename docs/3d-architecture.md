@@ -1,0 +1,288 @@
+# 3D generation architecture (v2): accurate, part-structured 3D for learning
+
+- **Status:** Draft for review, November 12, 2026
+- **Replaces:** the Phase 3 approach of having the LLM build every object's geometry as code
+- **Inputs:** the Phase 3 benchmark (`bench/results/3d-run-1`), the X-Ray Mirror example, SceneCraft (arXiv 2403.01248), the `setout` project, and the sources in section 10
+
+---
+
+## 1. Why a new architecture
+
+The Phase 3 benchmark asked one model (Muse Ember) to build 12 learning objects as code in three ways: Three.js, CadQuery and an agent with Blender tools. All 72 jobs produced a valid, named-part model, and the independent judge scored them 3.25–3.92 out of 5. The results look schematic: a heart made of blobs and tubes, a skull would be worse. For a learning app that is not good enough. Teaching wrong anatomy or science is a real harm, not a cosmetic issue.
+
+Three pieces of evidence point the same way:
+
+1. **Code-built geometry has a ceiling.** Swapping pipelines barely moved the score (no difference was statistically clear), and a critic loop added only +0.11. The limit is not the tool; it is that a language model can't type a CT-accurate skull from memory.
+2. **Accurate examples don't generate the geometry.** The X-Ray Mirror page embeds BodyParts3D meshes (scan-derived anatomy, 26 labelled structures; the cerebrum alone is 70,000 triangles) and uses MediaPipe tracking to place them. AI wrote the app, not the skull.
+3. **Research agents retrieve, then compose.** SceneCraft retrieves assets instead of generating them, has the LLM plan relations in a graph, scores layouts with code, and refines with a vision critic. Removing the relation graph dropped its constraint score from 88.9 to 3.2, removing the critic loop to 26.1, and removing the learned function library to 64.5 (vs 5.6 for BlenderGPT, the "LLM writes Blender code" baseline). Newer 3D work is moving the same way: part-aware generators that name their parts, and benchmarks showing that agents improve when they can inspect the 3D object through tools.
+
+**Principle: ground truth first, generate last, verify always.** Accuracy comes from authoritative data wherever it exists. The LLM's job is to find the right asset, structure it for teaching and compose the lesson. Generation fills the long tail, and every result says where it came from and how much to trust it.
+
+## 2. Requirements
+
+| # | Requirement | Measure |
+|---|---|---|
+| R1 | **Accuracy.** Geometry true to the real thing; for science and anatomy, traceable to an authoritative source | Expert/judge accuracy score; share of assets from verified sources |
+| R2 | **Named part structure.** Separable parts named and mapped to a concept ID (anatomy: FMA; general: Wikidata), with a hierarchy (heart → left ventricle) | Required parts present and correctly mapped |
+| R3 | **Teaching rig.** Label anchors, explode directions, cut-away planes, X-ray materials and highlight for every part | Rig completeness; label legibility in the headset |
+| R4 | **Quest budget.** Triangles, draw calls, texture memory, file size; levels of detail (LODs) | Budget checks at load |
+| R5 | **Coverage.** Any object a learner asks for gets a usable model, even if less certain | Share of requests served per tier |
+| R6 | **Latency.** Cached assets load in about a second; new ones arrive progressively (placeholder, then final) | Time to first model, time to final |
+| R7 | **Licensing.** Every asset carries its licence and attribution; incompatible licences are excluded | Licence check at ingestion |
+| R8 | **Provenance and confidence.** Every asset records its source tier and verification result, and the app can show it | Present on 100% of assets |
+
+## 3. Overview
+
+```
+ Request ("teach me the heart")          GenUI agent (lesson) asks for assets by concept
+        │
+        ▼
+ ┌─ 1. Concept grounding ─────────────────────────────────────────────────────────┐
+ │  concept ID (FMA / Wikidata) + required parts from an ontology, not LLM memory  │
+ └────────────────────────────────────────────────────────────────────────────────┘
+        │  AssetSpec
+        ▼
+ ┌─ 2. Source router: try tiers in order of trust ────────────────────────────────┐
+ │  A  Curated library hit (scan/scientific data)           → verified            │
+ │  B  Data-driven builder (authoritative data + code)      → verified by build   │
+ │  C  Open-licence retrieval (Objaverse, Smithsonian…)     → plausible           │
+ │  D  Generate: reference image → image-to-3D → parts      → generated           │
+ │  E  Agentic modelling (Blender/CadQuery/Three.js code)   → schematic           │
+ └────────────────────────────────────────────────────────────────────────────────┘
+        │  candidate mesh(es)
+        ▼
+ 3. Part structuring: segment if needed → name parts → map to required parts → hierarchy
+        ▼
+ 4. Teaching rig: label anchors, explode vectors, cut planes, X-ray/highlight variants
+        ▼
+ 5. Verification ensemble: structure + geometry + visual critic vs real reference photos
+        │        fail → next tier or revise         pass → confidence + provenance
+        ▼
+ 6. Optimise for Quest: decimate, LODs, compress, merge per part
+        ▼
+ 7. Asset library: stored with metadata, embeddings, licence; later requests are retrievals
+        ▼
+ 8. Lesson composition (GenUI host): assets.load(id), relation graph → layout solver → layout critic
+```
+
+## 4. Components
+
+### 4.1 Concept grounding
+
+The GenUI agent requests an asset with an `AssetSpec` instead of free text:
+
+```json
+{
+  "concept": "heart",
+  "conceptId": "FMA:7088",
+  "parts": [{ "name": "left ventricle", "conceptId": "FMA:9466" }, "..."],
+  "detail": "chambers-and-great-vessels",
+  "use": ["label", "explode", "cutaway"],
+  "style": "realistic",
+  "sizeM": 0.25
+}
+```
+
+- The **part list comes from an ontology** where one exists: the FMA (anatomy, which BodyParts3D uses), Wikidata "has part" (P527) for general objects, curated lists for other domains. The LLM proposes, the ontology confirms. A part list that only the LLM vouches for is marked lower confidence.
+- **Level of detail is explicit.** A heart for a 10-year-old needs 6 parts, for a medical student 30. The same source asset serves both by grouping parts.
+
+### 4.2 Asset library
+
+One catalogue for every source, so retrieval, the router and the host see a single shape:
+
+| Field | Example |
+|---|---|
+| `id`, `concepts` | `heart-bp3d-v1`, `[FMA:7088]` |
+| `parts` | node name ↔ concept ID ↔ display name, hierarchy |
+| `tier`, `provenance` | `A`, "BodyParts3D 4.0, simplified to 40k triangles" |
+| `licence`, `attribution` | CC BY-SA, required credit text |
+| `scale`, `axes`, `origin` | real size in metres, Y up, base at origin |
+| `lods`, `budget` | triangle counts per LOD, draw calls, bytes |
+| `rig` | label anchors, explode vectors, cut planes (section 4.6) |
+| `verification` | checks passed, critic notes, reviewer, date |
+| `thumbnails`, `embeddings` | four-view renders; text and image embeddings |
+
+Ingestion pipelines, one per source, all ending in the same normalised GLB plus metadata:
+
+| Source | Content | Licence (check before use) | Parts |
+|---|---|---|---|
+| BodyParts3D / Z-Anatomy | Human anatomy from scans | CC BY-SA (sources disagree on version) | Per structure, FMA IDs |
+| NASA 3D Resources | Planets, spacecraft, landers | NASA media guidelines (generally free, no endorsement) | Partly |
+| Smithsonian Open Access 3D | Fossils, artefacts, specimens | CC0 | No (needs segmentation) |
+| Poly Haven | Everyday props | CC0 | Some |
+| Objaverse (Cap3D-filtered) | Long tail, 100k+ objects | Per object; keep CC0/CC BY | Rarely |
+
+Storage: GLBs in object storage (Modal Volume to start; a CDN later), catalogue in SQLite/JSON with embeddings. Licences are checked at ingestion; non-commercial and unknown licences are excluded by default.
+
+### 4.3 Retrieval
+
+SceneCraft-style, with an exact path first:
+
+1. **Concept-ID match** (exact, highest trust).
+2. **Text search** over captions and part names (embedding similarity).
+3. **Image search** over multi-view thumbnails (image embeddings of the query or a reference image).
+4. **Vision rerank:** render the top candidates and have the vision model pick the one that matches the spec, or reject all.
+
+Below a confidence threshold the router moves to the next tier instead of returning a weak match.
+
+### 4.4 Data-driven builders (tier B)
+
+Many learning subjects have authoritative numbers even without a mesh. Geometry built from data is accurate by construction, and the LLM's job shrinks to writing glue code against a data API:
+
+- **Molecules and proteins:** PubChem 3D conformers, PDB structures → atoms, bonds, ribbons.
+- **Solar system:** NASA radii, axial tilts, ring dimensions, orbital elements, public-domain textures.
+- **DNA, crystals, lattices:** published geometric parameters.
+- **Earth science:** elevation data for terrain, plate boundaries.
+- **Maths and physics:** exact functions, fields, trajectories.
+
+Each builder is a tested function in a shared kit, not code the LLM writes from scratch each time.
+
+### 4.5 Generation tiers (D and E)
+
+**Tier D, image-to-3D with parts**, for realistic long-tail objects:
+
+1. A reference image: a retrieved real photo first (Wikimedia Commons, licence-checked), else Muse Image.
+2. Image-to-3D on a GPU: SAM 3D Objects (Meta; SAM License, commercial use allowed with conditions; needs ≥32 GB of GPU memory) or TRELLIS (MIT licence). Pick by mesh quality and licence after a bake-off.
+3. Part segmentation of the result: PartField (open source, class-agnostic) or P3-SAM.
+4. **Part naming with SAM 3.1** on the Meta API: render the mesh from several views with a face-ID buffer, ask SAM 3.1 for each required part by name ("left ventricle"), and vote which faces each mask covers. This turns unnamed segments into named parts using Meta's own models.
+
+Output is marked `generated`: usable and labelled, but not trusted until verification passes.
+
+**Tier E, agentic modelling**, for structured objects with no data and no asset (machines, buildings, diagrams). This is the Phase 3 work, upgraded with what SceneCraft, LL3M and ShapeCraft show:
+
+- Plan a part graph first (parts, relations, dimensions), then write code per part.
+- A shared kit of tested helpers (gears, shells, sweeps, arrays), grown by library learning (section 4.9).
+- The agent inspects its own scene through tools (sizes, contacts, renders), not just the final image.
+- Runs on Modal as a deployed Function that replays the code steps per call (the `setout` design): no session state, safe retries, undo by dropping a step.
+
+### 4.6 Part structuring and teaching rig
+
+For every asset, whatever the tier:
+
+- **Hierarchy:** organ → structures → substructures, so a lesson can show 6 parts or 30.
+- **Label anchors:** a surface point and outward normal per part (raycast from the part's centre outwards), so labels sit on the part with a leader line.
+- **Explode vectors:** each part's offset from the object's centre, adjusted until parts don't collide when spread.
+- **Cut planes and X-ray:** precomputed section planes, plus a translucent material variant per part.
+- **Highlight and focus:** per-part outline or emissive variant.
+
+Stored in the GLB (`extras`) or a sidecar JSON. The host turns them into hand interactions: grab a part, pull it out, tap to name it.
+
+### 4.7 Verification ensemble
+
+A model ships only with a verdict:
+
+| Check | How | Catches |
+|---|---|---|
+| Structure | Required parts present and mapped to concept IDs | Missing or misnamed parts |
+| Topology | Ontology relations hold geometrically (e.g. the aorta touches the left ventricle) via contact tests | Parts in the wrong place |
+| Geometry | Manifoldness, real-world scale vs known size, interpenetration, floating parts | Broken meshes |
+| Visual | Multi-view vision critic against **real reference photos**, not generated ones | Wrong shapes and proportions |
+| Budget | Triangles, draw calls, texture memory | Quest frame rate |
+
+The result is a confidence level (verified / plausible / generated / rejected) plus notes. A human review queue promotes generated assets to verified. The app can show learners where a model came from.
+
+### 4.8 Optimisation for Quest
+
+meshoptimizer/gltfpack: simplification per part (keeping part boundaries), 2–3 LODs, quantisation and meshopt compression, KTX2 textures, one draw call per part where possible. Budgets per asset and per scene are enforced at load, as the Phase 1 host already does for generated scenes.
+
+### 4.9 Lesson composition and library learning
+
+**Composition** (the GenUI side):
+
+- The host gains `assets.load(id)`, returning a group with named parts and the rig, plus helpers: `labelPart`, `explode`, `highlight`, `xray`, `cutaway`.
+- The agent states **relations** ("label near its part", "panel within reach", "nothing overlaps", "faces the learner"), and host code places things with scoring functions and a small solver, as in SceneCraft. The agent no longer guesses coordinates.
+- A vision critic checks the layout. The Phase 3 data suggests critics help layout more than geometry, matching SceneCraft's ablation.
+
+**Library learning** (SceneCraft's outer loop): when the critic repeatedly asks for the same fix across many lessons, the change is merged into a shared helper function. Verified generated assets join the asset library, so a request generated once is a retrieval the next time.
+
+## 5. Models and where they run
+
+| Role | Model | Why |
+|---|---|---|
+| Lesson agent, planner, coder | Muse Ember 1.0 (max) | Phase 2 app default: accurate, fast, very cheap |
+| Critic (layout, visual checks) | Muse Ember 1.0; Muse Wonder 1.0 for hard verification cases | Wonder is stronger but about 40× the price |
+| Reference images | Muse Image 1.0 (when no real photo is found) | $0.01 each |
+| Part naming on renders | SAM 3.1 (Meta API, text-prompted masks) | Names segments with Meta's own model |
+| Image-to-3D | SAM 3D Objects or TRELLIS on a Modal GPU | Bake-off first |
+| Part segmentation | PartField or P3-SAM on a Modal GPU | Open source |
+| Independent judge (benchmarks only) | Claude Opus 5.5 | Not used by any pipeline |
+
+An almost all-Meta pipeline (Muse Ember, Muse Image, SAM 3.1, SAM 3D) also suits the Meta competition.
+
+## 6. Infrastructure
+
+- **Compute on Modal**, following the `setout` design: deployed Modal Functions called from the device's Modal login, networking blocked for any code an LLM wrote, Blender steps replayed per call. GPU functions (image-to-3D, segmentation) scale to zero.
+- **Jobs are asynchronous with progress events:** the headset shows a placeholder (bounding box, or the closest library asset) immediately and swaps in the final model when ready.
+- **Asset store and catalogue** as in section 4.2; caching by concept and detail level.
+- **Provenance log** for every asset: sources, model versions, prompts, checks, costs.
+
+## 7. Evaluation (benchmark v2)
+
+- **Object set:** about 40 learning objects across anatomy, astronomy, biology, chemistry, mechanical, architecture, earth science and everyday objects, with ground truth where it exists (BodyParts3D meshes and FMA part lists, NASA dimensions, PubChem geometry).
+- **Systems compared:** code-only (the Phase 3 baseline, 3.75/5), retrieval only, generation with part naming, data-driven builders, and the full router.
+- **Metrics:**
+  - accuracy (vision judge plus expert ratings on an anatomy and science subset);
+  - part coverage and correct mapping against the ontology;
+  - geometric error against ground truth (Chamfer distance / F-score) for the generation tier;
+  - teaching-rig quality (label legibility and explode clarity, in the headset);
+  - Quest budget, latency, cost;
+  - provenance rate (share of assets from tiers A–B).
+- **Hypothesis:** the full router beats code-only on accuracy by a wide margin on science subjects, at lower latency for cached assets. Generation closes most of the gap on everyday objects but not on anatomy.
+
+## 8. Build order
+
+Each milestone ends with something visible in the headset or emulator and a measurable check.
+
+| Milestone | Delivers | Exit check |
+|---|---|---|
+| M1 Library core | Catalogue, normalisation pipeline, BodyParts3D ingestion (heart, skull, brain), host `assets.load` with named parts | An accurate heart lesson with labels; parts grabbable |
+| M2 Teaching rig + layout | Label anchors, explode, cut-away, X-ray; relation-graph layout solver; layout critic | Labels legible and non-overlapping on 3 anatomy assets |
+| M3 Concept grounding + retrieval + router | AssetSpec, ontology part lists, search and rerank, tiers A and C | Correct asset for a held-out request set |
+| M4 Data-driven builders | Solar system, molecules, DNA | Dimensions match source data |
+| M5 Generation tier | Image-to-3D bake-off, segmentation, SAM 3.1 part naming | Named parts on 10 everyday objects |
+| M6 Verification ensemble | Topology, geometry and visual checks; review queue | Rejects planted wrong models |
+| M7 Benchmark v2 + paper | Section 7 | Results table |
+| M8 Library learning | Helper evolution, generated-to-verified promotion | Fewer critic rounds over time |
+
+## 9. Decisions needed
+
+1. **Licensing.** Are CC BY-SA assets acceptable? They require credit and that our modified meshes be shared under the same licence, as X-Ray Mirror does. Exclude non-commercial assets?
+2. **GPU spend.** Tier D needs GPU time on Modal (image-to-3D needs a large GPU). Approve a budget, or defer tier D until M5?
+3. **Style.** Realistic (textured, scan-like) or clean educational (flat colours, clear parts), or switchable per lesson?
+4. **First domains.** Anatomy first (best data, strongest demo), then astronomy and chemistry?
+5. **Backend.** Move the Modal backend to the `setout` design (Functions called from the device, replayed steps) as part of M1.
+
+## 11. Experiment isolation
+
+v2 is built as an experiment that can be removed without a trace:
+
+- **Code:** branch `exp/3d-v2` in the worktree `.claude/worktrees/3d-v2`, started from the committed Phase 3 baseline (`phase-3-3d`). The main checkout is not touched.
+- **Modal:** everything v2 deploys uses its own names: app `spatial-genui-3d-v2`, volume `genui-assets-v2`. The Phase 3 backend (`spatial-genui-3d`) keeps running unchanged.
+- **Large data** (BodyParts3D, Z-Anatomy, downloaded models, generated assets) lives in `data/` (git-ignored) or the Modal volume, never in git.
+
+To remove v2 entirely:
+
+```bash
+git worktree remove .claude/worktrees/3d-v2   # add --force if it has uncommitted files
+git branch -D exp/3d-v2
+cd apps/worker3d && uv run modal app stop spatial-genui-3d-v2 && uv run modal volume delete genui-assets-v2
+```
+
+To adopt it: merge `exp/3d-v2` into the main line after its milestone checks pass.
+
+## 10. Sources
+
+- SceneCraft: An LLM Agent for Synthesizing 3D Scene as Blender Code. https://arxiv.org/abs/2403.01248
+- LL3M: Large Language 3D Modelers. https://www.researchgate.net/publication/394439477_LL3M_Large_Language_3D_Modelers
+- ShapeCraft: LLM Agents for Structured, Textured and Interactive 3D Modeling (NeurIPS 2025). https://arxiv.org/abs/2510.17603
+- 3DHarnessBench: Probing Agentic 3D-to-Code Capabilities of Frontier VLMs. https://arxiv.org/abs/2609.06535
+- DreamPartGen: Semantically Grounded Part-Level 3D Generation (ECCV 2026). https://arxiv.org/abs/2603.19216
+- Part-X-MLLM: Part-aware 3D multimodal LLM (ICLR 2026). https://proceedings.iclr.cc/paper_files/paper/2026/file/f38cb4cf9a5eaa92b3cfa481832719c6-Paper-Conference.pdf
+- Name That Part: 3D Part Segmentation and Naming (CVPR 2026). https://openaccess.thecvf.com/content/CVPR2026F/papers/Paul_Name_That_Part_3D_Part_Segmentation_and_Naming_CVPRF_2026_paper.pdf
+- PartField: Learning 3D Feature Fields for Part Segmentation. https://arxiv.org/abs/2504.11451
+- P3-SAM: Native 3D Part Segmentation. https://arxiv.org/abs/2509.06784
+- SAM 3D Objects (Meta). https://huggingface.co/facebook/sam-3d-objects
+- Meta Model API models (SAM 3.1, Muse Image, Muse Wonder). https://dev.meta.ai/docs/models
+- Cap3D (license-filtered Objaverse captions). https://huggingface.co/datasets/tiange/Cap3D
+- Z-Anatomy (CC BY-SA 4.0, derived from BodyParts3D). https://github.com/Z-Anatomy/Models-of-human-anatomy
+- BodyParts3D archive (DBCLS). https://dbarchive.biosciencedbc.jp/

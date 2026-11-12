@@ -402,6 +402,8 @@ Triangles, meshes, time and cost are for the pipeline alone (medians; cost is th
 
 **Decision (exit gate).** Live requests use P1 (Three.js inside the GenUI module), without a reference image. The critic loop is used for pre-generated demo lessons, where time doesn't matter. P2 and P3 stay deployed on the Modal 3D backend as options (precise mechanical parts, reusable GLB assets) and for the paper. **Caveats:** one generator model, 12 objects, one run each, integer judge scores: directional, not conclusive. The paper run needs more objects, runs and a human rating pass.
 
+**Next: architecture v2.** Reviewing the gallery, the code-built models are too schematic for a learning app (Nov 12). Accuracy has to come from authoritative data, as in X-Ray Mirror (BodyParts3D) and SceneCraft (retrieve, then compose): the redesign is in [`docs/3d-architecture.md`](docs/3d-architecture.md). The decision above stands only until v2's first milestone ships.
+
 **Built.** `apps/server/src/three-d/` (pipelines, critic, reference images, shared renderer, judge, report, gallery); `apps/worker3d/` (CadQuery runner, Blender MCP server with tools `execute_blender_code`, `get_scene_info` and `export_glb`, macOS sandbox profile, Modal app). The Modal backend serves `POST /cadquery` and the Blender MCP server over streamable HTTP at `/mcp`, behind a bearer token; each MCP session gets its own Blender sandbox. Gallery: [`bench/results/3d-run-1/gallery.md`](bench/results/3d-run-1/gallery.md).
 
 ### Phase 4: XR integration and hand interaction

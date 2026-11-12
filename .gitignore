@@ -13,3 +13,6 @@ bench/results/*.log
 # Phase 3: per-job code, GLBs and renders, and full-size reference images (regenerate with npm run bench3d)
 bench/results/*/jobs/
 bench/results/*/refs/
+
+# 3D v2 experiment: downloaded datasets and generated assets (never in git)
+/data/

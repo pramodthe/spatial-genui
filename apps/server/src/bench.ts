@@ -11,6 +11,7 @@ import { generate } from './agent.js';
 import { config } from './config.js';
 import type { LlmTarget } from './llm.js';
 import { parseCli } from './args.js';
+import { librarySection } from './library.js';
 import { SYSTEM_PROMPT } from './prompt.js';
 
 type ModelEntry = LlmTarget & {
@@ -47,10 +48,13 @@ export type BenchRow = {
   code?: string;
 };
 
-const args = parseCli(process.argv.slice(2), {
+const cli = parseCli(process.argv.slice(2), {
   values: ['prompts', 'models', 'only', 'prompt-ids', 'runs', 'limit', 'concurrency', 'out'],
-  usage: 'npm run bench -- [--prompts f] [--models f] [--only id,id] [--prompt-ids id,id] [--runs n] [--limit n] [--concurrency n] [--out dir]',
-}).flags;
+  booleans: ['library'],
+  usage: 'npm run bench -- [--prompts f] [--models f] [--only id,id] [--prompt-ids id,id] [--runs n] [--limit n] [--concurrency n] [--out dir] [--library]',
+});
+const args = cli.flags;
+const useLibrary = cli.booleans.has('library');
 const repoRoot = resolve(import.meta.dirname, '../../..');
 const promptsFile = resolve(args.prompts ?? join(repoRoot, 'bench/prompts/test-12.json'));
 const modelsFile = resolve(args.models ?? join(repoRoot, 'bench/models.json'));
@@ -88,7 +92,9 @@ await writeFile(
     startedAt: previousMeta.startedAt ?? new Date().toISOString(), promptsFile: relative(repoRoot, promptsFile), modelsFile: relative(repoRoot, modelsFile), runs,
     models: [...new Set([...(previousMeta.models ?? []), ...runnable.map((m) => m.id)])],
     modelSettings: { ...previousMeta.modelSettings, ...Object.fromEntries(runnable.map((m) => [m.id, { model: m.model, baseURL: m.baseURL, extraBody: m.extraBody }])) },
-    skipped, maxRepairs: config.maxRepairs, maxCompletionTokens: config.maxCompletionTokens, systemPrompt: SYSTEM_PROMPT,
+    skipped, maxRepairs: config.maxRepairs, maxCompletionTokens: config.maxCompletionTokens,
+    library: useLibrary,
+    systemPrompt: useLibrary ? SYSTEM_PROMPT + librarySection() : SYSTEM_PROMPT,
   }, null, 2),
 );
 
@@ -117,7 +123,8 @@ console.error(`Done. Summarize with: npm run bench:report -- ${outDir}`);
 async function runOne(m: ModelEntry, p: PromptCase, rep: number): Promise<BenchRow> {
   const base = { model: m.id, family: m.family, promptId: p.id, tier: p.tier, domain: p.domain, rep };
   try {
-    const r = await generate(p.prompt, { target: m, log: false, library: false });
+    // The 3D asset library is off unless asked for, so runs stay comparable with the published ones.
+    const r = await generate(p.prompt, { target: m, log: false, library: useLibrary });
     const promptTokens = r.attempts.reduce((s, a) => s + a.promptTokens, 0);
     const completionTokens = r.attempts.reduce((s, a) => s + a.completionTokens, 0);
     return {

@@ -1,4 +1,5 @@
 import { AssetManager, Vector3, type Object3D } from '@iwsdk/core';
+import { TeachingRig, type LabelHandle } from './rig';
 
 /**
  * Library assets for generated modules: accurate models with named parts, served by the agent server
@@ -21,6 +22,21 @@ export type AssetHandle = {
   part(id: string): Object3D;
   anchor(id: string): Vector3;
   credit: string;
+  // Teaching rig (rig.ts)
+  label(id: string, text?: string): LabelHandle;
+  labelParts(ids: string[]): LabelHandle[];
+  explode(amount: number): void;
+  cutaway(on?: boolean): void;
+  xray(on?: boolean, keep?: string[]): void;
+  highlight(id: string | null): void;
+  reset(): void;
+};
+
+/** What a handle needs from the host: the panel factory, grab state, and a per-frame hook. */
+export type HandleDeps = {
+  ui: ConstructorParameters<typeof TeachingRig>[2];
+  isGrabbed: (object: Object3D) => boolean;
+  onRig: (rig: TeachingRig) => void;
 };
 
 let catalog: Promise<Map<string, CatalogEntry>> | null = null;
@@ -58,7 +74,7 @@ export async function preloadAssets(ids: string[]): Promise<Map<string, CatalogE
 }
 
 /** A fresh copy of a preloaded asset, with its parts found by node name. */
-export function assetHandle(entries: Map<string, CatalogEntry>, id: string): AssetHandle {
+export function assetHandle(entries: Map<string, CatalogEntry>, id: string, deps: HandleDeps): AssetHandle {
   const entry = entries.get(id);
   const gltf = entry && AssetManager.getGLTF(cacheKey(id));
   if (!entry || !gltf) throw new Error(`Library asset '${id}' was not loaded.`);
@@ -76,6 +92,8 @@ export function assetHandle(entries: Map<string, CatalogEntry>, id: string): Ass
     if (!part) throw new Error(`Asset '${id}' has no part '${partId}'. Parts: ${parts.map((p) => p.id).join(', ')}.`);
     return part;
   };
+  const rig = new TeachingRig(object3D, parts, deps.ui, deps.isGrabbed);
+  deps.onRig(rig);
   return {
     object3D, parts, credit: entry.creditShort,
     part: (partId) => find(partId).object3D,
@@ -83,6 +101,13 @@ export function assetHandle(entries: Map<string, CatalogEntry>, id: string): Ass
       object3D.updateMatrix();
       return find(partId).labelAnchor.clone().applyMatrix4(object3D.matrix);
     },
+    label: (partId, text) => rig.label(partId, text),
+    labelParts: (ids) => rig.labelParts(ids),
+    explode: (amount) => rig.explode(amount),
+    cutaway: (on) => rig.cutaway(on),
+    xray: (on, keep) => rig.xray(on, keep),
+    highlight: (partId) => rig.highlight(partId),
+    reset: () => rig.reset(),
   };
 }
 

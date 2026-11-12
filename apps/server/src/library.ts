@@ -74,14 +74,21 @@ ${list.join('\n')}
 How to use one (the id must be written as a string; the host loads the model before build() runs):
 \`\`\`js
 const heart = assets.get('heart-bp3d');
-root.add(heart.object3D);              // real size in metres, standing on y = 0, front facing the user (+Z); you may scale it up to ~2x
+root.add(heart.object3D);              // add it to root first; real size in metres, standing on y = 0, front facing the user (+Z)
+heart.object3D.scale.setScalar(1.6);   // scale it 1.5-2x so its parts are easy to see and grab
+heart.labelParts(['left_ventricle', 'aortic_valve']); // labels with leader lines, placed beside the model by the host so they never overlap
+heart.label('mitral_valve', 'Mitral valve');           // one label, optional custom text; returns { object3D, set(text), setVisible(bool) }
+heart.explode(0.6);                    // 0 = assembled, 1 = parts spread apart; call it every frame in update() to animate
+heart.cutaway(true);                   // slice away the half facing the user to show the inside (follows the model as it turns); cutaway(false) closes it
+heart.xray(true, ['mitral_valve']);    // everything see-through except the listed parts; xray(false) makes it solid
+heart.highlight('left_ventricle');     // make one part glow; highlight(null) clears it
+heart.reset();                         // assembled, solid, no highlight, pulled-out parts back in place
+traits(heart.part('aortic_valve'), { grab: true }); // let the learner pull one part out by hand
 heart.parts;                           // [{ id, name, group, object3D, labelAnchor, explodeDir }] for every part
-heart.part('left_ventricle');          // that part's mesh: recolour or hide it to highlight, or make it grabbable with traits()
-heart.anchor('left_ventricle');        // THREE.Vector3 on the part's outside, in the coordinates of the model's parent (root): put its label there
-heart.parts[0].explodeDir;             // unit THREE.Vector3 from the model's centre outwards: move parts along it to explode the model
+heart.anchor('left_ventricle');        // THREE.Vector3 on the part's outside, in root's coordinates
 heart.credit;                          // short attribution, e.g. "Model: BodyParts3D, CC BY 4.0"
 \`\`\`
-Keep the model's parts where they are unless the lesson moves them on purpose (explode, pull out a part). Put the asset's credit as the last line of your main panel.`;
+Use these tools instead of building your own label panels or moving parts by hand: the host places labels and moves parts correctly. Layout: the model is already upright and facing the user, so keep it centred at x = 0 and don't rotate it; labels fill two columns directly left and right of the model (about 0.22 m on each side), so put your own panels above the model or more than 0.25 m beyond its sides, never beside it. Wire them to panel buttons (e.g. "Explode", "Cut open", "X-ray", "Reset"). Show at most 6 labels at a time: label the parts of the current step and use setVisible() to swap labels as the learner moves through the lesson, so the model is never buried in labels. Put the asset's credit as the last line of your main panel.`;
 }
 
 /** Lightweight stand-ins for the dry run: named, positioned parts without the real meshes. */

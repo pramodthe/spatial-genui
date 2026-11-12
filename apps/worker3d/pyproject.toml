@@ -11,5 +11,6 @@ dependencies = [
   "mcp>=2.3",
   "modal>=1.6.4",
   "networkx>=3.7",
+  "scikit-image>=0.26.0",
   "trimesh>=5.2.0",
 ]

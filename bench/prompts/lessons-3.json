@@ -1,0 +1,5 @@
+[
+  { "id": "heart-lesson", "tier": "T5", "domain": "learning", "prompt": "Teach me the human heart: its four chambers, the valves and the main blood vessels. Let me see inside it and take it apart." },
+  { "id": "skull-lesson", "tier": "T5", "domain": "learning", "prompt": "Teach me the bones of the human skull, with a short quiz at the end." },
+  { "id": "brain-lesson", "tier": "T5", "domain": "learning", "prompt": "Teach me the parts of the human brain and what each part does." }
+]

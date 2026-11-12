@@ -282,6 +282,20 @@ To adopt it: merge `exp/3d-v2` into the main line after its milestone checks pas
 
 Rebuild the assets: download BodyParts3D into `data/bodyparts3d/` (see the builder's docstring), then `apps/worker3d/.venv/bin/python3 apps/worker3d/library/bp3d_build.py apps/worker3d/library/recipes/heart.json` (and skull, brain). The agent server serves `data/library/` at `/api/library`.
 
+**M2 teaching rig (Nov 13).** Done, in the emulator:
+- Every library model gets host-side teaching tools (`apps/xr/src/genui/rig.ts`, mirrored by the server's dry run): `label`/`labelParts` (two columns beside the model, stacked without overlap, leader lines that follow the parts), `explode(t)`, `cutaway()` (a clipping plane that follows the model), `xray(keep)`, `highlight(part)`, `reset()`, and pulling parts out by hand via `traits(part, { grab: true })`. A fixture lesson (`tests/rig-demo.mjs`) exercises every state with screenshots.
+- The heart's missing ventricle walls are reconstructed (cavities grown by 8 mm left / 3 mm right, fused into a septum, marching cubes), recorded as reconstructed in the provenance; the coronary arteries now lie on the surface (median 0.8–1.1 mm away).
+- Lessons, Muse Ember 1.0 (max), same 3 requests (heart, skull, brain), 2 runs each, Opus 5.5 judge on the emulator screenshot:
+
+| | Fidelity | Correctness | Clarity | Hands-on | Panel buttons by hand | Median time | Cost / lesson |
+|---|---|---|---|---|---|---|---|
+| Built from shapes (no library) | 3.0 | 3.5 | 3.2 | 4.0 | 18/18 | 55 s | $0.014 |
+| Library + teaching rig | **4.0** | **4.0** | 3.0–3.5 | 4.2 | 15/18 | **32 s** | **$0.009** |
+
+  The library fixes fidelity (every shape-built model was called "crude", "blobby", "a bouquet of balloons") and the lessons are faster and cheaper to generate because the agent writes no geometry. Clarity is the open problem: across reruns the judge's notes moved from tiny labels and panels on top of labels (fixed: bigger labels, label columns kept below the model's top, a one-time host pass that moves panels sideways off labels, comfort fit no longer shrinking text) to a crowded label ring (fixed: at most 6 labels at a time). Clarity differences of ±0.5 between identical reruns show the judge's noise at n = 6.
+- Found and fixed on the way: the comfort fit scaled whole lessons (text included) below the readable size the server had checked; library labels caught hand rays meant for buttons; inside-out reconstructed walls looked see-through.
+- Open: in one skull lesson the agent's panel sits over the model and a hand ray from below hits the skull before the buttons (the host lifts panels at most 15 cm); the grab probe aims at an object's centre, which misses hollow models such as the skull.
+
 ## 10. Sources
 
 - SceneCraft: An LLM Agent for Synthesizing 3D Scene as Blender Code. https://arxiv.org/abs/2403.01248

@@ -19,6 +19,7 @@ import {
   type World,
 } from '@iwsdk/core';
 import { assetHandle, assetIdsIn, creditsFor, preloadAssets } from './library';
+import type { TeachingRig } from './rig';
 
 /**
  * GenUI host: runs agent-written component modules in the live scene.
@@ -55,6 +56,10 @@ type Mounted = {
   panels: Map<Entity, PanelRecord>;
   update?: (time: number, delta: number) => void;
   startTime: number;
+  /** Teaching rigs of library models in the scene; ticked every frame. */
+  rigs: TeachingRig[];
+  /** Frames since every panel loaded; the one-time label declutter runs a few frames in (null = done). */
+  declutterIn: number | null;
 };
 
 export type MountReport = { ok: true; warnings: string[]; credits: string[] } | { ok: false; error: string };
@@ -83,6 +88,8 @@ function toPanelText(text: string): string {
 const REACH_DISTANCE_M = 0.55;
 const BELOW_EYES_M = 0.35;
 const MAX_CONTENT_SIZE_M = 0.8;
+const MAX_DECLUTTER_SHIFT_M = 0.35;
+const MAX_DECLUTTER_LIFT_M = 0.15;
 // A near-hand pinch grabs everything within a few centimetres of the pinch point.
 const MIN_GRAB_GAP_M = 0.04;
 
@@ -95,6 +102,8 @@ const tmpForward = new Vector3();
 export function initGenUIHost(w: World, handlers: { onRuntimeError: (message: string) => void }) {
   world = w;
   onRuntimeError = handlers.onRuntimeError;
+  // Library models' cut-away view uses per-material clipping planes.
+  w.renderer.localClippingEnabled = true;
   w.registerSystem(GenUISystem);
 }
 
@@ -191,6 +200,8 @@ export async function mountGenerated(code: string): Promise<MountReport> {
     handlerCalls: 0,
     panels: new Map(),
     startTime: performance.now() / 1000,
+    rigs: [],
+    declutterIn: 3,
   };
 
   const api = {
@@ -218,7 +229,7 @@ export async function mountGenerated(code: string): Promise<MountReport> {
     assets: {
       get(id: string) {
         if (!library) throw new Error(`assets.get('${id}'): write the id as a plain string so the host can load it first.`);
-        return assetHandle(library, id);
+        return assetHandle(library, id, { ui: api.ui, isGrabbed: (o) => api.isGrabbed(o), onRig: (rig) => mounted.rigs.push(rig) });
       },
     },
     isGrabbed(object: Object3D) {
@@ -244,7 +255,7 @@ export async function mountGenerated(code: string): Promise<MountReport> {
   anchor.name = 'GenUI Anchor';
   placeInSeatedReach(anchor);
   anchor.add(root);
-  fitToComfortSize(root, warnings);
+  fitToComfortSize(root, new Set(panels.map((p) => p.holder)), warnings);
   anchor.updateMatrixWorld(true);
 
   const anchorEntity = track(mounted, world.createTransformEntity(anchor), anchor);
@@ -270,11 +281,16 @@ export async function mountGenerated(code: string): Promise<MountReport> {
     }
   }
 
+  // Library labels are read-only: without interactables they can't catch a hand ray meant for a
+  // button behind them (labels move when a model explodes).
+  const labelHolders = new Set(mounted.rigs.flatMap((rig) => rig.labelHolders()));
   for (const panel of panels) {
     const entity = adoptIntoRoot(mounted, panel.holder, root, rootEntity);
     entity.addComponent(PanelUI, { config: panel.url });
-    entity.addComponent(RayInteractable, {});
-    entity.addComponent(PokeInteractable, {});
+    if (!labelHolders.has(panel.holder)) {
+      entity.addComponent(RayInteractable, {});
+      entity.addComponent(PokeInteractable, {});
+    }
     mounted.panels.set(entity, panel);
   }
 
@@ -308,7 +324,23 @@ class GenUISystem extends createSystem({
 
   update(delta: number): void {
     const mounted = current;
-    if (!mounted?.update) return;
+    if (!mounted) return;
+    if (mounted.declutterIn !== null && mounted.rigs.length > 0 && [...mounted.panels.values()].every((p) => p.document)) {
+      // UIKit lays panels out over a few frames; measure once their sizes are real.
+      if (mounted.declutterIn-- <= 0) {
+        mounted.declutterIn = null;
+        declutterPanels(mounted);
+      }
+    }
+    for (const rig of mounted.rigs) {
+      try {
+        rig.tick();
+      } catch (err) {
+        mounted.rigs = mounted.rigs.filter((r) => r !== rig); // drop a broken rig, keep the scene
+        onRuntimeError?.(`Teaching rig failed: ${describe(err)}`);
+      }
+    }
+    if (!mounted.update) return;
     try {
       mounted.update(performance.now() / 1000 - mounted.startTime, delta);
     } catch (err) {
@@ -406,8 +438,20 @@ function findCrowdedGrabbables(objects: Object3D[]): Set<Object3D> {
   return crowded;
 }
 
-function fitToComfortSize(root: Object3D, warnings: string[]) {
-  const box = new Box3().setFromObject(root);
+/**
+ * Shrink oversized 3D content into the seated reach zone. Only meshes count: panels, labels and
+ * leader lines are excluded, because shrinking them would push text below the readable size the
+ * server checked. (Scaling root still scales panels, so this only triggers for genuinely huge models.)
+ */
+function fitToComfortSize(root: Object3D, panelHolders: Set<Object3D>, warnings: string[]) {
+  root.updateMatrixWorld(true);
+  const box = new Box3();
+  const visit = (object: Object3D) => {
+    if (panelHolders.has(object) || (object as { isLine?: boolean }).isLine) return;
+    if ((object as { isMesh?: boolean }).isMesh) box.expandByObject(object, false);
+    for (const child of object.children) visit(child);
+  };
+  visit(root);
   if (box.isEmpty()) return;
   const size = box.getSize(new Vector3());
   const largest = Math.max(size.x, size.y, size.z);
@@ -426,6 +470,60 @@ function guard(mounted: Mounted, fn: () => void): () => void {
       onRuntimeError?.(`Interaction handler threw: ${describe(err)}`);
     }
   };
+}
+
+/**
+ * Keep the lesson's own panels off the rig's labels: the agent places its panels, the host places
+ * labels, and they can collide. Each overlapping panel moves the shorter way clear, left or right
+ * (at most MAX_DECLUTTER_SHIFT_M), measured in root's frame with the panels' real, laid-out sizes.
+ * Runs once after mounting.
+ */
+function declutterPanels(mounted: Mounted) {
+  const labels = new Set(mounted.rigs.flatMap((rig) => rig.labelHolders()));
+  if (labels.size === 0) return;
+  const root = [...labels][0].parent;
+  if (!root) return;
+  root.updateMatrixWorld(true);
+  const boxIn = (object: Object3D) => {
+    const world = new Box3().setFromObject(object);
+    const local = new Box3();
+    const { min, max } = world;
+    for (const x of [min.x, max.x]) for (const y of [min.y, max.y]) for (const z of [min.z, max.z]) local.expandByPoint(root.worldToLocal(new Vector3(x, y, z)));
+    return local;
+  };
+  const labelBoxes = [...labels].map(boxIn).filter((b) => !b.isEmpty());
+  const modelBoxes = mounted.rigs.map((rig) => {
+    const box = new Box3();
+    for (const part of rig.partObjects()) box.union(boxIn(part));
+    return box;
+  }).filter((b) => !b.isEmpty());
+  const gap = 0.02;
+  for (const panel of mounted.panels.values()) {
+    if (labels.has(panel.holder) || panel.holder.parent !== root) continue;
+    // Off the model first: a panel overlapping its top sits behind it, and a hand ray from below
+    // hits the model before the buttons. Up only a little, so the panel stays in view.
+    for (const model of modelBoxes) {
+      const box = boxIn(panel.holder);
+      const overlaps = model.min.x < box.max.x && model.max.x > box.min.x && model.min.y < box.max.y && model.max.y > box.min.y;
+      const up = model.max.y + gap - box.min.y;
+      if (!box.isEmpty() && overlaps && box.min.y > model.min.y && up <= MAX_DECLUTTER_LIFT_M) {
+        panel.holder.position.y += up;
+        panel.holder.updateMatrixWorld(true);
+      }
+    }
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const box = boxIn(panel.holder);
+      const hits = labelBoxes.filter((l) => l.min.x < box.max.x && l.max.x > box.min.x && l.min.y < box.max.y && l.max.y > box.min.y);
+      if (box.isEmpty() || hits.length === 0) break;
+      // Sideways only, and not far: moving a panel up can push it out of a seated user's view.
+      const left = box.max.x - Math.min(...hits.map((l) => l.min.x)) + gap;
+      const right = Math.max(...hits.map((l) => l.max.x)) + gap - box.min.x;
+      const move = Math.min(left, right);
+      if (move > MAX_DECLUTTER_SHIFT_M) break;
+      panel.holder.position.x += move === left ? -left : right;
+      panel.holder.updateMatrixWorld(true);
+    }
+  }
 }
 
 function describe(err: unknown): string {

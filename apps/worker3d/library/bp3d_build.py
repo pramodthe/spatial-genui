@@ -83,6 +83,65 @@ def clip(verts: np.ndarray, faces: np.ndarray, lo: np.ndarray, hi: np.ndarray) -
     return verts[used], remap.reshape(kept.shape)
 
 
+def reconstruct_wall(merged: dict, spec: dict, recipe: dict) -> None:
+    """Rebuild a wall that BodyParts3D lacks (the ventricles are cavity casts with no myocardium).
+
+    Each cavity is grown outward by its wall thickness on a voxel grid; the union is morphologically
+    closed so neighbouring walls fuse (forming the septum between them); marching cubes gives a
+    smooth outer surface. Each wall triangle joins the part whose cavity is nearest, so the part
+    becomes cavity + wall and labels, explode and cut-away keep working. Recorded as reconstructed.
+    """
+    from scipy import ndimage
+    from scipy.spatial import cKDTree
+    from skimage import measure
+
+    names = [n for n in spec["thickness_mm"] if n in merged]
+    pitch = spec.get("voxel_mm", 1.0) / 1000.0
+    thickest = max(spec["thickness_mm"][n] for n in names) / 1000.0
+    close = spec.get("close_mm", 6) / 1000.0
+    all_v = np.concatenate([merged[n][0] for n in names])
+    lo = all_v.min(axis=0) - (thickest + close + 3 * pitch)
+    hi = all_v.max(axis=0) + (thickest + close + 3 * pitch)
+    shape = tuple(int(x) for x in np.ceil((hi - lo) / pitch) + 1)
+    solid = np.zeros(shape, dtype=bool)
+    for name in names:
+        v, f = merged[name]
+        filled = trimesh.Trimesh(vertices=v, faces=f, process=True).voxelized(pitch).fill()
+        idx = np.round((np.asarray(filled.points) - lo) / pitch).astype(int)
+        idx = idx[np.all((idx >= 0) & (idx < np.array(shape)), axis=1)]
+        cavity = np.zeros(shape, dtype=bool)
+        cavity[tuple(idx.T)] = True
+        solid |= ndimage.distance_transform_edt(~cavity) * pitch <= spec["thickness_mm"][name] / 1000.0
+    r = max(1, int(round(close / pitch)))
+    zz, yy, xx = np.ogrid[-r:r + 1, -r:r + 1, -r:r + 1]
+    solid = ndimage.binary_fill_holes(ndimage.binary_closing(solid, structure=(xx**2 + yy**2 + zz**2) <= r * r, iterations=1))
+    verts, faces, _normals, _values = measure.marching_cubes(solid.astype(np.float32), level=0.5)
+    wall = trimesh.Trimesh(vertices=verts * pitch + lo, faces=faces, process=True)
+    trimesh.smoothing.filter_taubin(wall, lamb=0.5, nu=-0.53, iterations=12)  # voxel steps, not anatomy
+    wall.fix_normals()
+    if wall.volume < 0:  # outward-facing, or the renderer culls the near side and the wall looks see-through
+        wall.invert()
+
+    # Each wall triangle joins the nearest cavity's part.
+    trees = [cKDTree(merged[n][0]) for n in names]
+    owner = np.argmin(np.stack([t.query(wall.triangles_center)[0] for t in trees]), axis=0)
+    for i, name in enumerate(names):
+        face_ids = np.where(owner == i)[0]
+        if len(face_ids) == 0:
+            continue
+        sub = wall.submesh([face_ids], append=True)
+        v, f = merged[name]
+        merged[name] = (np.concatenate([v, np.asarray(sub.vertices)]), np.concatenate([f, np.asarray(sub.faces) + len(v)]))
+
+    # How well the rebuilt surface carries the vessels that run on the real one.
+    wall_tree = cKDTree(np.asarray(wall.vertices))
+    for name in spec.get("check_on_surface", []):
+        if name in merged:
+            d = wall_tree.query(merged[name][0])[0] * 1000
+            print(f"  {name}: distance to reconstructed wall surface, median {np.median(d):.1f} mm, 90th pct {np.percentile(d, 90):.1f} mm", file=sys.stderr)
+    recipe.setdefault("notes", []).append(spec["note"])
+
+
 def snake(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")
 
@@ -151,18 +210,10 @@ def main() -> None:
                 v, f = np.asarray(main_piece.vertices), np.asarray(main_piece.faces)
             merged[part["name"]] = (v, f)
 
-    # BodyParts3D's meshes are 99% reduced and look faceted up close: Taubin-smooth each part (no
-    # shrinking), but keep the original if any vertex would move more than 1 mm (merged, non-manifold
-    # pieces can make smoothing spike). Loop subdivision is avoided for the same reason.
-    for name, (v, f) in list(merged.items()):
-        mesh = trimesh.Trimesh(vertices=v, faces=f, process=True)
-        before = np.asarray(mesh.vertices).copy()
-        trimesh.smoothing.filter_taubin(mesh, lamb=0.5, nu=-0.53, iterations=recipe.get("smooth_iterations", 6))
-        moved = float(np.max(np.linalg.norm(np.asarray(mesh.vertices) - before, axis=1))) if len(before) else 0.0
-        if moved <= 0.001:
-            merged[name] = (np.asarray(mesh.vertices), np.asarray(mesh.faces))
-        else:
-            print(f"  {name}: smoothing would move vertices {moved * 1000:.1f} mm; kept unsmoothed", file=sys.stderr)
+    # BodyParts3D's meshes stay unsmoothed: they are 99% reduced, and even gentle smoothing moved
+    # their vertices by several millimetres, too much for an accuracy-first library.
+    for spec in recipe.get("walls", []):
+        reconstruct_wall(merged, spec, recipe)
 
     # Meet the triangle budget by capping only the densest parts ("water-filling"): BodyParts3D's
     # coarse pieces (large vessels) are already at their minimum, so they keep every triangle.
@@ -195,7 +246,7 @@ def main() -> None:
         v, f = merged[part["name"]]
         v = v + shift
         mesh = trimesh.Trimesh(vertices=v, faces=f, process=True)
-        mesh.fix_normals()
+        mesh.fix_normals(multibody=True)  # each piece on its own (a part can be a cavity plus its wall)
         rgb = [int(part["color"][i:i + 2], 16) for i in (1, 3, 5)]
         mesh.visual = trimesh.visual.TextureVisuals(material=trimesh.visual.material.PBRMaterial(
             name=snake(part["name"]), baseColorFactor=[*rgb, 255], roughnessFactor=part.get("roughness", 0.55),

@@ -58,7 +58,7 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
       get(id: string) {
         const entry = assets[id];
         if (!entry) throw new Error(`Unknown library asset '${id}'. Available: ${Object.keys(assets).join(', ') || 'none'}.`);
-        return stubAsset(entry);
+        return stubAsset(entry, api.ui);
       },
     },
     isGrabbed() {
@@ -240,8 +240,20 @@ export type AssetStub = {
   parts: { node: string; name: string; group?: string | null; centroid: number[]; labelAnchor: number[]; explodeDir: number[]; triangles: number }[];
 };
 
+// Same markup as the browser rig's labels (apps/xr/src/genui/rig.ts), so the panel checks see what the headset will show.
+const LABEL_WIDTH_M = 0.16;
+const labelMarkup = (text: string) => `
+  <style>
+    .l { width: 320px; padding-left: 14px; padding-right: 14px; padding-top: 7px; padding-bottom: 7px;
+         border-radius: 12px; background-color: #15181d; }
+    .t { color: #ffffff; font-size: 28px; font-weight: 600; }
+  </style>
+  <div class="l"><span class="t" id="text">${text.replace(/[<>&]/g, ' ')}</span></div>`;
+
+type StubUi = (markup: unknown, options?: any) => { object3D: THREE.Object3D; on(): void; set(): void };
+
 /** Same handle as the browser host's assets.get(), with a small box standing in for each part. */
-function stubAsset(entry: AssetStub) {
+function stubAsset(entry: AssetStub, ui: StubUi) {
   const group = new THREE.Group();
   group.name = entry.id;
   const parts = entry.parts.map((p) => {
@@ -261,6 +273,23 @@ function stubAsset(entry: AssetStub) {
     if (!part) throw new Error(`Asset '${entry.id}' has no part '${id}'. Parts: ${parts.map((p) => p.id).join(', ')}.`);
     return part;
   };
+  const labelled = new Map<string, ReturnType<StubUi>>();
+  const label = (id: string, text?: string) => {
+    if (!group.parent) throw new Error('Add the model to root (root.add(model.object3D)) before labelling it.');
+    const part = find(id);
+    let panel = labelled.get(id);
+    if (!panel) {
+      panel = ui(labelMarkup(text ?? part.name.charAt(0).toUpperCase() + part.name.slice(1)), { width: LABEL_WIDTH_M, position: [0, 0, 0] });
+      group.parent.add(panel.object3D);
+      labelled.set(id, panel);
+    }
+    const holder = panel.object3D;
+    return { object3D: holder, set(_text: string) {}, setVisible(visible: boolean) { holder.visible = Boolean(visible); } };
+  };
+  const checkIds = (ids: unknown) => {
+    if (!Array.isArray(ids)) throw new Error('Pass part ids as an array, e.g. ["left_ventricle"].');
+    ids.forEach((id) => find(String(id)));
+  };
   return {
     object3D: group, parts, credit: entry.creditShort ?? '',
     part: (id: string) => find(id).object3D,
@@ -268,6 +297,16 @@ function stubAsset(entry: AssetStub) {
       group.updateMatrix();
       return find(id).labelAnchor.clone().applyMatrix4(group.matrix);
     },
+    // Teaching rig: same signatures as the browser; the geometry effects only exist there.
+    label,
+    labelParts: (ids: string[]) => (checkIds(ids), ids.map((id) => label(id))),
+    explode(amount: number) {
+      if (typeof amount !== 'number' || !Number.isFinite(amount)) throw new Error('explode(amount) takes a number from 0 (assembled) to 1 (apart).');
+    },
+    cutaway(_on?: boolean) {},
+    xray(_on?: boolean, keep: string[] = []) { checkIds(keep); },
+    highlight(id: string | null) { if (id !== null) find(id); },
+    reset() {},
   };
 }
 

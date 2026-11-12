@@ -5,6 +5,7 @@
 import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
+import { parseCli } from './args.js';
 import type { BenchRow } from './bench.js';
 
 type BrowserRow = {
@@ -16,9 +17,9 @@ type BrowserRow = {
 };
 type JudgeRow = { model: string; promptId: string; rep: number; judge: string; judgeFamily?: string; scores?: Record<string, number>; error?: string };
 
-const dir = resolve(process.argv[2] ?? '');
-const judgeArg = process.argv.indexOf('--judge');
-const requestedJudge = judgeArg > 0 ? process.argv[judgeArg + 1] : 'claude-opus-5-5';
+const cli = parseCli(process.argv.slice(2), { values: ['judge'], usage: 'npm run bench:report -- <results dir> [--judge id]' });
+const dir = resolve(cli.positional[0] ?? '');
+const requestedJudge = cli.flags.judge ?? 'claude-opus-5-5';
 if (!existsSync(join(dir, 'results.jsonl'))) {
   console.error('Usage: npm run bench:report -- <results dir containing results.jsonl>');
   process.exit(1);

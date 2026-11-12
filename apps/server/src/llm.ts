@@ -48,7 +48,8 @@ const longWaitFetch = ((url: string, init?: RequestInit) =>
   undiciFetch(url, { ...(init as object), dispatcher: longWaitAgent } as Parameters<typeof undiciFetch>[1])) as unknown as typeof fetch;
 
 function clientFor(target: LlmTarget): OpenAI {
-  const key = `${target.baseURL}\n${target.apiKey}`;
+  // Headers are baked into the client, so targets that differ only in headers need their own.
+  const key = `${target.baseURL}\n${target.apiKey}\n${JSON.stringify(target.headers ?? {})}`;
   let client = clients.get(key);
   if (!client) {
     // The SDK retries 429s, 5xx and dropped connections itself, so transient

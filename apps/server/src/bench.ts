@@ -10,6 +10,7 @@ import { join, relative, resolve } from 'node:path';
 import { generate } from './agent.js';
 import { config } from './config.js';
 import type { LlmTarget } from './llm.js';
+import { parseCli } from './args.js';
 import { SYSTEM_PROMPT } from './prompt.js';
 
 type ModelEntry = LlmTarget & {
@@ -46,7 +47,10 @@ export type BenchRow = {
   code?: string;
 };
 
-const args = parseArgs(process.argv.slice(2));
+const args = parseCli(process.argv.slice(2), {
+  values: ['prompts', 'models', 'only', 'prompt-ids', 'runs', 'limit', 'concurrency', 'out'],
+  usage: 'npm run bench -- [--prompts f] [--models f] [--only id,id] [--prompt-ids id,id] [--runs n] [--limit n] [--concurrency n] [--out dir]',
+}).flags;
 const repoRoot = resolve(import.meta.dirname, '../../..');
 const promptsFile = resolve(args.prompts ?? join(repoRoot, 'bench/prompts/test-12.json'));
 const modelsFile = resolve(args.models ?? join(repoRoot, 'bench/models.json'));
@@ -170,14 +174,6 @@ function resolveKey(m: ModelEntry): string {
   if (fromEnv) return fromEnv;
   // Same endpoint as the app itself: reuse the app's key.
   return new URL(m.baseURL).host === new URL(config.baseURL).host ? config.apiKey : '';
-}
-
-function parseArgs(argv: string[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i].startsWith('--')) out[argv[i].slice(2)] = argv[i + 1] ?? '';
-  }
-  return out;
 }
 
 /** A positive integer flag value, or the fallback when the flag is missing, empty or not a number. */

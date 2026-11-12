@@ -6,17 +6,19 @@
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
+import { parseCli } from './args.js';
 
-const argv = process.argv.slice(2);
-const outIndex = argv.indexOf('--out');
-const noteIndex = argv.indexOf('--note');
-if (outIndex < 0) {
+const cli = parseCli(process.argv.slice(2), {
+  values: ['out', 'note'],
+  usage: 'npm run bench:combine -- --out <dir> [--note "..."] <dir[:model[=label]]> ...',
+});
+if (!cli.flags.out || cli.positional.length === 0) {
   console.error('Usage: npm run bench:combine -- --out <dir> [--note "..."] <dir[:model[=label]]> ...');
   process.exit(1);
 }
-const outDir = resolve(argv[outIndex + 1]);
-const note = noteIndex >= 0 ? argv[noteIndex + 1] : undefined;
-const sources = argv.filter((_, i) => i !== outIndex && i !== outIndex + 1 && i !== noteIndex && i !== noteIndex + 1);
+const outDir = resolve(cli.flags.out);
+const note = cli.flags.note;
+const sources = cli.positional;
 
 const readJsonl = async (file: string) =>
   existsSync(file) ? (await readFile(file, 'utf8')).split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [];
@@ -45,6 +47,8 @@ for (const source of sources) {
   }
   for (const row of (await readJsonl(join(dir, 'judge.jsonl'))).filter(keep)) {
     row.model = rename(row.model);
+    // A renamed contestant that also judged must keep matching itself, or self-scores would count.
+    row.judge = rename(row.judge);
     merged.judge.push(JSON.stringify(row));
   }
 }

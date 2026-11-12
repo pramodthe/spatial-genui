@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
+import { parseCli } from './args.js';
 
 type Row = { model: string; family: string; promptId: string; tier: string; rep: number; ok: boolean; firstTryOk: boolean; stages: string[]; totalMs: number; costUSD: number | null; apiError?: string };
 type Browser = { model: string; promptId: string; rep: number; mounted: boolean; runtimeErrors: string[]; harnessError?: string; shot?: string;
@@ -13,7 +14,12 @@ type Browser = { model: string; promptId: string; rep: number; mounted: boolean;
   panelPress?: { tested: number; worked: number } };
 type Judge = { model: string; promptId: string; rep: number; judge: string; judgeFamily?: string; scores?: Record<string, number>; notes?: string };
 
-const dir = resolve(process.argv[2] ?? '');
+const cli = parseCli(process.argv.slice(2), {
+  values: ['judge'],
+  booleans: ['export-images'],
+  usage: 'npm run bench:gallery -- <results dir> [--export-images] [--judge id]',
+});
+const dir = resolve(cli.positional[0] ?? '');
 if (!existsSync(join(dir, 'results.jsonl'))) {
   console.error('Usage: npm run bench:gallery -- <results dir>');
   process.exit(1);
@@ -24,8 +30,7 @@ const rows = await read<Row>('results.jsonl');
 const browser = await read<Browser>('browser.jsonl');
 const judges = (await read<Judge>('judge.jsonl')).filter((j) => j.scores);
 // The independent judge (not a contestant) gives the headline score when present.
-const judgeArg = process.argv.indexOf('--judge');
-const PRIMARY = judgeArg > 0 ? process.argv[judgeArg + 1] : 'claude-opus-5-5';
+const PRIMARY = cli.flags.judge ?? 'claude-opus-5-5';
 const hasPrimary = judges.some((j) => j.judge === PRIMARY);
 // A judge that is also a contestant never supplies the headline score for its own scenes.
 const primaryIsContestant = rows.some((r) => r.model === PRIMARY);
@@ -73,7 +78,7 @@ const overall = models.map((m) => {
 });
 
 function cell(model: string, promptId: string, rep: number) {
-  const r = rows.find((x) => x.model === model && x.promptId === promptId && x.rep === rep);
+  const r = sceneRow(model, promptId, rep);
   if (!r) return '<td class="empty">not run</td>';
   const b = browserBy.get(key(r));
   const family = r.family;
@@ -141,7 +146,7 @@ console.log(join(dir, 'gallery.html'));
 
 // GitHub renders Markdown but not HTML pages, so gallery.md shows the same comparison from the
 // compressed JPEGs in <dir>/gallery/ (committed; the full-size PNGs in shots/ stay local).
-if (process.argv.includes('--export-images')) {
+if (cli.booleans.has('export-images')) {
   for (const b of browser.filter((x) => x.shot)) {
     const out = join(dir, jpgFor(b.shot!));
     mkdirSync(dirname(out), { recursive: true });
@@ -156,9 +161,10 @@ if (browser.some((b) => b.shot && existsSync(join(dir, jpgFor(b.shot))))) {
 }
 
 function markdownGallery(): string {
-  const md = (s: string) => s.replace(/\|/g, '\\|');
+  // Notes and names come from model output: escape HTML (and table pipes) so nothing renders as markup.
+  const md = (s: string) => s.replace(/[&<>"|]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '|': '\\|' })[c]!);
   const mdCell = (model: string, promptId: string, rep: number) => {
-    const r = rows.find((x) => x.model === model && x.promptId === promptId && x.rep === rep);
+    const r = sceneRow(model, promptId, rep);
     if (!r) return 'not run';
     const b = browserBy.get(key(r));
     const js = judges.filter((j) => key(j) === key(r));
@@ -181,14 +187,14 @@ function markdownGallery(): string {
     return `${img}<br>${facts}${note ? `<br><sub>${md(note)}</sub>` : ''}`;
   };
   const table = (rep: number) => [
-    `| Request | ${models.join(' | ')} |`,
+    `| Request | ${models.map(md).join(' | ')} |`,
     `|---|${models.map(() => '---').join('|')}|`,
-    ...prompts.map((p) => `| **${p.tier}** · ${p.id}<br>“${md(p.prompt)}” | ${models.map((m) => mdCell(m, p.id, rep)).join(' | ')} |`),
+    ...prompts.map((p) => `| **${md(p.tier)}** · ${md(p.id)}<br>“${md(p.prompt)}” | ${models.map((m) => mdCell(m, p.id, rep)).join(' | ')} |`),
   ].join('\n');
   return [
     `# Which model built what: ${basename(dir)}`,
     ``,
-    ...(meta.note ? [`**${meta.note}**`, ``] : []),
+    ...(meta.note ? [`**${md(meta.note)}**`, ``] : []),
     `Each column is one model; each row is one request from the held-out test set. Every model saw the same`,
     `system prompt and the same checks, and each scene was mounted in Meta's Quest emulator (the living room is the`,
     `emulator's simulated room; the toolbars are emulator controls, not part of the scene). Click a picture for full size.`,
@@ -201,7 +207,7 @@ function markdownGallery(): string {
     ``,
     `| Model | Quality | Median time |`,
     `|---|---|---|`,
-    ...overall.map((o) => `| ${o.m} | ${Number.isFinite(o.quality) ? o.quality.toFixed(2) : '–'} | ${o.medianS.toFixed(0)} s |`),
+    ...overall.map((o) => `| ${md(o.m)} | ${Number.isFinite(o.quality) ? o.quality.toFixed(2) : '–'} | ${o.medianS.toFixed(0)} s |`),
     ``,
     `Full numbers: [summary.md](summary.md).`,
     ``,
@@ -223,6 +229,12 @@ function markdownGallery(): string {
 /** The compressed copy of a screenshot: <run>/gallery/<name>.jpg next to <run>/shots/<name>.png (works for combined runs too). */
 function jpgFor(shot: string): string {
   return shot.replace(/(^|\/)shots\//, '$1gallery/').replace(/\.png$/, '.jpg');
+}
+
+/** The row to show for a scene: a provider (API) error is only shown if there was no real attempt. */
+function sceneRow(model: string, promptId: string, rep: number): Row | undefined {
+  const candidates = rows.filter((x) => x.model === model && x.promptId === promptId && x.rep === rep);
+  return candidates.find((x) => !x.apiError) ?? candidates[0];
 }
 
 function median(xs: number[]) {

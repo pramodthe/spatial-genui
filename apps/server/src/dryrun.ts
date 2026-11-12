@@ -208,7 +208,13 @@ function panelTextSize(markup: string, widthM: number): { minTextCm: number; min
     root.match(/style="([^"]+)"/)?.[1] ?? '',
   ].join(';');
   const rootPx = Number(rootDecls.match(/(?:^|[;\s])width:\s*(\d+(?:\.\d+)?)px/)?.[1]);
-  const fonts = [...markup.matchAll(/font-size:\s*(\d+(?:\.\d+)?)px/g)].map((m) => Number(m[1]));
+  // Only font sizes that reach an element: rules for classes used in the body, plus inline styles.
+  const usedClasses = new Set([...body.matchAll(/class="([^"]+)"/g)].flatMap((m) => m[1].split(/\s+/)));
+  const usedDecls = [
+    ...[...rules].filter(([cls]) => usedClasses.has(cls)).map(([, decls]) => decls),
+    ...[...body.matchAll(/style="([^"]+)"/g)].map((m) => m[1]),
+  ].join(';');
+  const fonts = [...usedDecls.matchAll(/font-size:\s*(\d+(?:\.\d+)?)px/g)].map((m) => Number(m[1]));
   if (!fonts.length) return null;
   if (!rootPx) return 'no-root-width';
   const minFontPx = Math.min(...fonts);

@@ -54,7 +54,9 @@ export function dryRun(transformed: string): DryRunResult {
   const context = vm.createContext({ __exports: {}, __api: api, console: { log() {}, warn() {}, error() {} } });
   let result: any;
   try {
-    vm.runInContext(transformed, context, { filename: 'component.js', timeout: TIMEOUT_MS });
+    // Browsers load the module as an ES module, which is always strict: an assignment to an
+    // undeclared name throws there, so it must throw here too. Same line, so line numbers match.
+    vm.runInContext(`'use strict'; ${transformed}`, context, { filename: 'component.js', timeout: TIMEOUT_MS });
     vm.runInContext(
       `__result = __exports.default(__api);
        if (__result && typeof __result.update === 'function') {

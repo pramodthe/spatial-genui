@@ -1,0 +1,136 @@
+{
+  "summary": [
+    {
+      "model": "claude-fable-5-2",
+      "family": "Anthropic",
+      "n": 4,
+      "apiErrors": 0,
+      "passAt1": 1,
+      "successWithRepair": 1,
+      "meanAttempts": 1,
+      "mountedClean": 1,
+      "grabWorks": 0.75,
+      "pressWorks": 1,
+      "qualityPrimary": 4.5,
+      "quality1to5": null,
+      "qualityOtherJudges": null,
+      "qualityOtherJudgesAdjusted": null,
+      "medianFirstAttemptS": 125.4,
+      "medianTotalS": 125.4,
+      "meanOutputTokens": 14853,
+      "costUSD": 2.459,
+      "costPerSuccessUSD": 0.6146,
+      "meanCrowdedGrabPairs": 1.5
+    },
+    {
+      "model": "claude-opus-5-5",
+      "family": "Anthropic",
+      "n": 4,
+      "apiErrors": 0,
+      "passAt1": 0.75,
+      "successWithRepair": 1,
+      "meanAttempts": 1.25,
+      "mountedClean": 1,
+      "grabWorks": 1,
+      "pressWorks": 1,
+      "qualityPrimary": 4.06,
+      "quality1to5": null,
+      "qualityOtherJudges": null,
+      "qualityOtherJudgesAdjusted": null,
+      "medianFirstAttemptS": 54.1,
+      "medianTotalS": 58.7,
+      "meanOutputTokens": 6951,
+      "costUSD": 0.623,
+      "costPerSuccessUSD": 0.1558,
+      "meanCrowdedGrabPairs": 0
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "family": "Anthropic",
+      "n": 4,
+      "apiErrors": 0,
+      "passAt1": 1,
+      "successWithRepair": 1,
+      "meanAttempts": 1,
+      "mountedClean": 1,
+      "grabWorks": 1,
+      "pressWorks": null,
+      "qualityPrimary": 4,
+      "quality1to5": null,
+      "qualityOtherJudges": null,
+      "qualityOtherJudgesAdjusted": null,
+      "medianFirstAttemptS": 41.5,
+      "medianTotalS": 41.5,
+      "meanOutputTokens": 7441,
+      "costUSD": 0.318,
+      "costPerSuccessUSD": 0.0795,
+      "meanCrowdedGrabPairs": 0
+    },
+    {
+      "model": "claude-haiku-5-5",
+      "family": "Anthropic",
+      "n": 4,
+      "apiErrors": 0,
+      "passAt1": 1,
+      "successWithRepair": 1,
+      "meanAttempts": 1,
+      "mountedClean": 1,
+      "grabWorks": 1,
+      "pressWorks": 1,
+      "qualityPrimary": 3.5,
+      "quality1to5": null,
+      "qualityOtherJudges": null,
+      "qualityOtherJudgesAdjusted": null,
+      "medianFirstAttemptS": 18,
+      "medianTotalS": 18,
+      "meanOutputTokens": 4770,
+      "costUSD": 0.01,
+      "costPerSuccessUSD": 0.0026,
+      "meanCrowdedGrabPairs": 0
+    }
+  ],
+  "taxonomy": [
+    {
+      "model": "claude-opus-5-5",
+      "syntax": 1
+    },
+    {
+      "model": "claude-fable-5-2",
+      "syntax": 0
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "syntax": 0
+    },
+    {
+      "model": "claude-haiku-5-5",
+      "syntax": 0
+    }
+  ],
+  "byTier": [
+    {
+      "model": "claude-opus-5-5",
+      "T1": "1/1",
+      "T2": "1/1",
+      "T3": "2/2"
+    },
+    {
+      "model": "claude-fable-5-2",
+      "T1": "1/1",
+      "T2": "1/1",
+      "T3": "2/2"
+    },
+    {
+      "model": "claude-sonnet-5-5",
+      "T1": "1/1",
+      "T2": "1/1",
+      "T3": "2/2"
+    },
+    {
+      "model": "claude-haiku-5-5",
+      "T1": "1/1",
+      "T2": "1/1",
+      "T3": "2/2"
+    }
+  ]
+}

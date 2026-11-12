@@ -183,6 +183,45 @@ If there's no time for these, the paper's claim narrows to the multi-model bench
 
 **Goal:** a measured answer to which model generates spatial UI best.
 
+**Status (Nov 12):** harness built and piloted.
+- **Generation:** `apps/server` `npm run bench`.
+- **Emulator mount + hand probes:** `apps/xr` `scripts/bench-browser.mjs`.
+- **Vision judge:** `npm run bench:judge`.
+- **Report:** `npm run bench:report`.
+
+Candidates are pinned in `bench/models.json` (IDs and prices from OpenRouter's catalog, Nov 12). Prompts are a held-out set, `bench/prompts/test-12.json`, because the dev prompts were used to tune the system prompt.
+
+**Pilot (4 Claude models × 4 prompts, 1 run each, judged by Claude Opus only, so there's no self-preference control yet):**
+
+| Model | pass@1 | Success | Grab works | Quality | Median time | Cost / success |
+|---|---|---|---|---|---|---|
+| Fable 5.2 | 4/4 | 4/4 | 3/4 | 4.5 | 125 s | $0.61 |
+| Opus 5.5 | 3/4 | 4/4 | 3/3 | 4.06 | 59 s | $0.16 |
+| Sonnet 5.5 | 4/4 | 4/4 | 4/4 | 4.0 | 42 s | $0.08 |
+| Haiku 5.5 | 4/4 | 4/4 | 3/3 | 3.5 | 18 s | $0.003 |
+
+Early signal (n=4, not conclusive): every Claude tier writes valid spatial UI. Quality rises with model size, and so do latency and cost; Haiku is 7× faster than Sonnet. That matters for Phase 5 routing, e.g. a fast draft followed by a refine. The pilot cost about $3.4 in generation (estimated from tokens × catalog prices).
+
+**Run 1 (Nov 12): Sonnet 5.5 vs Muse Spark 1.3 (Meta API) vs DeepSeek V4.1 Flash (Fireworks).** 12 held-out prompts × 2 repetitions = 72 scenes. The judge panel is the three models themselves; quality excludes a model's own family and is adjusted for each judge's strictness. Full table in `bench/results/run-1/summary.md`, side-by-side screenshots in `gallery.html`.
+
+| Model | pass@1 | Success | Mounted clean | Grab works | Quality, Opus 5.5 judge | Panel (adj.) | Median time | Cost / scene |
+|---|---|---|---|---|---|---|---|---|
+| Sonnet 5.5 | 100% | 100% | 24/24 | 14/17 | **4.18** | **4.32** | **40 s** | $0.075 |
+| Muse Spark 1.3 | 100% | 100% | 24/24 | **23/24** | 4.13 | 4.25 | 98 s | unknown (no price listed) |
+| DeepSeek V4.1 Flash | 92% | 100% | 23/24 | 14/14 | 3.97 | 4.05 | 47 s | **$0.010** |
+
+The main quality score comes from **Claude Opus 5.5 as an independent judge** (not a contestant, though it's made by Anthropic like Sonnet). It agrees with all three contestant judges on the order Sonnet ≥ Muse > DeepSeek. Sonnet and Muse are effectively tied (0.05 apart; with Opus, Sonnet had the best version of 12 of 23 requests and Muse 11). By criterion, **clarity is every model's weakest score (3.3–3.5 / 5)**: overlapping or crowded panels. That's the clearest target for improving the system prompt and host layout.
+
+**Findings:**
+- **All three can do Open GenUI in XR:** 72/72 succeeded within ≤2 repairs, across all tiers. Quality differences are small but consistent: every judge, including Meta's and DeepSeek's, ranked Sonnet ≥ Muse ≥ DeepSeek.
+- **Judges grade on very different curves.** Muse gave a mean of 4.7, Claude 3.8. Unadjusted cross-family scores are therefore misleading, which is a methodological point for the paper.
+- **Our test run was looser than the real runtime.** It ran as a lenient (sloppy-mode) script, while browsers load the code as a strict module. A DeepSeek scene (`sunGroup里 = null`) passed every server check but crashed in the browser. The dry run is now strict, and all 71 other scenes still pass.
+- **Grab failures:** an `InstancedMesh` marked grabbable (Sonnet, times tables), probably unsupported by IWSDK's grab (to verify), plus 2 unexplained misses.
+
+**Known gaps in the harness:**
+- Panel buttons (e.g. quiz answers) aren't probed yet, only trait-based press/grab.
+- Ray-grab probes can hit a neighbouring object first, e.g. nested Earth shells.
+
 **Candidates.** Pin exact model IDs on benchmark day and record them.
 
 | Provider | Models |

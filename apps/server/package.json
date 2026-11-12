@@ -8,7 +8,11 @@
     "start": "tsx src/server.ts",
     "gen": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
-    "batch": "tsx src/batch.ts"
+    "batch": "tsx src/batch.ts",
+    "bench": "tsx src/bench.ts",
+    "bench:report": "tsx src/bench-report.ts",
+    "bench:judge": "tsx src/judge.ts",
+    "bench:gallery": "tsx src/bench-gallery.ts"
   },
   "engines": {
     "node": ">=22.12.0"

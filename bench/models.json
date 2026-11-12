@@ -1,0 +1,140 @@
+{
+  "_note": "Benchmark candidates (enabled = in the run). IDs/prices for OpenRouter-listed models from its public catalog on 2026-11-12; DeepSeek V4.1 Flash runs on Fireworks, priced here at OpenRouter's listing for the same model version (estimate). Muse Spark (Meta API) has no listed price. Anthropic models reuse the app's key.",
+  "models": [
+    {
+      "id": "claude-opus-5-5",
+      "family": "Anthropic",
+      "baseURL": "https://api.anthropic.com/v1/",
+      "apiKeyEnv": "ANTHROPIC_API_KEY",
+      "model": "claude-opus-5-5",
+      "priceIn": 4,
+      "priceOut": 20,
+      "enabled": false
+    },
+    {
+      "id": "claude-fable-5-2",
+      "family": "Anthropic",
+      "baseURL": "https://api.anthropic.com/v1/",
+      "apiKeyEnv": "ANTHROPIC_API_KEY",
+      "model": "claude-fable-5-2",
+      "priceIn": 8,
+      "priceOut": 40,
+      "enabled": false
+    },
+    {
+      "id": "claude-sonnet-5-5",
+      "family": "Anthropic",
+      "baseURL": "https://api.anthropic.com/v1/",
+      "apiKeyEnv": "ANTHROPIC_API_KEY",
+      "model": "claude-sonnet-5-5",
+      "priceIn": 2,
+      "priceOut": 10,
+      "enabled": true
+    },
+    {
+      "id": "muse-spark-1.3",
+      "family": "Meta",
+      "baseURL": "https://api.meta.ai/v1",
+      "apiKeyEnv": "META_API_KEY",
+      "model": "muse-spark-1.3-contributor",
+      "enabled": true
+    },
+    {
+      "id": "deepseek-v4.1-flash",
+      "family": "DeepSeek",
+      "baseURL": "https://api.fireworks.ai/inference/v1",
+      "apiKeyEnv": "FIREWORKS_API_KEY",
+      "model": "accounts/fireworks/models/deepseek-v4p1-flash-1017",
+      "priceIn": 0.15,
+      "priceOut": 0.6,
+      "enabled": true
+    },
+    {
+      "id": "claude-haiku-5-5",
+      "family": "Anthropic",
+      "baseURL": "https://api.anthropic.com/v1/",
+      "apiKeyEnv": "ANTHROPIC_API_KEY",
+      "model": "claude-haiku-5-5",
+      "priceIn": 0.1,
+      "priceOut": 0.5,
+      "enabled": false
+    },
+    {
+      "id": "gpt-6-astra",
+      "family": "OpenAI",
+      "baseURL": "https://openrouter.ai/api/v1/",
+      "apiKeyEnv": "OPENROUTER_API_KEY",
+      "model": "openai/gpt-6-astra",
+      "maxTokensParam": "max_tokens",
+      "priceIn": 10,
+      "priceOut": 50,
+      "enabled": false
+    },
+    {
+      "id": "kimi-k3.1-pro",
+      "family": "Moonshot",
+      "baseURL": "https://openrouter.ai/api/v1/",
+      "apiKeyEnv": "OPENROUTER_API_KEY",
+      "model": "moonshotai/kimi-k3.1-pro",
+      "maxTokensParam": "max_tokens",
+      "priceIn": 2,
+      "priceOut": 10,
+      "enabled": false
+    },
+    {
+      "id": "qwen3.8-max-prime",
+      "family": "Alibaba",
+      "baseURL": "https://openrouter.ai/api/v1/",
+      "apiKeyEnv": "OPENROUTER_API_KEY",
+      "model": "qwen/qwen3.8-max-prime",
+      "maxTokensParam": "max_tokens",
+      "priceIn": 4,
+      "priceOut": 12,
+      "enabled": false
+    },
+    {
+      "id": "gemini-3.1-pro",
+      "family": "Google",
+      "baseURL": "https://openrouter.ai/api/v1/",
+      "apiKeyEnv": "OPENROUTER_API_KEY",
+      "model": "google/gemini-3.1-pro-preview",
+      "maxTokensParam": "max_tokens",
+      "priceIn": 2,
+      "priceOut": 12,
+      "enabled": false
+    },
+    {
+      "id": "grok-4.7",
+      "family": "xAI",
+      "baseURL": "https://openrouter.ai/api/v1/",
+      "apiKeyEnv": "OPENROUTER_API_KEY",
+      "model": "x-ai/grok-4.7",
+      "maxTokensParam": "max_tokens",
+      "priceIn": 2,
+      "priceOut": 6,
+      "enabled": false
+    },
+    {
+      "id": "deepseek-v4-pro",
+      "family": "DeepSeek",
+      "baseURL": "https://openrouter.ai/api/v1/",
+      "apiKeyEnv": "OPENROUTER_API_KEY",
+      "model": "deepseek/deepseek-v4-pro",
+      "maxTokensParam": "max_tokens",
+      "priceIn": 0.96,
+      "priceOut": 1.91,
+      "enabled": false
+    },
+    {
+      "id": "gpt-6.1-sol",
+      "family": "OpenAI",
+      "baseURL": "https://openrouter.ai/api/v1/",
+      "apiKeyEnv": "OPENROUTER_API_KEY",
+      "model": "openai/gpt-6.1-sol",
+      "maxTokensParam": "max_tokens",
+      "priceIn": 2,
+      "priceOut": 10,
+      "enabled": false
+    }
+  ]
+}

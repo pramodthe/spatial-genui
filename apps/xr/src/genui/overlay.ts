@@ -1,4 +1,4 @@
-import { mountGenerated, unmountGenerated, type MountReport } from './host.js';
+import { inspectMounted, mountGenerated, unmountGenerated, type MountReport } from './host.js';
 
 /**
  * Desktop/emulator prompt box for Phase 1 testing. In-headset input (topic chips,
@@ -82,7 +82,15 @@ export function createOverlay() {
   });
 
   // Scriptable entry point for automated tests (CLI/Playwright) and the benchmark harness.
-  (window as unknown as { genui: unknown }).genui = { generate, repair, mount, clear, state };
+  (window as unknown as { genui: unknown }).genui = {
+    generate,
+    repair,
+    mount,
+    clear,
+    state,
+    inspect: inspectMounted,
+    setOverlayHidden: (hidden: boolean) => (root.style.display = hidden ? 'none' : 'flex'),
+  };
 }
 
 export function reportRuntimeError(message: string) {

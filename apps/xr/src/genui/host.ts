@@ -45,6 +45,10 @@ type Mounted = {
   entities: Entity[];
   objectEntities: Map<Object3D, Entity>;
   pressHandlers: Map<Entity, () => void>;
+  grabModes: Map<Object3D, 'touch' | 'ray'>;
+  pressTargets: Object3D[];
+  /** Times any generated press/click handler ran; lets tests prove an interaction landed. */
+  handlerCalls: number;
   panels: Map<Entity, PanelRecord>;
   update?: (time: number, delta: number) => void;
   startTime: number;
@@ -79,6 +83,34 @@ export function unmountGenerated() {
   current = null;
 }
 
+export type MountedInspection = {
+  grabbables: { name: string; mode: 'touch' | 'ray'; center: [number, number, number]; held: boolean }[];
+  pressables: { name: string; center: [number, number, number] }[];
+  panels: number;
+  panelsLoaded: number;
+  handlerCalls: number;
+};
+
+/** What the host wired up for the current generation, for tests and the benchmark. */
+export function inspectMounted(): MountedInspection | null {
+  const mounted = current;
+  if (!mounted) return null;
+  const center = (object: Object3D) =>
+    new Box3().setFromObject(object).getCenter(new Vector3()).toArray() as [number, number, number];
+  return {
+    grabbables: [...mounted.grabModes].map(([object, mode]) => ({
+      name: object.name,
+      mode,
+      center: center(object),
+      held: mounted.objectEntities.get(object)?.hasComponent(Grabbed) ?? false,
+    })),
+    pressables: mounted.pressTargets.map((object) => ({ name: object.name, center: center(object) })),
+    panels: mounted.panels.size,
+    panelsLoaded: [...mounted.panels.values()].filter((p) => p.document).length,
+    handlerCalls: mounted.handlerCalls,
+  };
+}
+
 /** Load an agent-written module and mount what it builds. Throws nothing; failures come back as a report. */
 export async function mountGenerated(code: string): Promise<MountReport> {
   if (!world) return { ok: false, error: 'GenUI host is not initialised.' };
@@ -101,6 +133,9 @@ export async function mountGenerated(code: string): Promise<MountReport> {
     entities: [],
     objectEntities: new Map(),
     pressHandlers: new Map(),
+    grabModes: new Map(),
+    pressTargets: [],
+    handlerCalls: 0,
     panels: new Map(),
     startTime: performance.now() / 1000,
   };
@@ -117,7 +152,7 @@ export async function mountGenerated(code: string): Promise<MountReport> {
       return {
         object3D: record.holder,
         on(id: string, event: string, fn: () => void) {
-          const handler = { id, event, fn: guard(fn) };
+          const handler = { id, event, fn: guard(mounted, fn) };
           record.handlers.push(handler);
           if (record.document) bindHandler(record, handler);
         },
@@ -163,13 +198,16 @@ export async function mountGenerated(code: string): Promise<MountReport> {
       // A near-hand pinch would take neighbours too; a ray picks exactly the object it hits.
       if (!entity.hasComponent(RayInteractable)) entity.addComponent(RayInteractable, {});
       entity.addComponent(DistanceGrabbable, { movementMode: MovementMode.MoveAtSource });
+      mounted.grabModes.set(request.object, 'ray');
     } else if (request.grab) {
       entity.addComponent(OneHandGrabbable, {});
+      mounted.grabModes.set(request.object, 'touch');
     }
     if (request.onPress) {
       if (!entity.hasComponent(RayInteractable)) entity.addComponent(RayInteractable, {});
       if (!entity.hasComponent(PokeInteractable)) entity.addComponent(PokeInteractable, {});
-      mounted.pressHandlers.set(entity, guard(request.onPress));
+      mounted.pressHandlers.set(entity, guard(mounted, request.onPress));
+      mounted.pressTargets.push(request.object);
     }
   }
 
@@ -317,8 +355,9 @@ function fitToComfortSize(root: Object3D, warnings: string[]) {
   }
 }
 
-function guard(fn: () => void): () => void {
+function guard(mounted: Mounted, fn: () => void): () => void {
   return () => {
+    mounted.handlerCalls++;
     try {
       fn();
     } catch (err) {

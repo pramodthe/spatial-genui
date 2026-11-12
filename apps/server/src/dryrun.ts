@@ -35,7 +35,7 @@ const MIN_TEXT_CM = 1.1;
  * reaches the headset. Node's vm is NOT a security boundary: only call this inside the sandbox
  * process (sandbox.ts); everywhere else use `dryRun` from sandbox.ts.
  */
-export function dryRunUnsafe(transformed: string): DryRunResult {
+export function dryRunUnsafe(transformed: string, assets: Record<string, AssetStub> = {}): DryRunResult {
   const traitTargets: { object: unknown; grab: boolean; press: boolean }[] = [];
   const panels: { markup: string; options: any; holder: THREE.Group }[] = [];
 
@@ -53,6 +53,13 @@ export function dryRunUnsafe(transformed: string): DryRunResult {
       holder.rotation.y = typeof options?.rotationY === 'number' ? options.rotationY : 0;
       panels.push({ markup: String(markup), options, holder });
       return { object3D: holder, on() {}, set() {} };
+    },
+    assets: {
+      get(id: string) {
+        const entry = assets[id];
+        if (!entry) throw new Error(`Unknown library asset '${id}'. Available: ${Object.keys(assets).join(', ') || 'none'}.`);
+        return stubAsset(entry);
+      },
     },
     isGrabbed() {
       return false;
@@ -134,6 +141,11 @@ export function dryRunUnsafe(transformed: string): DryRunResult {
     if (!o.isMesh && !o.isLine && !o.isPoints) return;
     meshes++;
     drawCalls++;
+    // A library part's stand-in counts as the real mesh it replaces.
+    if (o.userData?.stubTriangles) {
+      triangles += o.userData.stubTriangles;
+      return;
+    }
     const geometry = o.geometry as THREE.BufferGeometry | undefined;
     if (!o.isMesh || !geometry) return;
     const count = geometry.index ? geometry.index.count : geometry.attributes.position?.count ?? 0;
@@ -219,6 +231,44 @@ function panelTextSize(markup: string, widthM: number): { minTextCm: number; min
   if (!rootPx) return 'no-root-width';
   const minFontPx = Math.min(...fonts);
   return { minTextCm: (widthM * minFontPx * 100) / rootPx, minFontPx, rootPx };
+}
+
+/** What the dry run needs from a library asset (see library.ts): its parts, without the meshes. */
+export type AssetStub = {
+  id: string;
+  creditShort?: string;
+  parts: { node: string; name: string; group?: string | null; centroid: number[]; labelAnchor: number[]; explodeDir: number[]; triangles: number }[];
+};
+
+/** Same handle as the browser host's assets.get(), with a small box standing in for each part. */
+function stubAsset(entry: AssetStub) {
+  const group = new THREE.Group();
+  group.name = entry.id;
+  const parts = entry.parts.map((p) => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.01, 0.01), new THREE.MeshStandardMaterial());
+    mesh.name = p.node;
+    mesh.position.set(p.centroid[0], p.centroid[1], p.centroid[2]);
+    mesh.userData.stubTriangles = p.triangles;
+    group.add(mesh);
+    return {
+      id: p.node, name: p.name, group: p.group ?? null, object3D: mesh,
+      labelAnchor: new THREE.Vector3(...(p.labelAnchor as [number, number, number])),
+      explodeDir: new THREE.Vector3(...(p.explodeDir as [number, number, number])),
+    };
+  });
+  const find = (id: string) => {
+    const part = parts.find((p) => p.id === id);
+    if (!part) throw new Error(`Asset '${entry.id}' has no part '${id}'. Parts: ${parts.map((p) => p.id).join(', ')}.`);
+    return part;
+  };
+  return {
+    object3D: group, parts, credit: entry.creditShort ?? '',
+    part: (id: string) => find(id).object3D,
+    anchor(id: string) {
+      group.updateMatrix();
+      return find(id).labelAnchor.clone().applyMatrix4(group.matrix);
+    },
+  };
 }
 
 function describeRuntimeError(err: unknown): string {

@@ -270,6 +270,18 @@ cd apps/worker3d && uv run modal app stop spatial-genui-3d-v2 && uv run modal vo
 
 To adopt it: merge `exp/3d-v2` into the main line after its milestone checks pass.
 
+## 12. Progress
+
+**Tier D bake-off (Nov 13).** TRELLIS.2 (Microsoft, MIT) runs on Modal (`apps/worker3d/modal_trellis.py`, RTX PRO 6000, about 6–100 s per model warm, under $1 for 12 models). On the Phase 3 objects and reference images it scores 3.58/5 with the best craft of any pipeline (4.00): excellent on everyday objects (office chair and guitar 5/5, bicycle and lunar lander 4/5), weak where the model must teach a concept (gears that don't mesh, a volcano without a vent), and with no named parts (one fused mesh, ~100k triangles). Consistent with the router: generators for real-world objects, code or data for concepts.
+
+**M1 library core (Nov 13).** Done, in the emulator:
+- `apps/worker3d/library/bp3d_build.py` builds assets from BodyParts3D 4.0 (CC BY 4.0 per the licence page updated 2025-02-27; the OBJ headers still carry the older CC BY-SA 2.1 JP notice, recorded in each asset's provenance) using recipes in `library/recipes/`: heart (27 parts), skull (22 bones), brain (19 parts). Real size, named parts with FMA IDs, label anchors, explode directions, colours, 60–80k triangles each.
+- Opus 5.5 judges all three 4/5 (recognizable 5, accuracy 4, craft 4) with every required part named. The heart ties TRELLIS.2's and beats every code-built heart (3/5).
+- Modules use `assets.get('heart-bp3d')` (validated against the catalogue, dry-run with stand-ins, preloaded by the host through IWSDK's AssetManager). Muse Ember chose the library heart on its own and built a labelled blood-flow tour on the first attempt; in the emulator the heart is grabbable and 3/3 panel buttons work by hand ray.
+- Known data limits: BodyParts3D has no ventricular wall (the ventricles are cavity casts, so coronary arteries sit slightly proud of the surface), no teeth, and some cortical gyri are missing; meshes are 99%-reduced and slightly faceted.
+
+Rebuild the assets: download BodyParts3D into `data/bodyparts3d/` (see the builder's docstring), then `apps/worker3d/.venv/bin/python3 apps/worker3d/library/bp3d_build.py apps/worker3d/library/recipes/heart.json` (and skull, brain). The agent server serves `data/library/` at `/api/library`.
+
 ## 10. Sources
 
 - SceneCraft: An LLM Agent for Synthesizing 3D Scene as Blender Code. https://arxiv.org/abs/2403.01248

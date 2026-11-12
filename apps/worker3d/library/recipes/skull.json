@@ -1,0 +1,191 @@
+{
+  "id": "skull-bp3d",
+  "title": "Human skull (22 bones, colour-coded)",
+  "concept": {
+    "id": "FMA46565",
+    "name": "skull"
+  },
+  "detail": "individual-bones",
+  "triangle_budget": 70000,
+  "notes": [
+    "Bones only: the eye structures and the hyoid bone in BodyParts3D's skull tree are left out. BodyParts3D 4.0 has no teeth meshes."
+  ],
+  "parts": [
+    {
+      "name": "frontal bone",
+      "group": "cranium",
+      "own": [
+        "FMA52734"
+      ],
+      "color": "#e3a33b"
+    },
+    {
+      "name": "right parietal bone",
+      "group": "cranium",
+      "own": [
+        "FMA52788"
+      ],
+      "color": "#3b82d6"
+    },
+    {
+      "name": "left parietal bone",
+      "group": "cranium",
+      "own": [
+        "FMA52789"
+      ],
+      "color": "#3b82d6"
+    },
+    {
+      "name": "occipital bone",
+      "group": "cranium",
+      "own": [
+        "FMA52735"
+      ],
+      "color": "#46a045"
+    },
+    {
+      "name": "right temporal bone",
+      "group": "cranium",
+      "own": [
+        "FMA52738"
+      ],
+      "color": "#d94a4a"
+    },
+    {
+      "name": "left temporal bone",
+      "group": "cranium",
+      "own": [
+        "FMA52739"
+      ],
+      "color": "#d94a4a"
+    },
+    {
+      "name": "sphenoid bone",
+      "group": "cranium",
+      "own": [
+        "FMA52736"
+      ],
+      "color": "#9a52c7"
+    },
+    {
+      "name": "ethmoid bone",
+      "group": "cranium",
+      "own": [
+        "FMA52740"
+      ],
+      "color": "#e8c51e"
+    },
+    {
+      "name": "right nasal bone",
+      "group": "face",
+      "own": [
+        "FMA53647"
+      ],
+      "color": "#1fae9c"
+    },
+    {
+      "name": "left nasal bone",
+      "group": "face",
+      "own": [
+        "FMA53648"
+      ],
+      "color": "#1fae9c"
+    },
+    {
+      "name": "right zygomatic bone",
+      "group": "face",
+      "own": [
+        "FMA52892"
+      ],
+      "color": "#ef7d22"
+    },
+    {
+      "name": "left zygomatic bone",
+      "group": "face",
+      "own": [
+        "FMA52893"
+      ],
+      "color": "#ef7d22"
+    },
+    {
+      "name": "right maxilla",
+      "group": "face",
+      "own": [
+        "FMA53649"
+      ],
+      "color": "#e46aa6"
+    },
+    {
+      "name": "left maxilla",
+      "group": "face",
+      "own": [
+        "FMA53650"
+      ],
+      "color": "#e46aa6"
+    },
+    {
+      "name": "mandible",
+      "group": "face",
+      "own": [
+        "FMA52748"
+      ],
+      "color": "#c9b38c"
+    },
+    {
+      "name": "right lacrimal bone",
+      "group": "face",
+      "own": [
+        "FMA53645"
+      ],
+      "color": "#5a6fe0"
+    },
+    {
+      "name": "left lacrimal bone",
+      "group": "face",
+      "own": [
+        "FMA53646"
+      ],
+      "color": "#5a6fe0"
+    },
+    {
+      "name": "right palatine bone",
+      "group": "face",
+      "own": [
+        "FMA53655"
+      ],
+      "color": "#b06ab3"
+    },
+    {
+      "name": "left palatine bone",
+      "group": "face",
+      "own": [
+        "FMA53656"
+      ],
+      "color": "#b06ab3"
+    },
+    {
+      "name": "right inferior nasal concha",
+      "group": "face",
+      "own": [
+        "FMA54737"
+      ],
+      "color": "#6fb36f"
+    },
+    {
+      "name": "left inferior nasal concha",
+      "group": "face",
+      "own": [
+        "FMA54738"
+      ],
+      "color": "#6fb36f"
+    },
+    {
+      "name": "vomer",
+      "group": "face",
+      "own": [
+        "FMA9710"
+      ],
+      "color": "#a07850"
+    }
+  ]
+}

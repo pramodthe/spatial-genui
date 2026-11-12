@@ -1,6 +1,8 @@
+import { createReadStream, statSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { generate } from './agent.js';
 import { config } from './config.js';
+import { assetPath, libraryCatalog, shortCredit } from './library.js';
 import { EXAMPLE_MODULE } from './prompt.js';
 
 const MAX_BODY_BYTES = 200_000;
@@ -9,6 +11,22 @@ const server = createServer(async (req, res) => {
   try {
     if (req.method === 'GET' && req.url === '/api/health') {
       return send(res, 200, { ok: true, model: config.model, provider: new URL(config.baseURL).host, hasKey: Boolean(config.apiKey) });
+    }
+    if (req.method === 'GET' && req.url === '/api/library/catalog') {
+      // What the browser host needs to build asset handles: parts, anchors, credit (no file paths).
+      // ?v= changes whenever a model is rebuilt, so browsers never keep a stale cached copy.
+      const entries = [...libraryCatalog().values()].map((e) => ({
+        ...e, creditShort: shortCredit(e), url: `/api/library/assets/${e.id}.glb?v=${Math.round(statSync(assetPath(e.id)!).mtimeMs)}`,
+      }));
+      return send(res, 200, { assets: entries });
+    }
+    const assetMatch = req.method === 'GET' && req.url?.match(/^\/api\/library\/assets\/([a-z0-9-]+)\.glb(\?v=\d+)?$/);
+    if (assetMatch) {
+      const path = assetPath(assetMatch[1]);
+      if (!path) return send(res, 404, { error: 'Unknown asset' });
+      res.writeHead(200, { 'content-type': 'model/gltf-binary', 'cache-control': 'public, max-age=3600' });
+      createReadStream(path).pipe(res);
+      return;
     }
     if (req.method === 'POST' && req.url === '/api/generate') {
       const body = await readJson(req);

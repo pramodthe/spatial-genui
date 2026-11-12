@@ -124,7 +124,9 @@ async function generate(prompt: string, extra: { previousCode?: string; clientEr
     if (state.lastMount?.ok) {
       setStatus(
         `Done in ${((data.totalMs ?? 0) / 1000).toFixed(1)} s with ${data.model} (attempts: ${stages}).` +
-          (state.lastMount.warnings.length ? `\n${state.lastMount.warnings.join('\n')}` : ''),
+          (state.lastMount.warnings.length ? `\n${state.lastMount.warnings.join('\n')}` : '') +
+          // Library models are CC BY: their full credit is shown wherever the lesson runs.
+          (state.lastMount.credits.length ? `\n${state.lastMount.credits.join('\n')}` : ''),
       );
     }
   } catch (err) {

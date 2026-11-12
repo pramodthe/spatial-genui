@@ -126,7 +126,11 @@ export function judgeText(req: AssetRequest): string {
  */
 export function missingParts(req: AssetRequest, nodeNames: string[]): string[] {
   const names = nodeNames.map((n) => n.toLowerCase().trim().replace(/[\s-]+/g, '_'));
+  // Also accept the part's words inside a longer anatomical name: left_frontal_lobe is a frontal lobe,
+  // ascending_aorta is aorta, right_pulmonary_artery is a pulmonary artery.
+  const words = (n: string) => new Set(n.replace(/\d+/g, ' ').split(/[_.\s]+/).filter(Boolean));
   const matches = (n: string, part: string) =>
-    n === part || n.startsWith(`${part}_`) || n.startsWith(`${part}.`) || (n.startsWith(part) && /^\d+$/.test(n.slice(part.length)));
+    n === part || n.startsWith(`${part}_`) || n.startsWith(`${part}.`) || (n.startsWith(part) && /^\d+$/.test(n.slice(part.length))) ||
+    [...words(part)].every((w) => words(n).has(w));
   return req.parts.filter((part) => !names.some((n) => matches(n, part)));
 }

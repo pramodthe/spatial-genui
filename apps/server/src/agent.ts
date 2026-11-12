@@ -4,6 +4,7 @@ import { config } from './config.js';
 import type { SceneStats } from './dryrun.js';
 import { dryRun } from './sandbox.js';
 import { complete, defaultTarget, type ChatMessage, type LlmTarget } from './llm.js';
+import { assetStubs, librarySection, libraryCatalog } from './library.js';
 import { SYSTEM_PROMPT, repairMessage } from './prompt.js';
 import { extractCode, validateModule } from './validate.js';
 
@@ -37,12 +38,15 @@ export type GenerationResult = {
  */
 export async function generate(
   prompt: string,
-  options: { previousCode?: string; clientError?: string; target?: LlmTarget; log?: boolean } = {},
+  options: { previousCode?: string; clientError?: string; target?: LlmTarget; log?: boolean; library?: boolean } = {},
 ): Promise<GenerationResult> {
   const target = options.target ?? defaultTarget;
   const started = performance.now();
+  // The asset library is on for the app; benchmarks turn it off so their prompt stays as published.
+  const useLibrary = options.library ?? true;
+  const knownAssets = useLibrary ? new Set(libraryCatalog().keys()) : new Set<string>();
   const messages: ChatMessage[] = [
-    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'system', content: useLibrary ? SYSTEM_PROMPT + librarySection() : SYSTEM_PROMPT },
     { role: 'user', content: prompt },
   ];
   if (options.previousCode && options.clientError) {
@@ -86,7 +90,7 @@ export async function generate(
     }
     result.code = code;
 
-    const validation = validateModule(code);
+    const validation = validateModule(code, knownAssets);
     if (!validation.ok) {
       attempt.stage = 'validate';
       attempt.error = validation.error;
@@ -94,7 +98,7 @@ export async function generate(
       continue;
     }
 
-    const run = await dryRun(validation.transformed);
+    const run = await dryRun(validation.transformed, assetStubs(validation.assets));
     if (!run.ok) {
       attempt.stage = 'dry-run';
       attempt.error = run.error;

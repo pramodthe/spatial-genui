@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
-import type { DryRunResult } from './dryrun.js';
+import type { AssetStub, DryRunResult } from './dryrun.js';
 
 /**
  * Executes agent-written code in a separate, locked-down Node process.
@@ -40,7 +40,7 @@ function ensureBundle(): Promise<void> {
   return bundled;
 }
 
-export async function dryRun(transformed: string): Promise<DryRunResult> {
+export async function dryRun(transformed: string, assets: Record<string, AssetStub> = {}): Promise<DryRunResult> {
   await ensureBundle();
   if (!existsSync(CHILD_BUNDLE)) return { ok: false, error: 'Sandbox bundle missing.' };
 
@@ -64,6 +64,6 @@ export async function dryRun(transformed: string): Promise<DryRunResult> {
         resolve({ ok: false, error: `Sandbox failed (${reason}).` });
       }
     });
-    child.stdin.end(JSON.stringify({ transformed }));
+    child.stdin.end(JSON.stringify({ transformed, assets }));
   });
 }

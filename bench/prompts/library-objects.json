@@ -1,0 +1,5 @@
+[
+  { "id": "heart", "category": "biology", "prompt": "A human heart showing its four chambers and the main blood vessels", "parts": ["left_ventricle", "right_ventricle", "left_atrium", "right_atrium", "aorta", "pulmonary_artery"] },
+  { "id": "skull", "category": "biology", "prompt": "A human skull showing its individual bones", "parts": ["frontal_bone", "parietal_bone", "temporal_bone", "occipital_bone", "sphenoid_bone", "ethmoid_bone", "nasal_bone", "zygomatic_bone", "maxilla", "mandible"] },
+  { "id": "brain", "category": "biology", "prompt": "A human brain showing its lobes, the cerebellum and the brainstem", "parts": ["frontal_lobe", "parietal_lobe", "temporal_lobe", "occipital_lobe", "cerebellum", "pons", "medulla_oblongata", "midbrain"] }
+]

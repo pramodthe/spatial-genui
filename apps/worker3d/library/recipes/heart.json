@@ -1,0 +1,258 @@
+{
+  "id": "heart-bp3d",
+  "title": "Human heart (chambers, valves and great vessels)",
+  "concept": {
+    "id": "FMA7088",
+    "name": "heart"
+  },
+  "detail": "chambers-valves-great-vessels",
+  "triangle_budget": 60000,
+  "notes": [
+    "BodyParts3D 4.0 has no ventricular wall (myocardium) mesh: the ventricles are casts of their cavities, the atria have walls.",
+    "Pulmonary arteries and veins keep only their main trunks near the heart (branches inside the lungs are left out); the inferior vena cava is clipped to the heart's neighbourhood."
+  ],
+  "parts": [
+    {
+      "name": "tricuspid valve",
+      "group": "valves",
+      "own": [
+        "FMA7238",
+        "FMA7239",
+        "FMA7240"
+      ],
+      "color": "#f3e6c4"
+    },
+    {
+      "name": "mitral valve",
+      "group": "valves",
+      "own": [
+        "FMA7242",
+        "FMA7243"
+      ],
+      "color": "#f3e6c4"
+    },
+    {
+      "name": "aortic valve",
+      "group": "valves",
+      "own": [
+        "FMA7252",
+        "FMA7253",
+        "FMA7254"
+      ],
+      "color": "#f3e6c4"
+    },
+    {
+      "name": "pulmonary valve",
+      "group": "valves",
+      "own": [
+        "FMA7247",
+        "FMA7249",
+        "FMA7250"
+      ],
+      "color": "#f3e6c4"
+    },
+    {
+      "name": "papillary muscles of right ventricle",
+      "group": "muscles",
+      "own": [
+        "FMA7260",
+        "FMA7261",
+        "FMA7262"
+      ],
+      "color": "#8c2f2a"
+    },
+    {
+      "name": "papillary muscles of left ventricle",
+      "group": "muscles",
+      "own": [
+        "FMA7264",
+        "FMA7265"
+      ],
+      "color": "#8c2f2a"
+    },
+    {
+      "name": "right atrium",
+      "group": "chambers",
+      "own": [
+        "FMA9457"
+      ],
+      "color": "#2f5bd3"
+    },
+    {
+      "name": "left atrium",
+      "group": "chambers",
+      "own": [
+        "FMA9531"
+      ],
+      "color": "#d1323b"
+    },
+    {
+      "name": "right ventricle",
+      "group": "chambers",
+      "own": [
+        "FMA9291"
+      ],
+      "color": "#1f43b8"
+    },
+    {
+      "name": "left ventricle",
+      "group": "chambers",
+      "own": [
+        "FMA9466"
+      ],
+      "color": "#b81d29"
+    },
+    {
+      "name": "right coronary artery",
+      "group": "coronary vessels",
+      "concepts": [
+        "FMA50039"
+      ],
+      "color": "#ff3b1f"
+    },
+    {
+      "name": "left coronary artery",
+      "group": "coronary vessels",
+      "concepts": [
+        "FMA50040"
+      ],
+      "color": "#ff3b1f"
+    },
+    {
+      "name": "cardiac veins",
+      "group": "coronary vessels",
+      "own": [
+        "FMA4706",
+        "FMA4707",
+        "FMA4714",
+        "FMA4716"
+      ],
+      "concepts": [
+        "FMA4717"
+      ],
+      "color": "#15287a"
+    },
+    {
+      "name": "ascending aorta",
+      "group": "great vessels",
+      "own": [
+        "FMA3736"
+      ],
+      "color": "#c4121f"
+    },
+    {
+      "name": "arch of aorta",
+      "group": "great vessels",
+      "own": [
+        "FMA3768"
+      ],
+      "color": "#c4121f"
+    },
+    {
+      "name": "brachiocephalic trunk",
+      "group": "great vessels",
+      "own": [
+        "FMA3932"
+      ],
+      "color": "#c4121f",
+      "clip": 30
+    },
+    {
+      "name": "left common carotid artery",
+      "group": "great vessels",
+      "own": [
+        "FMA4058"
+      ],
+      "color": "#c4121f",
+      "clip": 30
+    },
+    {
+      "name": "left subclavian artery",
+      "group": "great vessels",
+      "own": [
+        "FMA4694"
+      ],
+      "color": "#c4121f",
+      "clip": 30
+    },
+    {
+      "name": "pulmonary trunk",
+      "group": "great vessels",
+      "own": [
+        "FMA8612"
+      ],
+      "color": "#2547c4"
+    },
+    {
+      "name": "right pulmonary artery",
+      "group": "great vessels",
+      "own": [
+        "FMA50872"
+      ],
+      "color": "#2547c4",
+      "clip": 25
+    },
+    {
+      "name": "left pulmonary artery",
+      "group": "great vessels",
+      "own": [
+        "FMA50873"
+      ],
+      "color": "#2547c4",
+      "clip": 25
+    },
+    {
+      "name": "superior vena cava",
+      "group": "great vessels",
+      "own": [
+        "FMA4720"
+      ],
+      "color": "#1b3aa0"
+    },
+    {
+      "name": "inferior vena cava",
+      "group": "great vessels",
+      "own": [
+        "FMA10951"
+      ],
+      "color": "#1b3aa0",
+      "clip": 15
+    },
+    {
+      "name": "right superior pulmonary vein",
+      "group": "great vessels",
+      "own": [
+        "FMA49914"
+      ],
+      "color": "#e0353f",
+      "clip": 20
+    },
+    {
+      "name": "right inferior pulmonary vein",
+      "group": "great vessels",
+      "own": [
+        "FMA49911"
+      ],
+      "color": "#e0353f",
+      "clip": 20
+    },
+    {
+      "name": "left superior pulmonary vein",
+      "group": "great vessels",
+      "own": [
+        "FMA49916"
+      ],
+      "color": "#e0353f",
+      "clip": 20
+    },
+    {
+      "name": "left inferior pulmonary vein",
+      "group": "great vessels",
+      "own": [
+        "FMA49913"
+      ],
+      "color": "#e0353f",
+      "clip": 20
+    }
+  ]
+}

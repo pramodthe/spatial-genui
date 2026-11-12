@@ -1,0 +1,202 @@
+{
+  "id": "brain-bp3d",
+  "title": "Human brain (lobes, cerebellum and brainstem)",
+  "concept": {
+    "id": "FMA50801",
+    "name": "brain"
+  },
+  "detail": "lobes",
+  "triangle_budget": 80000,
+  "notes": [
+    "Lobes are grouped from BodyParts3D's gyri using the standard assignment (precentral gyrus to the frontal lobe; postcentral, superior parietal, supramarginal and angular to the parietal lobe).",
+    "BodyParts3D 4.0 lacks some cortical surfaces (e.g. the superior temporal and orbital gyri); the white matter mesh underneath fills those areas."
+  ],
+  "parts": [
+    {
+      "name": "left frontal lobe",
+      "group": "cerebrum",
+      "own": [
+        "FMA72654",
+        "FMA72656",
+        "FMA72658",
+        "FMA72662"
+      ],
+      "color": "#e2574c"
+    },
+    {
+      "name": "right frontal lobe",
+      "group": "cerebrum",
+      "own": [
+        "FMA72653",
+        "FMA72655",
+        "FMA72657",
+        "FMA72661"
+      ],
+      "color": "#e2574c"
+    },
+    {
+      "name": "left parietal lobe",
+      "group": "cerebrum",
+      "own": [
+        "FMA72666",
+        "FMA72672",
+        "FMA72668",
+        "FMA72670"
+      ],
+      "color": "#3d8bd9"
+    },
+    {
+      "name": "right parietal lobe",
+      "group": "cerebrum",
+      "own": [
+        "FMA72665",
+        "FMA72671",
+        "FMA72667",
+        "FMA72669"
+      ],
+      "color": "#3d8bd9"
+    },
+    {
+      "name": "left temporal lobe",
+      "group": "cerebrum",
+      "own": [
+        "FMA72686",
+        "FMA72688",
+        "FMA72690"
+      ],
+      "color": "#4caf50"
+    },
+    {
+      "name": "right temporal lobe",
+      "group": "cerebrum",
+      "own": [
+        "FMA72685",
+        "FMA72687",
+        "FMA72689"
+      ],
+      "color": "#4caf50"
+    },
+    {
+      "name": "left occipital lobe",
+      "group": "cerebrum",
+      "own": [
+        "FMA72976"
+      ],
+      "color": "#f2b632"
+    },
+    {
+      "name": "right occipital lobe",
+      "group": "cerebrum",
+      "own": [
+        "FMA72975"
+      ],
+      "color": "#f2b632"
+    },
+    {
+      "name": "left insula",
+      "group": "cerebrum",
+      "own": [
+        "FMA72978"
+      ],
+      "color": "#a259d9"
+    },
+    {
+      "name": "right insula",
+      "group": "cerebrum",
+      "own": [
+        "FMA72977"
+      ],
+      "color": "#a259d9"
+    },
+    {
+      "name": "limbic lobe",
+      "group": "cerebrum",
+      "own": [
+        "FMA72718",
+        "FMA72717",
+        "FMA72706",
+        "FMA72705",
+        "FMA72714",
+        "FMA72713"
+      ],
+      "color": "#f07f2e"
+    },
+    {
+      "name": "cerebellum",
+      "group": "hindbrain",
+      "own": [
+        "FMA67944"
+      ],
+      "color": "#b5458f"
+    },
+    {
+      "name": "pons",
+      "group": "brainstem",
+      "own": [
+        "FMA67943"
+      ],
+      "color": "#7a5c99"
+    },
+    {
+      "name": "medulla oblongata",
+      "group": "brainstem",
+      "own": [
+        "FMA62004"
+      ],
+      "color": "#3f7f8c"
+    },
+    {
+      "name": "midbrain",
+      "group": "brainstem",
+      "own": [
+        "FMA61993",
+        "FMA73422",
+        "FMA73423",
+        "FMA73434",
+        "FMA73435"
+      ],
+      "color": "#c26d4a"
+    },
+    {
+      "name": "hypothalamus",
+      "group": "diencephalon",
+      "own": [
+        "FMA62008",
+        "FMA62327"
+      ],
+      "color": "#d8a35d"
+    },
+    {
+      "name": "pineal body",
+      "group": "diencephalon",
+      "own": [
+        "FMA62033",
+        "FMA62032"
+      ],
+      "color": "#d8a35d"
+    },
+    {
+      "name": "white matter",
+      "group": "cerebrum",
+      "own": [
+        "FMA260794",
+        "FMA260791",
+        "FMA72907",
+        "FMA72906"
+      ],
+      "color": "#efe7d6"
+    },
+    {
+      "name": "ventricles",
+      "group": "ventricular system",
+      "own": [
+        "FMA78450",
+        "FMA78449",
+        "FMA78454",
+        "FMA78469",
+        "FMA78467"
+      ],
+      "color": "#1f8fd6"
+    }
+  ]
+}

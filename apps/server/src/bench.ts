@@ -117,7 +117,7 @@ console.error(`Done. Summarize with: npm run bench:report -- ${outDir}`);
 async function runOne(m: ModelEntry, p: PromptCase, rep: number): Promise<BenchRow> {
   const base = { model: m.id, family: m.family, promptId: p.id, tier: p.tier, domain: p.domain, rep };
   try {
-    const r = await generate(p.prompt, { target: m, log: false });
+    const r = await generate(p.prompt, { target: m, log: false, library: false });
     const promptTokens = r.attempts.reduce((s, a) => s + a.promptTokens, 0);
     const completionTokens = r.attempts.reduce((s, a) => s + a.completionTokens, 0);
     return {

@@ -5,7 +5,11 @@ description = "3D workers for Spatial GenUI: CadQuery runner and a headless Blen
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "cadquery>=2.5",
+  "fast-simplification>=0.2.0",
   "fastapi>=0.162.5",
+  "gradio-client>=2.7.2",
   "mcp>=2.3",
   "modal>=1.6.4",
+  "networkx>=3.7",
+  "trimesh>=5.2.0",
 ]

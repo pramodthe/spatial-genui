@@ -18,12 +18,13 @@ import {
   type UIKitDocument,
   type World,
 } from '@iwsdk/core';
+import { assetHandle, assetIdsIn, creditsFor, preloadAssets } from './library';
 
 /**
  * GenUI host: runs agent-written component modules in the live scene.
  *
  * It holds no components of its own. It loads the module, gives it the
- * build API (THREE, traits, ui, isGrabbed), turns trait requests into IWSDK
+ * build API (THREE, traits, ui, isGrabbed, assets), turns trait requests into IWSDK
  * hand-interaction components, places the result in seated reach, and
  * isolates runtime errors so a broken generation can't take the app down.
  */
@@ -56,7 +57,7 @@ type Mounted = {
   startTime: number;
 };
 
-export type MountReport = { ok: true; warnings: string[] } | { ok: false; error: string };
+export type MountReport = { ok: true; warnings: string[]; credits: string[] } | { ok: false; error: string };
 
 // The panel font (Inter atlas in @pmndrs/msdfonts) has plain ASCII plus these; anything else renders
 // as an empty box. Keep in sync with apps/server/src/glyphs.ts, which makes the agent fix its text.
@@ -157,6 +158,17 @@ export async function mountGenerated(code: string): Promise<MountReport> {
   if (!world) return { ok: false, error: 'GenUI host is not initialised.' };
   unmountGenerated();
 
+  // Library models the module names in assets.get('…') load first, so build() can use them synchronously.
+  const assetIds = assetIdsIn(code);
+  let library: Awaited<ReturnType<typeof preloadAssets>> | null = null;
+  if (assetIds.length > 0) {
+    try {
+      library = await preloadAssets(assetIds);
+    } catch (err) {
+      return { ok: false, error: `Library asset failed to load: ${(err as Error).message}` };
+    }
+  }
+
   const moduleUrl = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }));
   let build: unknown;
   try {
@@ -202,6 +214,12 @@ export async function mountGenerated(code: string): Promise<MountReport> {
           else record.pendingProps.push({ id, props });
         },
       };
+    },
+    assets: {
+      get(id: string) {
+        if (!library) throw new Error(`assets.get('${id}'): write the id as a plain string so the host can load it first.`);
+        return assetHandle(library, id);
+      },
     },
     isGrabbed(object: Object3D) {
       return mounted.objectEntities.get(object)?.hasComponent(Grabbed) ?? false;
@@ -262,7 +280,7 @@ export async function mountGenerated(code: string): Promise<MountReport> {
 
   mounted.update = typeof result.update === 'function' ? (result.update as Mounted['update']) : undefined;
   current = mounted;
-  return { ok: true, warnings };
+  return { ok: true, warnings, credits: library ? creditsFor(library, assetIds) : [] };
 }
 
 class GenUISystem extends createSystem({

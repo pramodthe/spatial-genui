@@ -3,7 +3,7 @@ import { full } from 'acorn-walk';
 import { unsupportedGlyphs } from './glyphs.js';
 
 export type ValidationResult =
-  | { ok: true; transformed: string }
+  | { ok: true; transformed: string; assets: string[] }
   | { ok: false; error: string };
 
 // Globals generated code may not reference: network, DOM, timers, dynamic code, host escape hatches.
@@ -42,7 +42,11 @@ export function extractCode(reply: string): string | null {
  * Static safety check for an agent-written module, then a transform that turns
  * `export default …` into an assignment so the dry run can execute it as a script.
  */
-export function validateModule(code: string): ValidationResult {
+/**
+ * `knownAssets`: ids in the 3D asset library. Calls to `assets.get(...)` must name one of them with a
+ * literal string, so the host can load the models before build() runs.
+ */
+export function validateModule(code: string, knownAssets: ReadonlySet<string> = new Set()): ValidationResult {
   let ast: Node;
   try {
     ast = parse(code, { ecmaVersion: 'latest', sourceType: 'module', locations: true });
@@ -54,6 +58,7 @@ export function validateModule(code: string): ValidationResult {
   const declared = new Set<string>();
   const references: { name: string; line?: number }[] = [];
   let exportDefault: (Node & { declaration: Node }) | null = null;
+  const assetIds = new Set<string>();
   // Text the panel font can't draw shows up as empty boxes; collect it from every string in the module.
   const badGlyphs = new Map<string, { replacement: string; lines: Set<number> }>();
   const noteGlyphs = (text: string, line?: number) => {
@@ -100,6 +105,19 @@ export function validateModule(code: string): ValidationResult {
       case 'ArrowFunctionExpression':
         if (node.async || node.generator) problems.push(`async functions and generators are not allowed${where}`);
         break;
+      case 'CallExpression': {
+        // assets.get('id') or api.assets.get('id'): the id must be a known, literal string.
+        const callee = node.callee;
+        const isAssetsGet = callee?.type === 'MemberExpression' && !callee.computed && callee.property.name === 'get' &&
+          ((callee.object.type === 'Identifier' && callee.object.name === 'assets') ||
+            (callee.object.type === 'MemberExpression' && !callee.object.computed && callee.object.property.name === 'assets'));
+        if (!isAssetsGet) break;
+        const id = constantString(node.arguments[0]);
+        if (id == null) problems.push(`assets.get() needs the asset id written as a string, e.g. assets.get('heart-bp3d')${where}`);
+        else if (!knownAssets.has(id)) problems.push(`There is no library asset '${id}'${where}. Available: ${[...knownAssets].join(', ') || 'none'}.`);
+        else assetIds.add(id);
+        break;
+      }
     }
   });
 
@@ -127,5 +145,5 @@ export function validateModule(code: string): ValidationResult {
   const decl = exportDefault as unknown as { start: number; declaration: { start: number } };
   const transformed =
     code.slice(0, decl.start) + '__exports.default = ' + code.slice(decl.declaration.start);
-  return { ok: true, transformed };
+  return { ok: true, transformed, assets: [...assetIds] };
 }

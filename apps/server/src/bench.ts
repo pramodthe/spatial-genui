@@ -50,14 +50,15 @@ const args = parseArgs(process.argv.slice(2));
 const repoRoot = resolve(import.meta.dirname, '../../..');
 const promptsFile = resolve(args.prompts ?? join(repoRoot, 'bench/prompts/test-12.json'));
 const modelsFile = resolve(args.models ?? join(repoRoot, 'bench/models.json'));
-const outDir = resolve(args.out ?? join(repoRoot, 'bench/results', new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')));
-const runs = Math.max(1, Number(args.runs ?? 1));
-const concurrency = Math.max(1, Number(args.concurrency ?? 4));
+// Without --out, results go to a `_`-prefixed scratch folder, which .gitignore keeps out of git.
+const outDir = resolve(args.out || join(repoRoot, 'bench/results', `_run-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}`));
+const runs = positiveInt(args.runs, 1);
+const concurrency = positiveInt(args.concurrency, 4);
 
 const promptIds = args['prompt-ids'] ? new Set(args['prompt-ids'].split(',')) : null;
 const prompts = (JSON.parse(await readFile(promptsFile, 'utf8')) as PromptCase[])
   .filter((p) => !promptIds || promptIds.has(p.id))
-  .slice(0, Number(args.limit ?? Infinity));
+  .slice(0, positiveInt(args.limit, Infinity));
 const only = args.only ? new Set(args.only.split(',')) : null;
 const allModels = (JSON.parse(await readFile(modelsFile, 'utf8')) as { models: ModelEntry[] }).models;
 const models = allModels
@@ -75,9 +76,16 @@ if (existsSync(resultsFile)) {
     if (!r.apiError) done.add(`${r.model}|${r.promptId}|${r.rep}`);
   }
 }
+// A run directory can be filled in several sittings (e.g. one model now, another when its key works).
+const previousMeta = existsSync(join(outDir, 'meta.json')) ? JSON.parse(await readFile(join(outDir, 'meta.json'), 'utf8')) : {};
 await writeFile(
   join(outDir, 'meta.json'),
-  JSON.stringify({ startedAt: new Date().toISOString(), promptsFile: relative(repoRoot, promptsFile), modelsFile: relative(repoRoot, modelsFile), runs, models: runnable.map((m) => m.id), skipped, maxRepairs: config.maxRepairs, maxCompletionTokens: config.maxCompletionTokens, systemPrompt: SYSTEM_PROMPT }, null, 2),
+  JSON.stringify({
+    startedAt: previousMeta.startedAt ?? new Date().toISOString(), promptsFile: relative(repoRoot, promptsFile), modelsFile: relative(repoRoot, modelsFile), runs,
+    models: [...new Set([...(previousMeta.models ?? []), ...runnable.map((m) => m.id)])],
+    modelSettings: { ...previousMeta.modelSettings, ...Object.fromEntries(runnable.map((m) => [m.id, { model: m.model, baseURL: m.baseURL, extraBody: m.extraBody }])) },
+    skipped, maxRepairs: config.maxRepairs, maxCompletionTokens: config.maxCompletionTokens, systemPrompt: SYSTEM_PROMPT,
+  }, null, 2),
 );
 
 const jobs = runnable.flatMap((m) =>
@@ -140,6 +148,8 @@ function classifyFailure(stage: string, error: string, finishReason: string | nu
   if (stage === 'no-code') return finishReason === 'length' ? 'truncated' : 'no-code-block';
   if (stage === 'validate') {
     if (/^Syntax error/.test(error)) return 'syntax';
+    if (/default export|export default/.test(error)) return 'contract';
+    if (/plain ASCII/.test(error)) return 'unsupported-glyph';
     return 'forbidden-api';
   }
   if (/timed out/.test(error)) return 'timeout';
@@ -148,6 +158,8 @@ function classifyFailure(stage: string, error: string, finishReason: string | nu
   if (/must return|default export/.test(error)) return 'contract';
   if (/not inside `root`|add `handle.object3D`/.test(error)) return 'hierarchy';
   if (/width in meters/.test(error)) return 'panel-options';
+  if (/explicit width|smallest text/.test(error)) return 'panel-text-size';
+  if (/tilted|turned \d+°/.test(error)) return 'panel-orientation';
   if (/empty/.test(error)) return 'empty-scene';
   if (/Runtime error/.test(error)) return 'runtime-error';
   return 'other';
@@ -166,6 +178,12 @@ function parseArgs(argv: string[]): Record<string, string> {
     if (argv[i].startsWith('--')) out[argv[i].slice(2)] = argv[i + 1] ?? '';
   }
   return out;
+}
+
+/** A positive integer flag value, or the fallback when the flag is missing, empty or not a number. */
+function positiveInt(value: string | undefined, fallback: number): number {
+  const n = Number(value);
+  return value && Number.isFinite(n) && n >= 1 ? Math.floor(n) : fallback;
 }
 
 function round4(n: number) {

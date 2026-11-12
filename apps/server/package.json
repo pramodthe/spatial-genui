@@ -12,7 +12,8 @@
     "bench": "tsx src/bench.ts",
     "bench:report": "tsx src/bench-report.ts",
     "bench:judge": "tsx src/judge.ts",
-    "bench:gallery": "tsx src/bench-gallery.ts"
+    "bench:gallery": "tsx src/bench-gallery.ts",
+    "bench:combine": "tsx src/bench-combine.ts"
   },
   "engines": {
     "node": ">=22.12.0"

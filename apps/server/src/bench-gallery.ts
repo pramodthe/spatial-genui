@@ -1,14 +1,14 @@
 // Side-by-side gallery of a benchmark run: one row per prompt, one column per model, with the
 // screenshot, timing, hand-probe results and judge scores. Writes <dir>/gallery.html (open locally)
 // and, when <dir>/gallery/ holds compressed JPEGs, <dir>/gallery.md (renders on GitHub).
-// Usage: npm run bench:gallery -- ../../bench/results/<name> [--export-images]
+// Usage: npm run bench:gallery -- ../../bench/results/<name> [--export-images] [--judge claude-opus-5-5]
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
-import { basename, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 
 type Row = { model: string; family: string; promptId: string; tier: string; rep: number; ok: boolean; firstTryOk: boolean; stages: string[]; totalMs: number; costUSD: number | null };
-type Browser = { model: string; promptId: string; rep: number; mounted: boolean; runtimeErrors: string[]; shot?: string;
+type Browser = { model: string; promptId: string; rep: number; mounted: boolean; runtimeErrors: string[]; harnessError?: string; shot?: string;
   grab?: { tested: boolean; held?: boolean; mode?: string }; press?: { tested: boolean; fired?: boolean } };
 type Judge = { model: string; promptId: string; rep: number; judge: string; judgeFamily?: string; scores?: Record<string, number>; notes?: string };
 
@@ -23,8 +23,20 @@ const rows = await read<Row>('results.jsonl');
 const browser = await read<Browser>('browser.jsonl');
 const judges = (await read<Judge>('judge.jsonl')).filter((j) => j.scores);
 // The independent judge (not a contestant) gives the headline score when present.
-const PRIMARY = 'claude-opus-5-5';
+const judgeArg = process.argv.indexOf('--judge');
+const PRIMARY = judgeArg > 0 ? process.argv[judgeArg + 1] : 'claude-opus-5-5';
 const hasPrimary = judges.some((j) => j.judge === PRIMARY);
+// A judge that is also a contestant never supplies the headline score for its own scenes.
+const primaryIsContestant = rows.some((r) => r.model === PRIMARY);
+const headline = (j: Judge, family: string | undefined) =>
+  hasPrimary ? j.judge === PRIMARY && j.model !== PRIMARY : j.judgeFamily !== family;
+// Same rules as bench-report: a scene works only if it passed the checks and mounted without
+// errors; failed scenes score 1/5 so every model's average covers all of its scenes.
+const crashedRow = (r: Row) => {
+  const b = browserBy.get(key(r));
+  return Boolean(b && !b.harnessError && (!b.mounted || b.runtimeErrors.length > 0));
+};
+const FAILED_SCENE_SCORE = 1;
 const meta = JSON.parse(await readFile(join(dir, 'meta.json'), 'utf8').catch(() => '{}'));
 const repoRoot = resolve(import.meta.dirname, '../../..');
 const promptsPath = meta.promptsFile ? resolve(repoRoot, meta.promptsFile) : '';
@@ -42,8 +54,10 @@ const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.le
 // Per-model overall: mean quality from judges of other families (self-preference excluded).
 const overall = models.map((m) => {
   const family = rows.find((r) => r.model === m)?.family;
-  const cross = judges.filter((j) => j.model === m && (hasPrimary ? j.judge === PRIMARY : j.judgeFamily !== family)).map((j) => avg(Object.values(j.scores!)));
   const mine = rows.filter((r) => r.model === m);
+  const failed = mine.filter((r) => !r.ok || crashedRow(r)).length;
+  const scores = judges.filter((j) => j.model === m && headline(j, family)).map((j) => avg(Object.values(j.scores!)));
+  const cross = scores.length ? [...scores, ...Array(failed).fill(FAILED_SCENE_SCORE)] : [];
   return { m, quality: avg(cross), medianS: median(mine.map((r) => r.totalMs / 1000)) };
 });
 
@@ -53,19 +67,19 @@ function cell(model: string, promptId: string, rep: number) {
   const b = browserBy.get(key(r));
   const family = r.family;
   const js = judges.filter((j) => key(j) === key(r));
-  const cross = js.filter((j) => (hasPrimary ? j.judge === PRIMARY : j.judgeFamily !== family));
+  const cross = js.filter((j) => headline(j, family));
   const q = avg(cross.map((j) => avg(Object.values(j.scores!))));
   const badges = [
-    r.ok ? (r.firstTryOk ? '<b class="ok">✓ first try</b>' : `<b class="warn">✓ after ${r.stages.length - 1} repair</b>`) : '<b class="bad">✗ failed</b>',
+    !r.ok ? '<b class="bad">✗ failed</b>' : crashedRow(r) ? '<b class="bad">✗ crashed in browser</b>' : r.firstTryOk ? '<b class="ok">✓ first try</b>' : `<b class="warn">✓ after ${r.stages.length - 1} repair</b>`,
     `${(r.totalMs / 1000).toFixed(0)} s`,
-    b && b.runtimeErrors.length ? '<b class="bad">crashed in browser</b>' : '',
+
     b?.grab?.tested ? (b.grab.held ? `<b class="ok">grab ✓</b>` : `<b class="bad">grab ✗</b>`) : '',
     b?.press?.tested ? (b.press.fired ? `<b class="ok">press ✓</b>` : `<b class="bad">press ✗</b>`) : '',
     Number.isFinite(q) ? `<b class="q">quality ${q.toFixed(1)}/5</b>` : '',
   ].filter(Boolean).join(' ');
   const notes = js.map((j) => {
     const s = j.scores!;
-    const label = j.judge === PRIMARY ? ' (independent judge, used for the score)' : hasPrimary ? ' (contestant panel, cross-check)' : j.judgeFamily === family ? ' (same company, not counted)' : '';
+    const label = j.judge === PRIMARY ? (j.model === PRIMARY ? ' (its own scene, not counted)' : primaryIsContestant ? ' (main judge, also a contestant)' : ' (independent judge, used for the score)') : hasPrimary ? ' (contestant panel, cross-check)' : j.judgeFamily === family ? ' (same company, not counted)' : '';
     return `<li><span class="judge">${esc(j.judge)}${label}</span> fidelity ${s.fidelity} · clarity ${s.clarity} · correctness ${s.correctness} · hands-on ${s.handsOn}<br>${esc(j.notes ?? '')}</li>`;
   }).join('');
   const img = b?.shot ? `<a href="${esc(b.shot)}" target="_blank"><img loading="lazy" src="${esc(b.shot)}" alt="${esc(model)} – ${esc(promptId)}"></a>` : '<div class="noshot">no screenshot</div>';
@@ -98,7 +112,8 @@ const html = `<!doctype html>
 </style></head>
 <body data-rep="${reps[0]}">
 <h1>Which model built what</h1>
-<p class="sub">${esc(dir.split('/').pop() ?? '')} · each column is one model, each row one request · ${hasPrimary ? 'quality is scored by Claude Opus 5.5, an independent judge that is not a contestant (it is made by Anthropic, like Sonnet); the contestants\' own scores are under “Judges’ comments” as a cross-check' : 'quality is the mean of judges from <i>other</i> companies (a model\'s own family never scores it)'} · click a picture to open it full size</p>
+<p class="sub">${esc(dir.split('/').pop() ?? '')} · each column is one model, each row one request · ${hasPrimary ? (primaryIsContestant ? `quality is scored by ${esc(PRIMARY)}, which is also a contestant here, so its own scenes get no headline score` : `quality is scored by ${esc(PRIMARY)}, an independent judge that is not a contestant`) + '; other judges are under “Judges’ comments” as a cross-check' : 'quality is the mean of judges from <i>other</i> companies (a model\'s own family never scores it)'} · scenes that failed or crashed score 1/5 · click a picture to open it full size</p>
+${meta.note ? `<p class="sub"><b>${esc(meta.note)}</b></p>` : ''}
 <div class="controls">Repetition: ${reps.map((r) => `<label><input type="radio" name="rep" value="${r}" ${r === reps[0] ? 'checked' : ''}> ${r + 1}</label>`).join(' ')}</div>
 <table>
 <tr><td class="prompt"></td>${overall.map((o) => `<th>${esc(o.m)}<small>${Number.isFinite(o.quality) ? `quality ${o.quality.toFixed(2)}/5 · ` : ''}median ${o.medianS.toFixed(0)} s</small></th>`).join('')}</tr>
@@ -115,15 +130,15 @@ console.log(join(dir, 'gallery.html'));
 // GitHub renders Markdown but not HTML pages, so gallery.md shows the same comparison from the
 // compressed JPEGs in <dir>/gallery/ (committed; the full-size PNGs in shots/ stay local).
 if (process.argv.includes('--export-images')) {
-  mkdirSync(join(dir, 'gallery'), { recursive: true });
   for (const b of browser.filter((x) => x.shot)) {
-    const out = join(dir, 'gallery', basename(b.shot!).replace(/\.png$/, '.jpg'));
+    const out = join(dir, jpgFor(b.shot!));
+    mkdirSync(dirname(out), { recursive: true });
     // macOS `sips`: 1200 px wide, JPEG quality 72 (~100 KB each).
     const res = spawnSync('sips', ['-Z', '1200', '-s', 'format', 'jpeg', '-s', 'formatOptions', '72', join(dir, b.shot!), '--out', out]);
     if (res.status !== 0) throw new Error(`sips failed for ${b.shot} (image export needs macOS)`);
   }
 }
-if (existsSync(join(dir, 'gallery'))) {
+if (browser.some((b) => b.shot && existsSync(join(dir, jpgFor(b.shot))))) {
   await writeFile(join(dir, 'gallery.md'), markdownGallery());
   console.log(join(dir, 'gallery.md'));
 }
@@ -135,14 +150,14 @@ function markdownGallery(): string {
     if (!r) return 'not run';
     const b = browserBy.get(key(r));
     const js = judges.filter((j) => key(j) === key(r));
-    const scored = js.filter((j) => (hasPrimary ? j.judge === PRIMARY : j.judgeFamily !== r.family));
+    const scored = js.filter((j) => headline(j, r.family));
     const q = avg(scored.map((j) => avg(Object.values(j.scores!))));
-    const note = hasPrimary ? js.find((j) => j.judge === PRIMARY)?.notes : undefined;
-    const jpg = b?.shot ? `gallery/${basename(b.shot).replace(/\.png$/, '.jpg')}` : null;
+    const note = hasPrimary ? js.find((j) => j.judge === PRIMARY && j.model !== PRIMARY)?.notes : undefined;
+    const jpg = b?.shot ? jpgFor(b.shot) : null;
     const facts = [
-      r.ok ? (r.firstTryOk ? '✅ first try' : `✅ after ${r.stages.length - 1} repair`) : '❌ failed',
+      !r.ok ? '❌ failed' : crashedRow(r) ? '💥 crashed in browser' : r.firstTryOk ? '✅ first try' : `✅ after ${r.stages.length - 1} repair`,
       `${(r.totalMs / 1000).toFixed(0)} s`,
-      b && b.runtimeErrors.length ? '💥 crashed in browser' : '',
+
       b?.grab?.tested ? (b.grab.held ? 'grab ✓' : 'grab ✗') : '',
       b?.press?.tested ? (b.press.fired ? 'press ✓' : 'press ✗') : '',
       Number.isFinite(q) ? `**${q.toFixed(1)}/5**` : '',
@@ -160,6 +175,7 @@ function markdownGallery(): string {
   return [
     `# Which model built what: ${basename(dir)}`,
     ``,
+    ...(meta.note ? [`**${meta.note}**`, ``] : []),
     `Each column is one model; each row is one request from the held-out test set. Every model saw the same`,
     `system prompt and the same checks, and each scene was mounted in Meta's Quest emulator (the living room is the`,
     `emulator's simulated room; the toolbars are emulator controls, not part of the scene). Click a picture for full size.`,
@@ -167,7 +183,7 @@ function markdownGallery(): string {
     `- ✅ passed all checks (first try, or after the agent repaired its own code) · time to a working scene`,
     `- grab / press: an emulated hand tried to pick up one grabbable object and press one pressable object`,
     hasPrimary
-      ? `- **score**: quality 1–5 from Claude Opus 5.5 as an independent judge (not a contestant; made by Anthropic, like Sonnet), averaging fidelity, clarity, correctness and hands-on; its one-line reason is under each score`
+      ? `- **score**: quality 1-5 from ${PRIMARY}${primaryIsContestant ? ' (also a contestant here, so its own scenes get no score)' : ', an independent judge that is not a contestant'}, averaging fidelity, clarity, correctness and hands-on; its one-line reason is under each score. Scenes that failed or crashed count as 1/5 in the overall averages`
       : `- **score**: quality 1–5 averaged over judges from other companies`,
     ``,
     `| Model | Quality | Median time |`,
@@ -189,6 +205,11 @@ function markdownGallery(): string {
       ``,
     ]),
   ].join('\n');
+}
+
+/** The compressed copy of a screenshot: <run>/gallery/<name>.jpg next to <run>/shots/<name>.png (works for combined runs too). */
+function jpgFor(shot: string): string {
+  return shot.replace(/(^|\/)shots\//, '$1gallery/').replace(/\.png$/, '.jpg');
 }
 
 function median(xs: number[]) {

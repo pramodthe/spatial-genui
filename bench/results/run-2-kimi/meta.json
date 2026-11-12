@@ -1,14 +1,17 @@
 {
-  "startedAt": "2026-11-12T05:46:35.913Z",
+  "startedAt": "2026-11-12T07:22:14.540Z",
   "promptsFile": "bench/prompts/test-12.json",
   "modelsFile": "bench/models.json",
-  "runs": 1,
+  "runs": 2,
   "models": [
-    "claude-opus-5-5",
-    "claude-fable-5-2",
-    "claude-sonnet-5-5",
-    "claude-haiku-5-5"
+    "kimi-k3.1-pro-fw"
   ],
+  "modelSettings": {
+    "kimi-k3.1-pro-fw": {
+      "model": "accounts/fireworks/models/kimi-k3p1-pro",
+      "baseURL": "https://api.fireworks.ai/inference/v1"
+    }
+  },
   "skipped": [],
   "maxRepairs": 2,
   "maxCompletionTokens": 32000,

@@ -24,6 +24,8 @@ export type LlmTarget = {
   /** Newer OpenAI-style APIs take max_completion_tokens; some gateways only accept max_tokens. */
   maxTokensParam?: 'max_completion_tokens' | 'max_tokens';
   headers?: Record<string, string>;
+  /** Provider-specific request fields, e.g. a reasoning-effort setting. */
+  extraBody?: Record<string, unknown>;
 };
 
 /** The app's own model, from .env. */
@@ -64,6 +66,7 @@ export async function complete(messages: ChatMessage[], target: LlmTarget = defa
     model: target.model,
     messages,
     [target.maxTokensParam ?? 'max_completion_tokens']: config.maxCompletionTokens,
+    ...target.extraBody,
   } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming);
   const choice = res.choices[0];
   return {

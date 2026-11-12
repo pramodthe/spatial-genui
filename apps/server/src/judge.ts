@@ -41,7 +41,7 @@ const meta = JSON.parse(await readFile(join(dir, 'meta.json'), 'utf8').catch(() 
 const prompts = new Map(
   (JSON.parse(await readFile(resolve(repoRoot, meta.promptsFile ?? 'bench/prompts/test-12.json'), 'utf8')) as PromptCase[]).map((p) => [p.id, p.prompt]),
 );
-const catalog = (JSON.parse(await readFile(join(repoRoot, 'bench/models.json'), 'utf8')) as { models: ModelEntry[] }).models;
+const catalog = (JSON.parse(await readFile(resolve(repoRoot, meta.modelsFile ?? 'bench/models.json'), 'utf8')) as { models: ModelEntry[] }).models;
 const wanted = (args.judges ?? 'claude-sonnet-5-5,muse-spark-1.3,deepseek-v4.1-flash').split(',');
 const judges = wanted
   .map((id) => catalog.find((m) => m.id === id))
@@ -65,12 +65,14 @@ const jobs = judges.flatMap((judge) => rows.map((row) => ({ judge, row }))).filt
 console.error(`Judges: ${judges.map((j) => j.id).join(', ')} · ${jobs.length} scores to compute`);
 
 let next = 0;
-await Promise.all(Array.from({ length: Math.max(1, Number(args.concurrency ?? 4)) }, async () => {
+const concurrency = Number.isFinite(Number(args.concurrency)) && Number(args.concurrency) >= 1 ? Math.floor(Number(args.concurrency)) : 4;
+await Promise.all(Array.from({ length: concurrency }, async () => {
   while (next < jobs.length) {
     const { judge, row } = jobs[next++];
-    const image = (await readFile(join(dir, row.shot!))).toString('base64');
     const base = { judge: judge.id, judgeFamily: judge.family, model: row.model, promptId: row.promptId, rep: row.rep };
     try {
+      // Inside the try: a missing screenshot becomes an error row, not a crash of the whole run.
+      const image = (await readFile(join(dir, row.shot!))).toString('base64');
       const reply = await complete([
         { role: 'system', content: JUDGE_PROMPT },
         {

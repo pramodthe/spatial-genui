@@ -36,10 +36,16 @@ export default async function run({ frame, page }) {
   });
 
   let processed = 0;
+  try {
   for (const row of todo.slice(0, limit)) {
     if (Date.now() > deadline) break;
     const shot = `shots/${row.model}__${row.promptId}__${row.rep}.png`;
-    const outcome = await target.evaluate(async ({ code, head }) => {
+    // A harness failure (dispatch, mount call, screenshot) is recorded for this row and the batch
+    // moves on; reports ignore such rows instead of blaming the model.
+    let outcome;
+    let probes;
+    try {
+    outcome = await target.evaluate(async ({ code, head }) => {
       const r = window.IWER_DEVICE.remote;
       const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
       const hand = 'hand-right';
@@ -62,7 +68,7 @@ export default async function run({ frame, page }) {
     if (element) await element.screenshot({ path: join(dir, shot), scale: 'css' });
     else await page.screenshot({ path: join(dir, shot), scale: 'css' });
 
-    const probes = await target.evaluate(async () => {
+    probes = await target.evaluate(async () => {
       const r = window.IWER_DEVICE.remote;
       const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
       const hand = 'hand-right';
@@ -115,6 +121,15 @@ export default async function run({ frame, page }) {
       window.genui.clear();
       return result;
     });
+    } catch (err) {
+      await target.evaluate(() => window.genui.clear()).catch(() => {});
+      await appendFile(join(dir, 'browser.jsonl'), JSON.stringify({
+        model: row.model, promptId: row.promptId, rep: row.rep, mounted: null, runtimeErrors: [],
+        harnessError: String(err?.message ?? err).slice(0, 300),
+      }) + '\n');
+      processed++;
+      continue;
+    }
 
     await appendFile(join(dir, 'browser.jsonl'), JSON.stringify({
       model: row.model, promptId: row.promptId, rep: row.rep,
@@ -126,6 +141,8 @@ export default async function run({ frame, page }) {
     }) + '\n');
     processed++;
   }
-  await target.evaluate(() => window.genui.setOverlayHidden(false));
+  } finally {
+    await target.evaluate(() => window.genui.setOverlayHidden(false)).catch(() => {});
+  }
   return { processed, remaining: Math.max(0, todo.length - processed) };
 }

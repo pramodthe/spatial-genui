@@ -56,6 +56,22 @@ type Mounted = {
 
 export type MountReport = { ok: true; warnings: string[] } | { ok: false; error: string };
 
+// The panel font (Inter atlas in @pmndrs/msdfonts) has plain ASCII plus these; anything else renders
+// as an empty box. Keep in sync with apps/server/src/glyphs.ts, which makes the agent fix its text.
+const PANEL_GLYPHS = new Set([...Array.from({ length: 95 }, (_, i) => String.fromCharCode(32 + i)), ...'§°ÄÖÜßäöü\n\r\t']);
+const GLYPH_FALLBACKS: Record<string, string> = {
+  '–': '-', '—': '-', '−': '-', '‘': "'", '’': "'", '“': '"', '”': '"', '…': '...', '·': '-', '•': '-',
+  '×': 'x', '÷': '/', '→': '->', '←': '<-', '≈': '~', '≤': '<=', '≥': '>=', '±': '+/-', '²': '^2', '³': '^3',
+  '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', 'µ': 'u', 'é': 'e', '€': 'EUR ', '£': 'GBP ', '\u00a0': ' ',
+};
+
+/** Safety net for text that slipped past the server checks: swap or drop characters the font lacks. */
+function toPanelText(text: string): string {
+  let out = '';
+  for (const ch of text) out += PANEL_GLYPHS.has(ch) ? ch : GLYPH_FALLBACKS[ch] ?? '';
+  return out;
+}
+
 // Seated placement: content sits this far in front of and below the viewer's eyes.
 const REACH_DISTANCE_M = 0.55;
 const BELOW_EYES_M = 0.35;
@@ -147,7 +163,7 @@ export async function mountGenerated(code: string): Promise<MountReport> {
       return object;
     },
     ui(markup: string, options: PanelOptions = {}) {
-      const record = createPanelRecord(String(markup), options);
+      const record = createPanelRecord(toPanelText(String(markup)), options);
       panels.push(record);
       return {
         object3D: record.holder,
@@ -288,6 +304,7 @@ function bindHandler(panel: PanelRecord, handler: PanelRecord['handlers'][number
 }
 
 function applyProps(document: UIKitDocument, id: string, props: ElementProps) {
+  if (typeof props.text === 'string') props = { ...props, text: toPanelText(props.text) };
   const element = document.getElementById(id);
   if (!element) {
     onRuntimeError?.(`Panel set(): no element with id "${id}".`);

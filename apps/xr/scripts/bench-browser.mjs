@@ -28,9 +28,11 @@ for (let batch = 1; batch <= 200; batch++) {
     process.exit(1);
   }
   console.error(`batch ${batch}: ${result.processed} processed, ${result.remaining} remaining`);
-  if (result.remaining === 0) break;
+  if (result.remaining === 0) process.exit(0);
   if (result.processed === 0) {
     console.error('No progress in this batch; stopping.');
     process.exit(1);
   }
 }
+console.error('Stopped after 200 batches with rows still unprobed.');
+process.exit(1);

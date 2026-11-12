@@ -198,9 +198,11 @@ Candidates are pinned in `bench/models.json` (IDs and prices from OpenRouter's c
 | Fable 5.2 | 4/4 | 4/4 | 3/4 | 4.5 | 125 s | $0.61 |
 | Opus 5.5 | 3/4 | 4/4 | 3/3 | 4.06 | 59 s | $0.16 |
 | Sonnet 5.5 | 4/4 | 4/4 | 4/4 | 4.0 | 42 s | $0.08 |
-| Haiku 5.5 | 4/4 | 4/4 | 3/3 | 3.5 | 18 s | $0.003 |
+| Haiku 5.5 | 4/4 | 4/4 | 2/2 | 3.5 | 18 s | $0.003 |
 
 Early signal (n=4, not conclusive): every Claude tier writes valid spatial UI. Quality rises with model size, and so do latency and cost; Haiku is 7× faster than Sonnet. That matters for Phase 5 routing, e.g. a fast draft followed by a refine. The pilot cost about $3.4 in generation (estimated from tokens × catalog prices).
+
+_Scoring rule (since Nov 12, after code review): a scene counts as a success only if it passed the checks **and** ran in the emulator without errors, and failed scenes score 1/5 in quality averages so every model is averaged over all its scenes. This corrected DeepSeek's run-1 numbers: one scene passed the then-lenient checks but crashed in the browser._
 
 **Run 1 (Nov 12): Sonnet 5.5 vs Muse Spark 1.3 (Meta API) vs DeepSeek V4.1 Flash (Fireworks).** 12 held-out prompts × 2 repetitions = 72 scenes. The judge panel is the three models themselves; quality excludes a model's own family and is adjusted for each judge's strictness. Full table in `bench/results/run-1/summary.md`; side-by-side screenshots in [`gallery.md`](bench/results/run-1/gallery.md) (renders on GitHub) and `gallery.html` (local).
 
@@ -208,7 +210,7 @@ Early signal (n=4, not conclusive): every Claude tier writes valid spatial UI. Q
 |---|---|---|---|---|---|---|---|---|
 | Sonnet 5.5 | 100% | 100% | 24/24 | 14/17 | **4.18** | **4.32** | **40 s** | $0.075 |
 | Muse Spark 1.3 | 100% | 100% | 24/24 | **23/24** | 4.13 | 4.25 | 98 s | unknown (no price listed) |
-| DeepSeek V4.1 Flash | 92% | 100% | 23/24 | 14/14 | 3.97 | 4.05 | 47 s | **$0.010** |
+| DeepSeek V4.1 Flash | 88% | 96% | 23/24 | 14/14 | 3.84 | 3.98 | 47 s | **$0.010** |
 
 The main quality score comes from **Claude Opus 5.5 as an independent judge** (not a contestant, though it's made by Anthropic like Sonnet). It agrees with all three contestant judges on the order Sonnet ≥ Muse > DeepSeek. Sonnet and Muse are effectively tied (0.05 apart; with Opus, Sonnet had the best version of 12 of 23 requests and Muse 11). By criterion, **clarity is every model's weakest score (3.3–3.5 / 5)**: overlapping or crowded panels. That's the clearest target for improving the system prompt and host layout.
 
@@ -217,6 +219,40 @@ The main quality score comes from **Claude Opus 5.5 as an independent judge** (n
 - **Judges grade on very different curves.** Muse gave a mean of 4.7, Claude 3.8. Unadjusted cross-family scores are therefore misleading, which is a methodological point for the paper.
 - **Our test run was looser than the real runtime.** It ran as a lenient (sloppy-mode) script, while browsers load the code as a strict module. A DeepSeek scene (`sunGroup里 = null`) passed every server check but crashed in the browser. The dry run is now strict, and all 71 other scenes still pass.
 - **Grab failures:** an `InstancedMesh` marked grabbable (Sonnet, times tables), probably unsupported by IWSDK's grab (to verify), plus 2 unexplained misses.
+
+**Run 2 (Nov 12): Muse Ember 1.0 (`reasoning_effort: max`, Meta API) and Kimi K3.1 Pro (Fireworks).** Same 12 prompts × 2 repetitions and the identical system prompt as run 1 (verified). Judged by Opus 5.5, so the scores are comparable with run 1. Kimi's data: [`run-2-kimi/summary.md`](bench/results/run-2-kimi/summary.md), [`run-2-kimi/gallery.md`](bench/results/run-2-kimi/gallery.md). Ember's original-system data was removed once run 3 superseded it; its numbers stay in the table below.
+
+| Model (all judged by Opus 5.5) | Success | First try | Grab works | Quality | Fidelity | Clarity | Correctness | Hands-on | Median time | Cost / scene |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Sonnet 5.5 (run 1) | 24/24 | 24/24 | 14/17 | **4.18** | 4.50 | **3.54** | **4.62** | 4.04 | 40 s | $0.075 |
+| Muse Spark 1.3 (run 1) | 24/24 | 24/24 | **23/24** | 4.12 | 4.50 | 3.33 | 4.54 | **4.12** | 98 s | – |
+| Kimi K3.1 Pro (run 2) | 24/24 | 24/24 | 10/12 | 4.05 | 4.46 | 3.38 | 4.46 | 3.92 | 149 s | $0.097 |
+| DeepSeek V4.1 Flash (run 1) | 23/24 | 21/24 | 14/14 | 3.84 | 4.26 | 3.26 | 4.61 | 3.74 | 47 s | **$0.010** |
+| Muse Ember 1.0 max (run 2) | 24/24 | 21/24 | 15/16 | 3.77 | 4.33 | **2.71** | 4.29 | 3.75 | **27 s** | – |
+
+**Findings:**
+- **Ember is the fastest model tested** (27 s median at max reasoning, vs Muse Spark's 98 s), but it has the lowest quality. That's almost entirely clarity, according to Opus's notes:
+  - non-ASCII text such as CO₂ subscripts and emoji renders as missing-glyph boxes in UIKit panels;
+  - panels are small or tilted, with tiny text;
+  - labels overlap.
+- **Kimi** is solid (4.05, 24/24 first try) but the slowest (149 s).
+- **Per request (best Opus score across the 5 models):** Sonnet 6 and Muse Spark 6 of 12 (ties counted for each), Kimi 4, DeepSeek 2, Ember 0.
+- **Clarity problems are mostly fixable by the system, not the model.** A rule against non-ASCII glyphs, a minimum panel size and font size, limits on panel rotation and label overlap checks would raise every model. Ember stands to gain most.
+
+**Run 3 (Nov 12): Ember 1.0 max with the improved system.** Same model, prompts and judge; only our system changed, in two iterations:
+1. **Plain-text rule.** The panel font is a 104-glyph Inter atlas: ASCII plus ° § ä ö ü Ä Ö Ü ß. Unsupported characters were rendering as empty boxes, in 13/24 of Ember's run-2 scenes, 18/24 of Kimi's and 8/24 of Sonnet's run-1 scenes. The fix adds a prompt rule, a validator that names each bad character with its replacement (`apps/server/src/glyphs.ts`), and a host fallback.
+2. **Readable panels.** Panel roots must have a fixed px width, so text wraps instead of shrinking the panel (Ember never set one). The dry run computes text height as ui_width × font_px / root_px and requires ≥ 1.1 cm. Panels may turn at most ±0.4 rad. Ember gets 64k output tokens so max reasoning isn't cut off.
+
+| Ember 1.0 max (Opus 5.5 judge) | Original (run 2) | Iteration 1 | Iteration 2 (run 3) |
+|---|---|---|---|
+| Quality | 3.77 | 4.04 | **4.30** |
+| Clarity | 2.71 | 3.17 | **3.67** |
+| Correctness | 4.29 | 4.71 | **4.75** |
+| Hands-on | 3.75 | 3.92 | **4.25** |
+| First try | 21/24 | 22/24 | **24/24** |
+| Median time | 27 s | 29 s | 28 s |
+
+In the emulator, run 3 had 24/24 clean mounts, 16/16 grabs and 17/17 presses. Data: [`run-3-ember-max`](bench/results/run-3-ember-max/gallery.md). All five models side by side: [`compare-all/gallery.md`](bench/results/compare-all/gallery.md). That page is **not like-for-like**: the run-1/run-2 models used the original system, which also cost them points. A fair final ranking needs them re-run with the improved system. Clarity's remaining issue is overlapping elements.
 
 **Known gaps in the harness:**
 - Panel buttons (e.g. quiz answers) aren't probed yet, only trait-based press/grab.

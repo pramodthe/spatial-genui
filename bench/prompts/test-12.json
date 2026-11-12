@@ -1,0 +1,14 @@
+[
+  { "id": "color-button", "tier": "T1", "domain": "ui", "prompt": "A glowing button that changes to a new color each time I press it" },
+  { "id": "dna-helix", "tier": "T1", "domain": "learning", "prompt": "A DNA double helix I can pick up and turn around" },
+  { "id": "desk-clock", "tier": "T1", "domain": "productivity", "prompt": "A small desk clock that shows the current hours and minutes" },
+  { "id": "desk-lamp", "tier": "T1", "domain": "ui", "prompt": "A desk lamp I can switch on and off by pressing it" },
+  { "id": "earth-layers", "tier": "T2", "domain": "learning", "prompt": "Show the layers of the Earth as a cut-away sphere with a label for each layer" },
+  { "id": "photosynthesis", "tier": "T2", "domain": "learning", "prompt": "Explain photosynthesis with a small plant, the Sun, and labeled arrows for light, water, carbon dioxide and oxygen" },
+  { "id": "weather", "tier": "T2", "domain": "data", "prompt": "A weather dashboard for three cities with an icon and the temperature for each" },
+  { "id": "coffee-mug", "tier": "T2", "domain": "commerce", "prompt": "A coffee mug I can pick up, with a card showing its price and what it is made of" },
+  { "id": "times-tables", "tier": "T3", "domain": "learning", "prompt": "A multiplication quiz with 5 questions, answer buttons, and a running score" },
+  { "id": "habit-tracker", "tier": "T3", "domain": "productivity", "prompt": "A habit tracker for this week: 3 habits, tap a day to check it off, and show each habit's streak" },
+  { "id": "build-water", "tier": "T3", "domain": "learning", "prompt": "Build a molecule: hydrogen and oxygen atoms I can grab, and a check button that tells me whether I built water" },
+  { "id": "fruit-basket", "tier": "T3", "domain": "commerce", "prompt": "Three fruits I can pick up and drop into a basket, with a running total price of what is in the basket" }
+]

@@ -32,6 +32,8 @@ export class PanelSystem extends createSystem({}) {
         const is2D = visibilityState === VisibilityState.NonImmersive;
         xrButton.setProperties({ display: is2D ? 'flex' : 'none' });
         exitButton.setProperties({ display: is2D ? 'none' : 'flex' });
+        // A landing panel for the 2D page; in XR it would sit in front of generated content.
+        panel!.visible = is2D;
       }),
     );
   }

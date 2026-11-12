@@ -39,18 +39,40 @@ type PanelRecord = {
   pendingProps: { id: string; props: ElementProps }[];
   document: UIKitDocument | null;
   url: string;
+  /** Elements that got a generated click handler, for tests that press panel buttons. */
+  boundElements: { id: string; element: Object3D }[];
 };
 
 type Mounted = {
   entities: Entity[];
   objectEntities: Map<Object3D, Entity>;
   pressHandlers: Map<Entity, () => void>;
+  grabModes: Map<Object3D, 'touch' | 'ray'>;
+  pressTargets: Object3D[];
+  /** Times any generated press/click handler ran; lets tests prove an interaction landed. */
+  handlerCalls: number;
   panels: Map<Entity, PanelRecord>;
   update?: (time: number, delta: number) => void;
   startTime: number;
 };
 
 export type MountReport = { ok: true; warnings: string[] } | { ok: false; error: string };
+
+// The panel font (Inter atlas in @pmndrs/msdfonts) has plain ASCII plus these; anything else renders
+// as an empty box. Keep in sync with apps/server/src/glyphs.ts, which makes the agent fix its text.
+const PANEL_GLYPHS = new Set([...Array.from({ length: 95 }, (_, i) => String.fromCharCode(32 + i)), ...'§°ÄÖÜßäöü\n\r\t']);
+const GLYPH_FALLBACKS: Record<string, string> = {
+  '–': '-', '—': '-', '−': '-', '‘': "'", '’': "'", '“': '"', '”': '"', '…': '...', '·': '-', '•': '-',
+  '×': 'x', '÷': '/', '→': '->', '←': '<-', '≈': '~', '≤': '<=', '≥': '>=', '±': '+/-', '²': '^2', '³': '^3',
+  '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', 'µ': 'u', 'é': 'e', '€': 'EUR ', '£': 'GBP ', '\u00a0': ' ',
+};
+
+/** Safety net for text that slipped past the server checks: swap or drop characters the font lacks. */
+function toPanelText(text: string): string {
+  let out = '';
+  for (const ch of text) out += PANEL_GLYPHS.has(ch) ? ch : GLYPH_FALLBACKS[ch] ?? '';
+  return out;
+}
 
 // Seated placement: content sits this far in front of and below the viewer's eyes.
 const REACH_DISTANCE_M = 0.55;
@@ -79,6 +101,53 @@ export function unmountGenerated() {
   current = null;
 }
 
+export type MountedInspection = {
+  grabbables: { name: string; mode: 'touch' | 'ray'; center: [number, number, number]; held: boolean }[];
+  pressables: { name: string; center: [number, number, number] }[];
+  panels: number;
+  panelsLoaded: number;
+  handlerCalls: number;
+  /** Panel elements with a generated click handler, with their world-space centers. */
+  panelButtons: { id: string; center: [number, number, number]; size: [number, number, number] }[];
+};
+
+/** What the host wired up for the current generation, for tests and the benchmark. */
+export function inspectMounted(): MountedInspection | null {
+  const mounted = current;
+  if (!mounted) return null;
+  const center = (object: Object3D) =>
+    new Box3().setFromObject(object).getCenter(new Vector3()).toArray() as [number, number, number];
+  return {
+    grabbables: [...mounted.grabModes].map(([object, mode]) => ({
+      name: object.name,
+      mode,
+      center: center(object),
+      held: mounted.objectEntities.get(object)?.hasComponent(Grabbed) ?? false,
+    })),
+    pressables: mounted.pressTargets.map((object) => ({ name: object.name, center: center(object) })),
+    panels: mounted.panels.size,
+    panelsLoaded: [...mounted.panels.values()].filter((p) => p.document).length,
+    handlerCalls: mounted.handlerCalls,
+    panelButtons: [...mounted.panels.values()].flatMap((p) =>
+      // uikit draws in batches, so the element mesh's own .visible says nothing; ask uikit whether
+      // the element is shown (display, ancestors) and not clipped, i.e. whether a user could press it.
+      p.boundElements
+        .filter((b) => isPressableNow(b.element))
+        .map((b) => {
+          // Force uikit to recompute this element's world matrix before measuring it.
+          b.element.updateWorldMatrix(true, false);
+          const box = new Box3().setFromObject(b.element);
+          return { id: b.id, center: box.getCenter(new Vector3()).toArray() as [number, number, number], size: box.getSize(new Vector3()).toArray() as [number, number, number] };
+        }),
+    ),
+  };
+}
+
+function isPressableNow(element: Object3D): boolean {
+  const ui = element as unknown as { isVisible?: { peek(): boolean }; isClipped?: { peek(): boolean } };
+  return (ui.isVisible?.peek() ?? true) && !(ui.isClipped?.peek() ?? false);
+}
+
 /** Load an agent-written module and mount what it builds. Throws nothing; failures come back as a report. */
 export async function mountGenerated(code: string): Promise<MountReport> {
   if (!world) return { ok: false, error: 'GenUI host is not initialised.' };
@@ -101,6 +170,9 @@ export async function mountGenerated(code: string): Promise<MountReport> {
     entities: [],
     objectEntities: new Map(),
     pressHandlers: new Map(),
+    grabModes: new Map(),
+    pressTargets: [],
+    handlerCalls: 0,
     panels: new Map(),
     startTime: performance.now() / 1000,
   };
@@ -112,12 +184,12 @@ export async function mountGenerated(code: string): Promise<MountReport> {
       return object;
     },
     ui(markup: string, options: PanelOptions = {}) {
-      const record = createPanelRecord(String(markup), options);
+      const record = createPanelRecord(toPanelText(String(markup)), options);
       panels.push(record);
       return {
         object3D: record.holder,
         on(id: string, event: string, fn: () => void) {
-          const handler = { id, event, fn: guard(fn) };
+          const handler = { id, event, fn: guard(mounted, fn) };
           record.handlers.push(handler);
           if (record.document) bindHandler(record, handler);
         },
@@ -163,13 +235,16 @@ export async function mountGenerated(code: string): Promise<MountReport> {
       // A near-hand pinch would take neighbours too; a ray picks exactly the object it hits.
       if (!entity.hasComponent(RayInteractable)) entity.addComponent(RayInteractable, {});
       entity.addComponent(DistanceGrabbable, { movementMode: MovementMode.MoveAtSource });
+      mounted.grabModes.set(request.object, 'ray');
     } else if (request.grab) {
       entity.addComponent(OneHandGrabbable, {});
+      mounted.grabModes.set(request.object, 'touch');
     }
     if (request.onPress) {
       if (!entity.hasComponent(RayInteractable)) entity.addComponent(RayInteractable, {});
       if (!entity.hasComponent(PokeInteractable)) entity.addComponent(PokeInteractable, {});
-      mounted.pressHandlers.set(entity, guard(request.onPress));
+      mounted.pressHandlers.set(entity, guard(mounted, request.onPress));
+      mounted.pressTargets.push(request.object);
     }
   }
 
@@ -237,6 +312,7 @@ function createPanelRecord(markup: string, options: PanelOptions): PanelRecord {
     pendingProps: [],
     document: null,
     url: URL.createObjectURL(new Blob([markup], { type: 'text/plain' })),
+    boundElements: [],
   };
 }
 
@@ -247,9 +323,11 @@ function bindHandler(panel: PanelRecord, handler: PanelRecord['handlers'][number
     return;
   }
   element.addEventListener(handler.event as 'click', handler.fn);
+  if (handler.event === 'click') panel.boundElements.push({ id: handler.id, element: element as unknown as Object3D });
 }
 
 function applyProps(document: UIKitDocument, id: string, props: ElementProps) {
+  if (typeof props.text === 'string') props = { ...props, text: toPanelText(props.text) };
   const element = document.getElementById(id);
   if (!element) {
     onRuntimeError?.(`Panel set(): no element with id "${id}".`);
@@ -317,8 +395,9 @@ function fitToComfortSize(root: Object3D, warnings: string[]) {
   }
 }
 
-function guard(fn: () => void): () => void {
+function guard(mounted: Mounted, fn: () => void): () => void {
   return () => {
+    mounted.handlerCalls++;
     try {
       fn();
     } catch (err) {

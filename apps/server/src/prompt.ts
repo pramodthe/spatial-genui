@@ -21,7 +21,7 @@ export const EXAMPLE_MODULE = `export default function build({ THREE, traits, ui
 
   const info = ui(\`
     <style>
-      .card { flex-direction: column; gap: 10px; padding-top: 18px; padding-bottom: 18px;
+      .card { width: 480px; flex-direction: column; gap: 10px; padding-top: 18px; padding-bottom: 18px;
               padding-left: 22px; padding-right: 22px; border-radius: 18px; background-color: #1f2228; }
       .title { color: #ffffff; font-size: 30px; font-weight: 700; }
       .body { color: #d7dbe2; font-size: 22px; }
@@ -69,8 +69,8 @@ user interacts with it using only their hands (pinch to grab, poke or pinch to p
 Reply with exactly one \`\`\`js code block containing an ES module, and nothing else:
 
 export default function build({ THREE, traits, ui, isGrabbed }) {
-  // create objects …
-  return { root, update(time, delta) { … } };   // update is optional
+  // create objects ...
+  return { root, update(time, delta) { ... } };   // update is optional
 }
 
 # The API you receive
@@ -81,11 +81,11 @@ export default function build({ THREE, traits, ui, isGrabbed }) {
   grab: true lets the user pinch the object and move it. onPress runs when the user presses the object.
   Only use traits on objects that are DIRECT children of root (call root.add(object) first).
 - ui(markup, { width, position?, rotationY? }): a flat 2D panel (text, buttons, cards) in UIKitML.
-  width is the panel's width in meters (0.2–0.5 is typical); position is [x, y, z] in meters relative
+  width is the panel's width in meters (0.2-0.5 is typical); position is [x, y, z] in meters relative
   to root; rotationY turns it in radians (panels face +Z, toward the user). It returns a handle:
-    handle.object3D – add it to root
-    handle.on(elementId, 'click', fn) – react to a press on an element with that id
-    handle.set(elementId, { text?, color?, backgroundColor?, display? }) – update an element
+    handle.object3D - add it to root
+    handle.on(elementId, 'click', fn) - react to a press on an element with that id
+    handle.set(elementId, { text?, color?, backgroundColor?, display? }) - update an element
 - isGrabbed(object): true while the user holds that object. Skip animating a held object.
 
 # UIKitML rules (HTML/CSS-shaped, but not a browser)
@@ -94,13 +94,28 @@ export default function build({ THREE, traits, ui, isGrabbed }) {
   justify-content, gap, margin-*, padding-*, width, height, background-color, border-color,
   border-width, border-radius, font-size, font-weight, color, text-align. Write padding/margin as
   four separate properties, never shorthand. Always set color explicitly on text.
-- Use px values. Design the panel around 400–600px wide with font-size 20–32px; the host scales it to
+- Use px values. Design the panel around 400-600px wide with font-size 20-32px; the host scales it to
   the width you pass to ui().
-- Use dark panel backgrounds (#1a1d22 – #2a2e35) with light text; passthrough backgrounds vary.
+- Use dark panel backgrounds (#1a1d22 - #2a2e35) with light text; passthrough backgrounds vary.
+
+# Readable panels (scenes are judged in a headset; tiny, tilted or crowded text is the most common failure)
+- Panel text must be plain ASCII. The panel font has no other glyphs except: ° § ä ö ü Ä Ö Ü ß.
+  Write CO2 (not a subscript 2), x for multiply, - for every dash, ' and " for quotes, -> for
+  arrows, ... for ellipsis, and use no emoji (build icons from 3D shapes instead). Any other
+  character shows up as an empty box.
+- Give every panel's root element an explicit width in px (400-600px for panels with sentences;
+  smaller for short labels) so text wraps instead of stretching the panel.
+- Text must be at least 1.2 cm tall in the headset. Its height is ui_width_m * font_px / root_px:
+  e.g. a 500px-wide panel shown at 0.3 m with 22px text gives 1.3 cm. Body text 22-28px, titles
+  28-36px; panels with sentences need a ui() width of at least 0.25 m.
+- Keep panels upright and facing the user. Turn a panel only with rotationY, within -0.4..0.4 rad;
+  never rotate a panel around X or Z.
+- Never overlap: leave at least 2 cm between panels, and never put a panel or label in front of a 3D
+  object or another label. Prefer one info panel whose text updates on press over many floating labels.
 
 # Space, comfort and performance
 - Units are meters. root's origin sits on the user's desk, about 0.5 m in front of them; +Y is up,
-  +Z points toward the user. Keep everything inside 0.8 m wide × 0.5 m tall × 0.5 m deep, above y = 0.
+  +Z points toward the user. Keep everything inside 0.8 m wide x 0.5 m tall x 0.5 m deep, above y = 0.
 - Make interactive objects at least 0.03 m across so a pinch can hit them; keep them within reach.
 - Space separate grabbable objects at least 4 cm apart so they can be picked up by hand. Parts of one
   whole (pizza slices, heart chambers, cards in a column) may touch: keep them grabbable and the host
@@ -108,7 +123,7 @@ export default function build({ THREE, traits, ui, isGrabbed }) {
 - Grabbable objects must be still or move slowly (under 0.05 m/s); a hand cannot catch a fast mover.
   Animate the scenery around them instead, or let the user start the motion with a button.
 - Stay under 50,000 triangles and 60 meshes. Reuse geometries and materials; use InstancedMesh for
-  many repeats. Use modest segment counts (spheres: 24–32 by 12–16).
+  many repeats. Use modest segment counts (spheres: 24-32 by 12-16).
 - update(time, delta) runs every frame (time and delta in seconds). Do not allocate objects in it.
 
 # Forbidden

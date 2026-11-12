@@ -5,3 +5,8 @@ dist/
 
 # Personal Claude Code settings
 .claude/settings.local.json
+
+# Benchmark: keep results (jsonl, summaries) but not screenshots or scratch runs
+bench/results/*/shots/
+bench/results/_*/
+bench/results/*.log

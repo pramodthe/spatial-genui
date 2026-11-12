@@ -202,7 +202,7 @@ Candidates are pinned in `bench/models.json` (IDs and prices from OpenRouter's c
 
 Early signal (n=4, not conclusive): every Claude tier writes valid spatial UI. Quality rises with model size, and so do latency and cost; Haiku is 7× faster than Sonnet. That matters for Phase 5 routing, e.g. a fast draft followed by a refine. The pilot cost about $3.4 in generation (estimated from tokens × catalog prices).
 
-**Run 1 (Nov 12): Sonnet 5.5 vs Muse Spark 1.3 (Meta API) vs DeepSeek V4.1 Flash (Fireworks).** 12 held-out prompts × 2 repetitions = 72 scenes. The judge panel is the three models themselves; quality excludes a model's own family and is adjusted for each judge's strictness. Full table in `bench/results/run-1/summary.md`, side-by-side screenshots in `gallery.html`.
+**Run 1 (Nov 12): Sonnet 5.5 vs Muse Spark 1.3 (Meta API) vs DeepSeek V4.1 Flash (Fireworks).** 12 held-out prompts × 2 repetitions = 72 scenes. The judge panel is the three models themselves; quality excludes a model's own family and is adjusted for each judge's strictness. Full table in `bench/results/run-1/summary.md`; side-by-side screenshots in [`gallery.md`](bench/results/run-1/gallery.md) (renders on GitHub) and `gallery.html` (local).
 
 | Model | pass@1 | Success | Mounted clean | Grab works | Quality, Opus 5.5 judge | Panel (adj.) | Median time | Cost / scene |
 |---|---|---|---|---|---|---|---|---|

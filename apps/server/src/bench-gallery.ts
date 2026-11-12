@@ -1,9 +1,11 @@
 // Side-by-side gallery of a benchmark run: one row per prompt, one column per model, with the
-// screenshot, timing, hand-probe results and judge scores. Writes <dir>/gallery.html (open locally).
-// Usage: npm run bench:gallery -- ../../bench/results/<name>
-import { existsSync } from 'node:fs';
+// screenshot, timing, hand-probe results and judge scores. Writes <dir>/gallery.html (open locally)
+// and, when <dir>/gallery/ holds compressed JPEGs, <dir>/gallery.md (renders on GitHub).
+// Usage: npm run bench:gallery -- ../../bench/results/<name> [--export-images]
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 
 type Row = { model: string; family: string; promptId: string; tier: string; rep: number; ok: boolean; firstTryOk: boolean; stages: string[]; totalMs: number; costUSD: number | null };
 type Browser = { model: string; promptId: string; rep: number; mounted: boolean; runtimeErrors: string[]; shot?: string;
@@ -109,6 +111,85 @@ ${reps.map((rep) => prompts.map((p) => `<tr class="rep rep-${rep}"><td class="pr
 
 await writeFile(join(dir, 'gallery.html'), html);
 console.log(join(dir, 'gallery.html'));
+
+// GitHub renders Markdown but not HTML pages, so gallery.md shows the same comparison from the
+// compressed JPEGs in <dir>/gallery/ (committed; the full-size PNGs in shots/ stay local).
+if (process.argv.includes('--export-images')) {
+  mkdirSync(join(dir, 'gallery'), { recursive: true });
+  for (const b of browser.filter((x) => x.shot)) {
+    const out = join(dir, 'gallery', basename(b.shot!).replace(/\.png$/, '.jpg'));
+    // macOS `sips`: 1200 px wide, JPEG quality 72 (~100 KB each).
+    const res = spawnSync('sips', ['-Z', '1200', '-s', 'format', 'jpeg', '-s', 'formatOptions', '72', join(dir, b.shot!), '--out', out]);
+    if (res.status !== 0) throw new Error(`sips failed for ${b.shot} (image export needs macOS)`);
+  }
+}
+if (existsSync(join(dir, 'gallery'))) {
+  await writeFile(join(dir, 'gallery.md'), markdownGallery());
+  console.log(join(dir, 'gallery.md'));
+}
+
+function markdownGallery(): string {
+  const md = (s: string) => s.replace(/\|/g, '\\|');
+  const mdCell = (model: string, promptId: string, rep: number) => {
+    const r = rows.find((x) => x.model === model && x.promptId === promptId && x.rep === rep);
+    if (!r) return 'not run';
+    const b = browserBy.get(key(r));
+    const js = judges.filter((j) => key(j) === key(r));
+    const scored = js.filter((j) => (hasPrimary ? j.judge === PRIMARY : j.judgeFamily !== r.family));
+    const q = avg(scored.map((j) => avg(Object.values(j.scores!))));
+    const note = hasPrimary ? js.find((j) => j.judge === PRIMARY)?.notes : undefined;
+    const jpg = b?.shot ? `gallery/${basename(b.shot).replace(/\.png$/, '.jpg')}` : null;
+    const facts = [
+      r.ok ? (r.firstTryOk ? '✅ first try' : `✅ after ${r.stages.length - 1} repair`) : '❌ failed',
+      `${(r.totalMs / 1000).toFixed(0)} s`,
+      b && b.runtimeErrors.length ? '💥 crashed in browser' : '',
+      b?.grab?.tested ? (b.grab.held ? 'grab ✓' : 'grab ✗') : '',
+      b?.press?.tested ? (b.press.fired ? 'press ✓' : 'press ✗') : '',
+      Number.isFinite(q) ? `**${q.toFixed(1)}/5**` : '',
+    ].filter(Boolean).join(' · ');
+    const img = jpg && existsSync(join(dir, jpg))
+      ? `<a href="${jpg}"><img src="${jpg}" width="320" alt="${md(model)}: ${md(promptId)}"></a>`
+      : '_no screenshot_';
+    return `${img}<br>${facts}${note ? `<br><sub>${md(note)}</sub>` : ''}`;
+  };
+  const table = (rep: number) => [
+    `| Request | ${models.join(' | ')} |`,
+    `|---|${models.map(() => '---').join('|')}|`,
+    ...prompts.map((p) => `| **${p.tier}** · ${p.id}<br>“${md(p.prompt)}” | ${models.map((m) => mdCell(m, p.id, rep)).join(' | ')} |`),
+  ].join('\n');
+  return [
+    `# Which model built what: ${basename(dir)}`,
+    ``,
+    `Each column is one model; each row is one request from the held-out test set. Every model saw the same`,
+    `system prompt and the same checks, and each scene was mounted in Meta's Quest emulator (the living room is the`,
+    `emulator's simulated room; the toolbars are emulator controls, not part of the scene). Click a picture for full size.`,
+    ``,
+    `- ✅ passed all checks (first try, or after the agent repaired its own code) · time to a working scene`,
+    `- grab / press: an emulated hand tried to pick up one grabbable object and press one pressable object`,
+    hasPrimary
+      ? `- **score**: quality 1–5 from Claude Opus 5.5 as an independent judge (not a contestant; made by Anthropic, like Sonnet), averaging fidelity, clarity, correctness and hands-on; its one-line reason is under each score`
+      : `- **score**: quality 1–5 averaged over judges from other companies`,
+    ``,
+    `| Model | Quality | Median time |`,
+    `|---|---|---|`,
+    ...overall.map((o) => `| ${o.m} | ${Number.isFinite(o.quality) ? o.quality.toFixed(2) : '–'} | ${o.medianS.toFixed(0)} s |`),
+    ``,
+    `Full numbers: [summary.md](summary.md).`,
+    ``,
+    `## Repetition 1`,
+    ``,
+    table(reps[0]),
+    ``,
+    ...reps.slice(1).flatMap((rep) => [
+      `<details><summary><b>Repetition ${rep + 1}</b> (same requests, run again)</summary>`,
+      ``,
+      table(rep),
+      ``,
+      `</details>`,
+      ``,
+    ]),
+  ].join('\n');
+}
 
 function median(xs: number[]) {
   if (!xs.length) return 0;

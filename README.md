@@ -47,6 +47,9 @@ npx @iwsdk/cli xr run-sequence --input-json '{"device":"hand-right","steps":[{"p
 
 ## Benchmark (Phase 2)
 
+**See the results: [which model built what](bench/results/run-1/gallery.md)** (Claude Sonnet 5.5, Meta Muse Spark 1.3
+and DeepSeek V4.1 Flash on 12 requests, side by side, with scores) · [numbers](bench/results/run-1/summary.md)
+
 Compares models on the same agent loop. Candidates are in `bench/models.json`; the held-out test prompts
 in `bench/prompts/test-12.json` (the dev prompts were used to tune the system prompt, so they are not used
 for scoring). Add `OPENROUTER_API_KEY` to `.env` for non-Anthropic models.
@@ -58,6 +61,7 @@ cd ../xr && npx @iwsdk/cli xr enter                                 # 2. mount +
 node scripts/bench-browser.mjs "$PWD/../../bench/results/run-1"
 cd ../server && npm run bench:judge -- ../../bench/results/run-1    # 3. vision-model quality scores
 npm run bench:report -- ../../bench/results/run-1                   # 4. summary.md leaderboard
+npm run bench:gallery -- ../../bench/results/run-1 --export-images # 5. gallery.md (GitHub) + gallery.html
 ```
 
 Metrics: pass@1 (valid first try, comparable to XR Blocks), success with ≤2 repairs, clean mount in the

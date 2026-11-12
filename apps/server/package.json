@@ -1,0 +1,29 @@
+{
+  "name": "genui-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "gen": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "batch": "tsx src/batch.ts"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "dependencies": {
+    "@drawcall/uikitml": "^0.1.8",
+    "acorn": "^8.19.0",
+    "acorn-walk": "^8.3.5",
+    "openai": "^7.55.0",
+    "three": "npm:super-three@^0.185.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/three": "^0.185.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

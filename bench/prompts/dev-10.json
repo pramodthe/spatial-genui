@@ -1,0 +1,12 @@
+[
+  { "id": "solar-system", "tier": "T3", "domain": "learning", "prompt": "Teach me the solar system: the Sun and the 8 planets I can pick up, with a short 3-question quiz" },
+  { "id": "heart", "tier": "T3", "domain": "learning", "prompt": "Show me how the human heart works: its four chambers I can pull apart, and a quiz about blood flow" },
+  { "id": "water-cycle", "tier": "T2", "domain": "learning", "prompt": "Explain the water cycle with a small 3D landscape and labels for each stage" },
+  { "id": "atom", "tier": "T2", "domain": "learning", "prompt": "Build a carbon atom with its nucleus and electron shells, and a panel explaining protons, neutrons and electrons" },
+  { "id": "fractions", "tier": "T3", "domain": "learning", "prompt": "Teach fractions with a pizza I can take slices from, and show the fraction of pizza left" },
+  { "id": "planet-slider", "tier": "T1", "domain": "learning", "prompt": "A single planet with buttons to make it bigger or smaller" },
+  { "id": "pomodoro", "tier": "T3", "domain": "productivity", "prompt": "A pomodoro focus timer with start, pause and reset buttons and a visual progress ring" },
+  { "id": "kanban", "tier": "T3", "domain": "productivity", "prompt": "A small task board with To do, Doing and Done columns and three task cards I can move between columns" },
+  { "id": "sneaker", "tier": "T2", "domain": "commerce", "prompt": "A product viewer for a sneaker I can pick up and turn, with color option buttons and a price card" },
+  { "id": "bar-chart", "tier": "T2", "domain": "data", "prompt": "A 3D bar chart of the populations of the five most populous countries, with labels" }
+]

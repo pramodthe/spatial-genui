@@ -1,0 +1,149 @@
+{
+  "id": "saturn-nasa",
+  "title": "Saturn with its main rings and Titan",
+  "tier": "B",
+  "kind": "astronomy",
+  "concept": {
+    "id": "Q193",
+    "name": "Saturn"
+  },
+  "detail": "planet-rings-largest-moon",
+  "keywords": [
+    "saturn",
+    "rings",
+    "ring system",
+    "cassini division",
+    "titan",
+    "gas giant"
+  ],
+  "glb": "assets/saturn-nasa.glb",
+  "sizeM": [
+    0.3826,
+    0.1229,
+    0.2435
+  ],
+  "triangles": 8544,
+  "parts": [
+    {
+      "node": "saturn",
+      "name": "Saturn",
+      "group": "planet",
+      "color": "#cfaa5e",
+      "triangles": 4416,
+      "centroid": [
+        -0.0551,
+        0.0614,
+        -0.0
+      ],
+      "labelAnchor": [
+        -0.1151,
+        0.0623,
+        -0.0018
+      ],
+      "explodeDir": [
+        -1.0,
+        0.0,
+        -0.0
+      ]
+    },
+    {
+      "node": "c_ring",
+      "name": "C ring",
+      "group": "rings",
+      "color": "#8d7b66",
+      "triangles": 1024,
+      "centroid": [
+        -0.0551,
+        0.0614,
+        -0.0
+      ],
+      "labelAnchor": [
+        -0.1467,
+        0.0617,
+        0.0001
+      ],
+      "explodeDir": [
+        -1.0,
+        -0.0,
+        -0.0
+      ]
+    },
+    {
+      "node": "b_ring",
+      "name": "B ring",
+      "group": "rings",
+      "color": "#e6d6b3",
+      "triangles": 1024,
+      "centroid": [
+        -0.0551,
+        0.0614,
+        0.0
+      ],
+      "labelAnchor": [
+        -0.1721,
+        0.0617,
+        0.0001
+      ],
+      "explodeDir": [
+        -1.0,
+        -0.0,
+        0.0
+      ]
+    },
+    {
+      "node": "a_ring",
+      "name": "A ring",
+      "group": "rings",
+      "color": "#c9b897",
+      "triangles": 1024,
+      "centroid": [
+        -0.0551,
+        0.0614,
+        -0.0
+      ],
+      "labelAnchor": [
+        -0.1913,
+        0.0617,
+        0.0001
+      ],
+      "explodeDir": [
+        -1.0,
+        -0.0,
+        -0.0
+      ]
+    },
+    {
+      "node": "titan",
+      "name": "Titan",
+      "group": "moon",
+      "color": "#d9a54a",
+      "triangles": 1056,
+      "centroid": [
+        0.1849,
+        0.0614,
+        -0.0
+      ],
+      "labelAnchor": [
+        0.1913,
+        0.0614,
+        -0.0004
+      ],
+      "explodeDir": [
+        1.0,
+        -0.0,
+        -0.0
+      ]
+    }
+  ],
+  "licence": "public domain data",
+  "credit": "NASA Planetary Fact Sheets (NSSDCA)",
+  "provenance": {
+    "built": "2026-11-13",
+    "source": "NASA Planetary Fact Sheets (NSSDCA): planets, Sun, Saturn's rings, Saturnian satellites",
+    "notes": [
+      "Saturn and its rings are to scale with each other (equatorial radius 60,268 km shown as 6 cm), including the polar flattening (54,364 km) and the 26.7 degree axial tilt.",
+      "Ring edges: C 74,658-91,975 km, B 91,975-117,507 km, A 122,340-136,780 km; the gap between B and A is the Cassini Division.",
+      "Titan is enlarged 2.5x and placed 24 cm away instead of its true 1.22 m at this scale."
+    ]
+  }
+}

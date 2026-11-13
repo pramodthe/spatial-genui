@@ -1,0 +1,639 @@
+{
+  "id": "molecule-d-glucose",
+  "title": "D-Glucose molecule (C6H12O6), ball-and-stick",
+  "tier": "B",
+  "kind": "chemistry",
+  "concept": {
+    "id": "pubchem:5793",
+    "name": "D-Glucose"
+  },
+  "detail": "ball-and-stick",
+  "keywords": [
+    "(3r,4s,5s,6r)-6-(hydroxymethyl)oxane-2,3,4,5-tetrol",
+    "c6h12o6",
+    "d-glucose",
+    "glucose"
+  ],
+  "glb": "assets/molecule-d-glucose.glb",
+  "sizeM": [
+    0.2181,
+    0.1949,
+    0.1039
+  ],
+  "triangles": 20352,
+  "parts": [
+    {
+      "node": "oxygen_1",
+      "name": "oxygen 1",
+      "group": "oxygen",
+      "color": "#ff0d0d",
+      "triangles": 1280,
+      "centroid": [
+        -0.0131,
+        0.0555,
+        -0.0046
+      ],
+      "labelAnchor": [
+        -0.0173,
+        0.0448,
+        -0.0061
+      ],
+      "explodeDir": [
+        -0.2966,
+        -0.9494,
+        -0.1035
+      ],
+      "element": "O",
+      "atomIndex": 1
+    },
+    {
+      "node": "oxygen_2",
+      "name": "oxygen 2",
+      "group": "oxygen",
+      "color": "#ff0d0d",
+      "triangles": 1280,
+      "centroid": [
+        -0.0253,
+        0.1694,
+        0.006
+      ],
+      "labelAnchor": [
+        -0.0294,
+        0.1801,
+        0.0075
+      ],
+      "explodeDir": [
+        -0.3307,
+        0.9405,
+        0.0784
+      ],
+      "element": "O",
+      "atomIndex": 2
+    },
+    {
+      "node": "oxygen_3",
+      "name": "oxygen 3",
+      "group": "oxygen",
+      "color": "#ff0d0d",
+      "triangles": 1280,
+      "centroid": [
+        0.0601,
+        0.16,
+        -0.0231
+      ],
+      "labelAnchor": [
+        0.0677,
+        0.1681,
+        -0.0266
+      ],
+      "explodeDir": [
+        0.6699,
+        0.6963,
+        -0.2578
+      ],
+      "element": "O",
+      "atomIndex": 3
+    },
+    {
+      "node": "oxygen_4",
+      "name": "oxygen 4",
+      "group": "oxygen",
+      "color": "#ff0d0d",
+      "triangles": 1280,
+      "centroid": [
+        0.0974,
+        0.0822,
+        0.0103
+      ],
+      "labelAnchor": [
+        0.1089,
+        0.0807,
+        0.0113
+      ],
+      "explodeDir": [
+        0.9826,
+        -0.1535,
+        0.1043
+      ],
+      "element": "O",
+      "atomIndex": 4
+    },
+    {
+      "node": "oxygen_5",
+      "name": "oxygen 5",
+      "group": "oxygen",
+      "color": "#ff0d0d",
+      "triangles": 1280,
+      "centroid": [
+        0.0455,
+        0.0116,
+        -0.0042
+      ],
+      "labelAnchor": [
+        0.0516,
+        0.0017,
+        -0.0042
+      ],
+      "explodeDir": [
+        0.4681,
+        -0.8826,
+        -0.043
+      ],
+      "element": "O",
+      "atomIndex": 5
+    },
+    {
+      "node": "oxygen_6",
+      "name": "oxygen 6",
+      "group": "oxygen",
+      "color": "#ff0d0d",
+      "triangles": 1280,
+      "centroid": [
+        -0.0974,
+        0.0581,
+        0.0135
+      ],
+      "labelAnchor": [
+        -0.108,
+        0.0534,
+        0.0145
+      ],
+      "explodeDir": [
+        -0.9195,
+        -0.3717,
+        0.1277
+      ],
+      "element": "O",
+      "atomIndex": 6
+    },
+    {
+      "node": "carbon_1",
+      "name": "carbon 1",
+      "group": "carbon",
+      "color": "#404040",
+      "triangles": 1280,
+      "centroid": [
+        -0.008,
+        0.1313,
+        -0.0099
+      ],
+      "labelAnchor": [
+        -0.01,
+        0.1432,
+        -0.0132
+      ],
+      "explodeDir": [
+        -0.2217,
+        0.936,
+        -0.2733
+      ],
+      "element": "C",
+      "atomIndex": 7
+    },
+    {
+      "node": "carbon_2",
+      "name": "carbon 2",
+      "group": "carbon",
+      "color": "#404040",
+      "triangles": 1280,
+      "centroid": [
+        0.0386,
+        0.1291,
+        0.0013
+      ],
+      "labelAnchor": [
+        0.0484,
+        0.1369,
+        0.0023
+      ],
+      "explodeDir": [
+        0.7732,
+        0.6337,
+        0.0255
+      ],
+      "element": "C",
+      "atomIndex": 8
+    },
+    {
+      "node": "carbon_3",
+      "name": "carbon 3",
+      "group": "carbon",
+      "color": "#404040",
+      "triangles": 1280,
+      "centroid": [
+        -0.0318,
+        0.094,
+        0.009
+      ],
+      "labelAnchor": [
+        -0.0439,
+        0.0923,
+        0.0118
+      ],
+      "explodeDir": [
+        -0.9569,
+        -0.1049,
+        0.2708
+      ],
+      "element": "C",
+      "atomIndex": 9
+    },
+    {
+      "node": "carbon_4",
+      "name": "carbon 4",
+      "group": "carbon",
+      "color": "#404040",
+      "triangles": 1280,
+      "centroid": [
+        0.0568,
+        0.0857,
+        -0.0082
+      ],
+      "labelAnchor": [
+        0.0687,
+        0.0824,
+        -0.0102
+      ],
+      "explodeDir": [
+        0.9697,
+        -0.2003,
+        -0.14
+      ],
+      "element": "C",
+      "atomIndex": 10
+    },
+    {
+      "node": "carbon_5",
+      "name": "carbon 5",
+      "group": "carbon",
+      "color": "#404040",
+      "triangles": 1280,
+      "centroid": [
+        0.0291,
+        0.0509,
+        0.0097
+      ],
+      "labelAnchor": [
+        0.0351,
+        0.04,
+        0.0114
+      ],
+      "explodeDir": [
+        0.5214,
+        -0.8353,
+        0.1743
+      ],
+      "element": "C",
+      "atomIndex": 11
+    },
+    {
+      "node": "carbon_6",
+      "name": "carbon 6",
+      "group": "carbon",
+      "color": "#404040",
+      "triangles": 1280,
+      "centroid": [
+        -0.0776,
+        0.0934,
+        -0.0047
+      ],
+      "labelAnchor": [
+        -0.0902,
+        0.0934,
+        -0.0047
+      ],
+      "explodeDir": [
+        -0.9968,
+        -0.0519,
+        -0.0609
+      ],
+      "element": "C",
+      "atomIndex": 12
+    },
+    {
+      "node": "hydrogen_1",
+      "name": "hydrogen 1",
+      "group": "hydrogen",
+      "color": "#e6e6e6",
+      "triangles": 320,
+      "centroid": [
+        -0.0116,
+        0.1318,
+        -0.0441
+      ],
+      "labelAnchor": [
+        -0.0128,
+        0.1373,
+        -0.0496
+      ],
+      "explodeDir": [
+        -0.2026,
+        0.6016,
+        -0.7727
+      ],
+      "element": "H",
+      "atomIndex": 13
+    },
+    {
+      "node": "hydrogen_2",
+      "name": "hydrogen 2",
+      "group": "hydrogen",
+      "color": "#e6e6e6",
+      "triangles": 320,
+      "centroid": [
+        0.0438,
+        0.1375,
+        0.0343
+      ],
+      "labelAnchor": [
+        0.0485,
+        0.1429,
+        0.0376
+      ],
+      "explodeDir": [
+        0.6395,
+        0.584,
+        0.5
+      ],
+      "element": "H",
+      "atomIndex": 14
+    },
+    {
+      "node": "hydrogen_3",
+      "name": "hydrogen 3",
+      "group": "hydrogen",
+      "color": "#e6e6e6",
+      "triangles": 320,
+      "centroid": [
+        -0.031,
+        0.095,
+        0.0435
+      ],
+      "labelAnchor": [
+        -0.0351,
+        0.095,
+        0.0501
+      ],
+      "explodeDir": [
+        -0.5796,
+        -0.0469,
+        0.8135
+      ],
+      "element": "H",
+      "atomIndex": 15
+    },
+    {
+      "node": "hydrogen_4",
+      "name": "hydrogen 4",
+      "group": "hydrogen",
+      "color": "#e6e6e6",
+      "triangles": 320,
+      "centroid": [
+        0.061,
+        0.082,
+        -0.0422
+      ],
+      "labelAnchor": [
+        0.0678,
+        0.08,
+        -0.0456
+      ],
+      "explodeDir": [
+        0.8053,
+        -0.204,
+        -0.5567
+      ],
+      "element": "H",
+      "atomIndex": 16
+    },
+    {
+      "node": "hydrogen_5",
+      "name": "hydrogen 5",
+      "group": "hydrogen",
+      "color": "#e6e6e6",
+      "triangles": 320,
+      "centroid": [
+        0.0297,
+        0.0503,
+        0.0441
+      ],
+      "labelAnchor": [
+        0.033,
+        0.0457,
+        0.0495
+      ],
+      "explodeDir": [
+        0.4176,
+        -0.6634,
+        0.6209
+      ],
+      "element": "H",
+      "atomIndex": 17
+    },
+    {
+      "node": "hydrogen_6",
+      "name": "hydrogen 6",
+      "group": "hydrogen",
+      "color": "#e6e6e6",
+      "triangles": 320,
+      "centroid": [
+        -0.0805,
+        0.0906,
+        -0.0389
+      ],
+      "labelAnchor": [
+        -0.0872,
+        0.0906,
+        -0.043
+      ],
+      "explodeDir": [
+        -0.8978,
+        -0.0768,
+        -0.4336
+      ],
+      "element": "H",
+      "atomIndex": 18
+    },
+    {
+      "node": "hydrogen_7",
+      "name": "hydrogen 7",
+      "group": "hydrogen",
+      "color": "#e6e6e6",
+      "triangles": 320,
+      "centroid": [
+        -0.0943,
+        0.1216,
+        0.0055
+      ],
+      "labelAnchor": [
+        -0.1018,
+        0.1237,
+        0.0067
+      ],
+      "explodeDir": [
+        -0.9671,
+        0.248,
+        0.0561
+      ],
+      "element": "H",
+      "atomIndex": 19
+    },
+    {
+      "node": "hydrogen_8",
+      "name": "hydrogen 8",
+      "group": "hydrogen",
+      "color": "#e6e6e6",
+      "triangles": 320,
+      "centroid": [
+        -0.0225,
+        0.169,
+        0.0364
+      ],
+      "labelAnchor": [
+        -0.0249,
+        0.1754,
+        0.0403
+      ],
+      "explodeDir": [
+        -0.2694,
+        0.8585,
+        0.4364
+      ],
+      "element": "H",
+      "atomIndex": 20
+    },
+    {
+      "node": "hydrogen_9",
+      "name": "hydrogen 9",
+      "group": "hydrogen",
+      "color": "#e6e6e6",
+      "triangles": 320,
+      "centroid": [
+        0.0476,
+        0.1871,
+        -0.0167
+      ],
+      "labelAnchor": [
+        0.051,
+        0.1938,
+        -0.0188
+      ],
+      "explodeDir": [
+        0.463,
+        0.8713,
+        -0.1628
+      ],
+      "element": "H",
+      "atomIndex": 21
+    },
+    {
+      "node": "hydrogen_10",
+      "name": "hydrogen 10",
+      "group": "hydrogen",
+      "color": "#e6e6e6",
+      "triangles": 320,
+      "centroid": [
+        0.0944,
+        0.0857,
+        0.0405
+      ],
+      "labelAnchor": [
+        0.1012,
+        0.0836,
+        0.0439
+      ],
+      "explodeDir": [
+        0.9129,
+        -0.1141,
+        0.392
+      ],
+      "element": "H",
+      "atomIndex": 22
+    },
+    {
+      "node": "hydrogen_11",
+      "name": "hydrogen 11",
+      "group": "hydrogen",
+      "color": "#e6e6e6",
+      "triangles": 320,
+      "centroid": [
+        0.0553,
+        0.0148,
+        -0.0329
+      ],
+      "labelAnchor": [
+        0.0587,
+        0.008,
+        -0.035
+      ],
+      "explodeDir": [
+        0.5278,
+        -0.7891,
+        -0.3142
+      ],
+      "element": "H",
+      "atomIndex": 23
+    },
+    {
+      "node": "hydrogen_12",
+      "name": "hydrogen 12",
+      "group": "hydrogen",
+      "color": "#e6e6e6",
+      "triangles": 320,
+      "centroid": [
+        -0.0823,
+        0.0332,
+        0.0043
+      ],
+      "labelAnchor": [
+        -0.089,
+        0.0291,
+        0.0043
+      ],
+      "explodeDir": [
+        -0.7877,
+        -0.6147,
+        0.0409
+      ],
+      "element": "H",
+      "atomIndex": 24
+    },
+    {
+      "node": "bonds",
+      "name": "bonds",
+      "group": "bonds",
+      "color": "#c9ced6",
+      "triangles": 1152,
+      "centroid": [
+        0.0036,
+        0.096,
+        0.0004
+      ],
+      "labelAnchor": [
+        0.0997,
+        0.0806,
+        0.0108
+      ],
+      "explodeDir": [
+        0.9253,
+        -0.3665,
+        0.0979
+      ]
+    }
+  ],
+  "licence": "public domain data",
+  "credit": "PubChem (NCBI/NLM), CID 5793",
+  "provenance": {
+    "built": "2026-11-13",
+    "source": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/5793/record/SDF?record_type=3d",
+    "formula": "C6H12O6",
+    "iupacName": "(3R,4S,5S,6R)-6-(hydroxymethyl)oxane-2,3,4,5-tetrol",
+    "atoms": 24,
+    "bonds": 24,
+    "scaleMPerAngstrom": 0.0314,
+    "notes": [
+      "Atom positions are PubChem's computed 3D conformer: one low-energy shape; real molecules flex and rotate about single bonds.",
+      "Ball sizes are a fraction of each element's radius so bonds stay visible (ball-and-stick, not space-filling)."
+    ]
+  }
+}

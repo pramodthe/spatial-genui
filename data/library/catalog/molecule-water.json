@@ -1,0 +1,134 @@
+{
+  "id": "molecule-water",
+  "title": "Water molecule (H2O), ball-and-stick",
+  "tier": "B",
+  "kind": "chemistry",
+  "concept": {
+    "id": "pubchem:962",
+    "name": "Water"
+  },
+  "detail": "ball-and-stick",
+  "keywords": [
+    "h2o",
+    "oxidane",
+    "water"
+  ],
+  "glb": "assets/molecule-water.glb",
+  "sizeM": [
+    0.1216,
+    0.073,
+    0.0444
+  ],
+  "triangles": 2016,
+  "parts": [
+    {
+      "node": "oxygen_1",
+      "name": "oxygen 1",
+      "group": "oxygen",
+      "color": "#ff0d0d",
+      "triangles": 1280,
+      "centroid": [
+        0.0,
+        0.0508,
+        0.0
+      ],
+      "labelAnchor": [
+        0.0,
+        0.073,
+        -0.0
+      ],
+      "explodeDir": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "element": "O",
+      "atomIndex": 1
+    },
+    {
+      "node": "hydrogen_1",
+      "name": "hydrogen 1",
+      "group": "hydrogen",
+      "color": "#e6e6e6",
+      "triangles": 320,
+      "centroid": [
+        -0.0458,
+        0.015,
+        0.0
+      ],
+      "labelAnchor": [
+        -0.0586,
+        0.0071,
+        0.0
+      ],
+      "explodeDir": [
+        -0.9052,
+        -0.4249,
+        0.0
+      ],
+      "element": "H",
+      "atomIndex": 2
+    },
+    {
+      "node": "hydrogen_2",
+      "name": "hydrogen 2",
+      "group": "hydrogen",
+      "color": "#e6e6e6",
+      "triangles": 320,
+      "centroid": [
+        0.0458,
+        0.015,
+        -0.0
+      ],
+      "labelAnchor": [
+        0.0586,
+        0.0071,
+        -0.0
+      ],
+      "explodeDir": [
+        0.9052,
+        -0.4249,
+        -0.0
+      ],
+      "element": "H",
+      "atomIndex": 3
+    },
+    {
+      "node": "bonds",
+      "name": "bonds",
+      "group": "bonds",
+      "color": "#c9ced6",
+      "triangles": 96,
+      "centroid": [
+        0.0,
+        0.0329,
+        -0.0
+      ],
+      "labelAnchor": [
+        0.0425,
+        0.0107,
+        -0.0
+      ],
+      "explodeDir": [
+        0.0,
+        -1.0,
+        -0.0
+      ]
+    }
+  ],
+  "licence": "public domain data",
+  "credit": "PubChem (NCBI/NLM), CID 962",
+  "provenance": {
+    "built": "2026-11-13",
+    "source": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/962/record/SDF?record_type=3d",
+    "formula": "H2O",
+    "iupacName": "oxidane",
+    "atoms": 3,
+    "bonds": 2,
+    "scaleMPerAngstrom": 0.06,
+    "notes": [
+      "Atom positions are PubChem's computed 3D conformer: one low-energy shape; real molecules flex and rotate about single bonds.",
+      "Ball sizes are a fraction of each element's radius so bonds stay visible (ball-and-stick, not space-filling)."
+    ]
+  }
+}

@@ -1,0 +1,145 @@
+{
+  "id": "apollo-lunar-lander-objaverse",
+  "title": "Apollo Lunar Lander (3D model by Vector-3DModels)",
+  "tier": "C",
+  "kind": "astronomy",
+  "concept": {
+    "id": "objaverse:c7d5ae92d0ca41dfb3bec26552c5d1cb",
+    "name": "Apollo Lunar Lander"
+  },
+  "detail": "retrieved",
+  "keywords": [
+    "apollo lunar lander",
+    "apollo lunar module",
+    "lunar lander",
+    "moon lander",
+    "moon landing",
+    "spacecraft"
+  ],
+  "glb": "assets/apollo-lunar-lander-objaverse.glb",
+  "sizeM": [
+    0.6,
+    0.4679,
+    0.5999
+  ],
+  "triangles": 98020,
+  "parts": [
+    {
+      "node": "descent_stage",
+      "name": "descent stage",
+      "group": null,
+      "color": "#e6194b",
+      "triangles": 27786,
+      "centroid": [
+        -0.0486,
+        0.1096,
+        0.0848
+      ],
+      "labelAnchor": [
+        -0.0161,
+        0.0071,
+        0.2922
+      ],
+      "explodeDir": [
+        -0.3071,
+        -0.7863,
+        0.5362
+      ],
+      "groups": [
+        1
+      ]
+    },
+    {
+      "node": "ascent_stage",
+      "name": "ascent stage",
+      "group": null,
+      "color": "#3cb44b",
+      "triangles": 49857,
+      "centroid": [
+        -0.0083,
+        0.3772,
+        0.0392
+      ],
+      "labelAnchor": [
+        0.0034,
+        0.4679,
+        0.1637
+      ],
+      "explodeDir": [
+        -0.0561,
+        0.963,
+        0.2637
+      ],
+      "groups": [
+        2
+      ]
+    },
+    {
+      "node": "engine_nozzle",
+      "name": "engine nozzle",
+      "group": null,
+      "color": "#4363d8",
+      "triangles": 479,
+      "centroid": [
+        -0.0017,
+        0.0515,
+        -0.0003
+      ],
+      "labelAnchor": [
+        -0.0449,
+        0.0284,
+        -0.0106
+      ],
+      "explodeDir": [
+        -0.0093,
+        -1.0,
+        -0.0016
+      ],
+      "groups": [
+        3
+      ]
+    },
+    {
+      "node": "leg",
+      "name": "leg",
+      "group": null,
+      "color": "#ffe119",
+      "triangles": 19898,
+      "centroid": [
+        0.0626,
+        0.1025,
+        -0.0903
+      ],
+      "labelAnchor": [
+        0.0009,
+        0.0063,
+        -0.2733
+      ],
+      "explodeDir": [
+        0.3655,
+        -0.7673,
+        -0.527
+      ],
+      "groups": [
+        4
+      ]
+    }
+  ],
+  "licence": "CC BY 4.0",
+  "credit": "Vector-3DModels (Sketchfab), \"Nasa lunar module\", https://sketchfab.com/3d-models/c7d5ae92d0ca41dfb3bec26552c5d1cb",
+  "provenance": {
+    "built": "2026-11-13",
+    "source": "https://sketchfab.com/3d-models/c7d5ae92d0ca41dfb3bec26552c5d1cb",
+    "objaverseUid": "c7d5ae92d0ca41dfb3bec26552c5d1cb",
+    "retrievedFor": "An Apollo-style lunar lander standing on its legs",
+    "dinoSimilarity": 0.6716,
+    "pickReason": "Candidate 1 is the complete Apollo-style lander with separate descent and ascent stages, four legs with footpads, central engine nozzle, and front ladder matching the reference.",
+    "authorUrl": "https://sketchfab.com/elperro0151",
+    "scale": 0.09335,
+    "notes": [
+      "Made by Vector-3DModels and shared on Sketchfab under CC BY 4.0; found through Objaverse 1.0 and chosen by Muse Ember from renders. Not checked by a subject expert.",
+      "Not real size: the real apollo lunar lander is about 9 m across; it is shown 60 cm across (about 1:16).",
+      "Parts are regions cut by P3-SAM (Tencent Hunyuan3D-Part, non-commercial licence) and named by Muse Ember from a render of each region."
+    ]
+  }
+}

@@ -1,0 +1,142 @@
+{
+  "id": "acoustic-guitar-objaverse",
+  "title": "acoustic guitar (3D model by LeonArt3d)",
+  "tier": "C",
+  "kind": "everyday",
+  "concept": {
+    "id": "objaverse:45ff76dcea9a4274a3c1e70856867101",
+    "name": "acoustic guitar"
+  },
+  "detail": "retrieved",
+  "keywords": [
+    "acoustic guitar",
+    "music lesson",
+    "musical instrument",
+    "string instrument"
+  ],
+  "glb": "assets/acoustic-guitar-objaverse.glb",
+  "sizeM": [
+    0.3948,
+    1.0,
+    0.1216
+  ],
+  "triangles": 40992,
+  "parts": [
+    {
+      "node": "guitar_body",
+      "name": "guitar body",
+      "group": null,
+      "color": "#e6194b",
+      "triangles": 8861,
+      "centroid": [
+        -0.0004,
+        0.2725,
+        -0.0063
+      ],
+      "labelAnchor": [
+        0.0,
+        0.0,
+        -0.0566
+      ],
+      "explodeDir": [
+        -0.0018,
+        -0.9996,
+        -0.0278
+      ],
+      "groups": [
+        1
+      ]
+    },
+    {
+      "node": "neck",
+      "name": "neck",
+      "group": null,
+      "color": "#3cb44b",
+      "triangles": 17059,
+      "centroid": [
+        -0.001,
+        0.8395,
+        0.0348
+      ],
+      "labelAnchor": [
+        0.0003,
+        1.0,
+        0.0338
+      ],
+      "explodeDir": [
+        -0.0029,
+        0.9948,
+        0.1019
+      ],
+      "groups": [
+        2
+      ]
+    },
+    {
+      "node": "bridge",
+      "name": "bridge",
+      "group": null,
+      "color": "#4363d8",
+      "triangles": 6188,
+      "centroid": [
+        0.0012,
+        0.208,
+        0.0571
+      ],
+      "labelAnchor": [
+        0.0009,
+        0.1892,
+        0.0565
+      ],
+      "explodeDir": [
+        0.004,
+        -0.9814,
+        0.1918
+      ],
+      "groups": [
+        3
+      ]
+    },
+    {
+      "node": "string",
+      "name": "string",
+      "group": null,
+      "color": "#ffe119",
+      "triangles": 8884,
+      "centroid": [
+        0.0017,
+        0.7389,
+        0.0513
+      ],
+      "labelAnchor": [
+        0.0192,
+        0.9664,
+        0.0396
+      ],
+      "explodeDir": [
+        0.007,
+        0.9777,
+        0.2101
+      ],
+      "groups": [
+        4
+      ]
+    }
+  ],
+  "licence": "CC BY 4.0",
+  "credit": "LeonArt3d (Sketchfab), \"Acoustic Guitar Clean\", https://sketchfab.com/3d-models/45ff76dcea9a4274a3c1e70856867101",
+  "provenance": {
+    "built": "2026-11-13",
+    "source": "https://sketchfab.com/3d-models/45ff76dcea9a4274a3c1e70856867101",
+    "objaverseUid": "45ff76dcea9a4274a3c1e70856867101",
+    "retrievedFor": "An acoustic guitar",
+    "dinoSimilarity": 0.8686,
+    "pickReason": "Candidate 5 best matches the reference dreadnought acoustic guitar with a realistic body, sound hole, neck, headstock, bridge, strings and tuning pegs all clearly visible.",
+    "authorUrl": "https://sketchfab.com/thedj245",
+    "scale": 0.289185,
+    "notes": [
+      "Made by LeonArt3d and shared on Sketchfab under CC BY 4.0; found through Objaverse 1.0 and chosen by Muse Ember from renders. Not checked by a subject expert.",
+      "Parts are regions cut by P3-SAM (Tencent Hunyuan3D-Part, non-commercial licence) and named by Muse Ember from a render of each region."
+    ]
+  }
+}

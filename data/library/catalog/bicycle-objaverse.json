@@ -1,0 +1,199 @@
+{
+  "id": "bicycle-objaverse",
+  "title": "Bicycle (3D model by Remik.Papaj)",
+  "tier": "C",
+  "kind": "mechanical",
+  "concept": {
+    "id": "objaverse:3bde1ab67c6448169b604dedad6828d8",
+    "name": "Bicycle"
+  },
+  "detail": "retrieved",
+  "keywords": [
+    "bicycle",
+    "bike",
+    "cycling",
+    "frame",
+    "wheels"
+  ],
+  "glb": "assets/bicycle-objaverse.glb",
+  "sizeM": [
+    1.8,
+    1.0578,
+    0.5611
+  ],
+  "triangles": 40290,
+  "parts": [
+    {
+      "node": "front_wheel",
+      "name": "front wheel",
+      "group": null,
+      "color": "#e6194b",
+      "triangles": 4545,
+      "centroid": [
+        0.5052,
+        0.4076,
+        -0.0012
+      ],
+      "labelAnchor": [
+        0.8944,
+        0.3018,
+        -0.0069
+      ],
+      "explodeDir": [
+        0.9724,
+        -0.2334,
+        -0.0024
+      ],
+      "groups": [
+        1,
+        3
+      ]
+    },
+    {
+      "node": "rear_wheel",
+      "name": "rear wheel",
+      "group": null,
+      "color": "#3cb44b",
+      "triangles": 16925,
+      "centroid": [
+        -0.4124,
+        0.4095,
+        0.0198
+      ],
+      "labelAnchor": [
+        -0.878,
+        0.2403,
+        0.0019
+      ],
+      "explodeDir": [
+        -0.9596,
+        -0.2777,
+        0.0461
+      ],
+      "groups": [
+        2,
+        4
+      ]
+    },
+    {
+      "node": "frame",
+      "name": "frame",
+      "group": null,
+      "color": "#f58231",
+      "triangles": 13950,
+      "centroid": [
+        0.102,
+        0.4602,
+        0.0377
+      ],
+      "labelAnchor": [
+        0.5459,
+        0.3599,
+        0.0505
+      ],
+      "explodeDir": [
+        0.7929,
+        -0.5341,
+        0.2933
+      ],
+      "groups": [
+        5,
+        6,
+        9,
+        10
+      ]
+    },
+    {
+      "node": "saddle",
+      "name": "saddle",
+      "group": null,
+      "color": "#42d4f4",
+      "triangles": 842,
+      "centroid": [
+        -0.2707,
+        1.0046,
+        -0.003
+      ],
+      "labelAnchor": [
+        -0.4049,
+        1.0541,
+        -0.003
+      ],
+      "explodeDir": [
+        -0.4945,
+        0.8691,
+        -0.0054
+      ],
+      "groups": [
+        7,
+        8
+      ]
+    },
+    {
+      "node": "handlebar",
+      "name": "handlebar",
+      "group": null,
+      "color": "#469990",
+      "triangles": 2700,
+      "centroid": [
+        0.4075,
+        1.0107,
+        -0.0002
+      ],
+      "labelAnchor": [
+        0.488,
+        1.0431,
+        -0.2449
+      ],
+      "explodeDir": [
+        0.6458,
+        0.7635,
+        -0.0003
+      ],
+      "groups": [
+        11
+      ]
+    },
+    {
+      "node": "pedal",
+      "name": "pedal",
+      "group": null,
+      "color": "#9a6324",
+      "triangles": 1328,
+      "centroid": [
+        -0.1512,
+        0.4963,
+        -0.1584
+      ],
+      "labelAnchor": [
+        -0.2065,
+        0.5127,
+        -0.208
+      ],
+      "explodeDir": [
+        -0.6829,
+        -0.1471,
+        -0.7155
+      ],
+      "groups": [
+        12
+      ]
+    }
+  ],
+  "licence": "CC BY 4.0",
+  "credit": "Remik.Papaj (Sketchfab), \"Bike\", https://sketchfab.com/3d-models/3bde1ab67c6448169b604dedad6828d8",
+  "provenance": {
+    "built": "2026-11-13",
+    "source": "https://sketchfab.com/3d-models/3bde1ab67c6448169b604dedad6828d8",
+    "objaverseUid": "3bde1ab67c6448169b604dedad6828d8",
+    "retrievedFor": "A bicycle",
+    "dinoSimilarity": 0.6179,
+    "pickReason": "Candidate 3 is a clean realistic road bicycle with frame, both spoked wheels, handlebar, saddle, pedals and chain clearly visible in all views.",
+    "authorUrl": "https://sketchfab.com/Remik.Papaj",
+    "scale": 0.9,
+    "notes": [
+      "Made by Remik.Papaj and shared on Sketchfab under CC BY 4.0; found through Objaverse 1.0 and chosen by Muse Ember from renders. Not checked by a subject expert.",
+      "Parts are the model's physically separate pieces, grouped by size and named by Muse Ember from a render of each group; pieces the author modelled as one (e.g. a guitar's body and neck) stay one part."
+    ]
+  }
+}

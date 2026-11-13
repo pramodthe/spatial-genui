@@ -1,0 +1,94 @@
+{
+  "id": "volcano-objaverse",
+  "title": "Volcano (3D model by shooogp)",
+  "tier": "C",
+  "kind": "earth-science",
+  "concept": {
+    "id": "objaverse:f53dad6cb99844e98753a41035373560",
+    "name": "Volcano"
+  },
+  "detail": "retrieved",
+  "keywords": [
+    "lava flow",
+    "magma chamber",
+    "volcano",
+    "volcano cross section",
+    "volcano eruption"
+  ],
+  "glb": "assets/volcano-objaverse.glb",
+  "sizeM": [
+    0.6,
+    0.38,
+    0.5397
+  ],
+  "triangles": 24374,
+  "parts": [
+    {
+      "node": "volcano",
+      "name": "volcano",
+      "group": null,
+      "color": "#e6194b",
+      "triangles": 19568,
+      "centroid": [
+        -0.0148,
+        0.2359,
+        -0.0022
+      ],
+      "labelAnchor": [
+        -0.0237,
+        0.3772,
+        0.0208
+      ],
+      "explodeDir": [
+        -0.307,
+        0.9507,
+        -0.0447
+      ],
+      "groups": [
+        1
+      ]
+    },
+    {
+      "node": "magma_chamber",
+      "name": "magma chamber",
+      "group": null,
+      "color": "#3cb44b",
+      "triangles": 4806,
+      "centroid": [
+        -0.0036,
+        0.185,
+        0.0453
+      ],
+      "labelAnchor": [
+        -0.115,
+        0.1338,
+        0.2543
+      ],
+      "explodeDir": [
+        -0.0794,
+        -0.109,
+        0.9909
+      ],
+      "groups": [
+        2
+      ]
+    }
+  ],
+  "licence": "CC BY 4.0",
+  "credit": "shooogp (Sketchfab), \"Volcano - \u0627\u0644\u0628\u0631\u0643\u0627\u0646\", https://sketchfab.com/3d-models/f53dad6cb99844e98753a41035373560",
+  "provenance": {
+    "built": "2026-11-13",
+    "source": "https://sketchfab.com/3d-models/f53dad6cb99844e98753a41035373560",
+    "objaverseUid": "f53dad6cb99844e98753a41035373560",
+    "retrievedFor": "A volcano cut in half to show what is inside",
+    "dinoSimilarity": 0.5611,
+    "pickReason": "Candidate 4 is the only cutaway volcano showing the magma chamber, central vent, crater and layered rock matching the reference, while the others are whole external volcanoes without interior structure.",
+    "authorUrl": "https://sketchfab.com/shooogp",
+    "scale": 0.000504,
+    "notes": [
+      "Made by shooogp and shared on Sketchfab under CC BY 4.0; found through Objaverse 1.0 and chosen by Muse Ember from renders. Not checked by a subject expert.",
+      "Not real size: the real volcano is about 5,000 m across; it is shown 60 cm across (about 1:8,333).",
+      "Parts are the model's physically separate pieces, grouped by size and named by Muse Ember from a render of each group; pieces the author modelled as one (e.g. a guitar's body and neck) stay one part."
+    ]
+  }
+}

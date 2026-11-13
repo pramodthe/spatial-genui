@@ -1,0 +1,661 @@
+{
+  "id": "brain-bp3d",
+  "title": "Human brain (lobes, cerebellum and brainstem)",
+  "tier": "A",
+  "kind": "anatomy",
+  "concept": {
+    "id": "FMA50801",
+    "name": "brain"
+  },
+  "detail": "lobes",
+  "keywords": [
+    "brain",
+    "cerebrum",
+    "cerebellum",
+    "brainstem",
+    "lobes",
+    "nervous system",
+    "neuroscience"
+  ],
+  "glb": "assets/brain-bp3d.glb",
+  "sizeM": [
+    0.139,
+    0.166,
+    0.1803
+  ],
+  "triangles": 79989,
+  "parts": [
+    {
+      "node": "left_frontal_lobe",
+      "name": "left frontal lobe",
+      "group": "cerebrum",
+      "color": "#e2574c",
+      "triangles": 4655,
+      "centroid": [
+        0.0262,
+        0.1268,
+        0.0281
+      ],
+      "labelAnchor": [
+        0.0274,
+        0.1348,
+        0.0682
+      ],
+      "explodeDir": [
+        0.4488,
+        0.7521,
+        0.4826
+      ],
+      "fma": [
+        "FMA72654",
+        "FMA72656",
+        "FMA72658",
+        "FMA72662"
+      ],
+      "fmaNames": [
+        "left superior frontal gyrus",
+        "left middle frontal gyrus",
+        "left inferior frontal gyrus",
+        "left precentral gyrus"
+      ],
+      "pieces": 4
+    },
+    {
+      "node": "right_frontal_lobe",
+      "name": "right frontal lobe",
+      "group": "cerebrum",
+      "color": "#e2574c",
+      "triangles": 4655,
+      "centroid": [
+        -0.0274,
+        0.1269,
+        0.0272
+      ],
+      "labelAnchor": [
+        -0.0299,
+        0.1348,
+        0.0664
+      ],
+      "explodeDir": [
+        -0.469,
+        0.751,
+        0.4647
+      ],
+      "fma": [
+        "FMA72653",
+        "FMA72655",
+        "FMA72657",
+        "FMA72661"
+      ],
+      "fmaNames": [
+        "right superior frontal gyrus",
+        "right middle frontal gyrus",
+        "right inferior frontal gyrus",
+        "right precentral gyrus"
+      ],
+      "pieces": 4
+    },
+    {
+      "node": "left_parietal_lobe",
+      "name": "left parietal lobe",
+      "group": "cerebrum",
+      "color": "#3d8bd9",
+      "triangles": 4656,
+      "centroid": [
+        0.0309,
+        0.1178,
+        -0.0442
+      ],
+      "labelAnchor": [
+        0.0247,
+        0.1372,
+        -0.0679
+      ],
+      "explodeDir": [
+        0.4813,
+        0.5417,
+        -0.6891
+      ],
+      "fma": [
+        "FMA72666",
+        "FMA72672",
+        "FMA72668",
+        "FMA72670"
+      ],
+      "fmaNames": [
+        "left postcentral gyrus",
+        "left superior parietal lobule",
+        "left supramarginal gyrus",
+        "left angular gyrus"
+      ],
+      "pieces": 4
+    },
+    {
+      "node": "right_parietal_lobe",
+      "name": "right parietal lobe",
+      "group": "cerebrum",
+      "color": "#3d8bd9",
+      "triangles": 4654,
+      "centroid": [
+        -0.0328,
+        0.1178,
+        -0.0443
+      ],
+      "labelAnchor": [
+        -0.0322,
+        0.1431,
+        -0.0578
+      ],
+      "explodeDir": [
+        -0.503,
+        0.5347,
+        -0.679
+      ],
+      "fma": [
+        "FMA72665",
+        "FMA72671",
+        "FMA72667",
+        "FMA72669"
+      ],
+      "fmaNames": [
+        "right postcentral gyrus",
+        "right superior parietal lobule",
+        "right supramarginal gyrus",
+        "right angular gyrus"
+      ],
+      "pieces": 4
+    },
+    {
+      "node": "left_temporal_lobe",
+      "name": "left temporal lobe",
+      "group": "cerebrum",
+      "color": "#4caf50",
+      "triangles": 4655,
+      "centroid": [
+        0.0427,
+        0.0689,
+        -0.0069
+      ],
+      "labelAnchor": [
+        0.0673,
+        0.0757,
+        -0.0203
+      ],
+      "explodeDir": [
+        0.9389,
+        -0.3093,
+        -0.1508
+      ],
+      "fma": [
+        "FMA72686",
+        "FMA72688",
+        "FMA72690"
+      ],
+      "fmaNames": [
+        "left middle temporal gyrus",
+        "left inferior temporal gyrus",
+        "left fusiform gyrus"
+      ],
+      "pieces": 3
+    },
+    {
+      "node": "right_temporal_lobe",
+      "name": "right temporal lobe",
+      "group": "cerebrum",
+      "color": "#4caf50",
+      "triangles": 4656,
+      "centroid": [
+        -0.0432,
+        0.0687,
+        -0.0053
+      ],
+      "labelAnchor": [
+        -0.0675,
+        0.0786,
+        -0.0278
+      ],
+      "explodeDir": [
+        -0.9434,
+        -0.3108,
+        -0.1158
+      ],
+      "fma": [
+        "FMA72685",
+        "FMA72687",
+        "FMA72689"
+      ],
+      "fmaNames": [
+        "right middle temporal gyrus",
+        "right inferior temporal gyrus",
+        "right fusiform gyrus"
+      ],
+      "pieces": 3
+    },
+    {
+      "node": "left_occipital_lobe",
+      "name": "left occipital lobe",
+      "group": "cerebrum",
+      "color": "#f2b632",
+      "triangles": 4390,
+      "centroid": [
+        0.0179,
+        0.0761,
+        -0.0643
+      ],
+      "labelAnchor": [
+        0.0192,
+        0.079,
+        -0.0885
+      ],
+      "explodeDir": [
+        0.266,
+        -0.1022,
+        -0.9585
+      ],
+      "fma": [
+        "FMA72976"
+      ],
+      "fmaNames": [
+        "left occipital lobe"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "right_occipital_lobe",
+      "name": "right occipital lobe",
+      "group": "cerebrum",
+      "color": "#f2b632",
+      "triangles": 4564,
+      "centroid": [
+        -0.0195,
+        0.0758,
+        -0.0643
+      ],
+      "labelAnchor": [
+        -0.024,
+        0.0759,
+        -0.087
+      ],
+      "explodeDir": [
+        -0.2883,
+        -0.1059,
+        -0.9517
+      ],
+      "fma": [
+        "FMA72975"
+      ],
+      "fmaNames": [
+        "right occipital lobe"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "left_insula",
+      "name": "left insula",
+      "group": "cerebrum",
+      "color": "#a259d9",
+      "triangles": 2448,
+      "centroid": [
+        0.0366,
+        0.0999,
+        0.0192
+      ],
+      "labelAnchor": [
+        0.0399,
+        0.105,
+        0.0329
+      ],
+      "explodeDir": [
+        0.819,
+        0.3796,
+        0.4302
+      ],
+      "fma": [
+        "FMA72978"
+      ],
+      "fmaNames": [
+        "left insula"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "right_insula",
+      "name": "right insula",
+      "group": "cerebrum",
+      "color": "#a259d9",
+      "triangles": 2448,
+      "centroid": [
+        -0.0369,
+        0.0995,
+        0.0194
+      ],
+      "labelAnchor": [
+        -0.0408,
+        0.1043,
+        0.0326
+      ],
+      "explodeDir": [
+        -0.8233,
+        0.3687,
+        0.4316
+      ],
+      "fma": [
+        "FMA72977"
+      ],
+      "fmaNames": [
+        "right insula"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "limbic_lobe",
+      "name": "limbic lobe",
+      "group": "cerebrum",
+      "color": "#f07f2e",
+      "triangles": 4656,
+      "centroid": [
+        -0.0015,
+        0.0896,
+        0.0016
+      ],
+      "labelAnchor": [
+        -0.0041,
+        0.1267,
+        0.0518
+      ],
+      "explodeDir": [
+        -0.2122,
+        0.9488,
+        0.234
+      ],
+      "fma": [
+        "FMA72718",
+        "FMA72717",
+        "FMA72706",
+        "FMA72705",
+        "FMA72714",
+        "FMA72713"
+      ],
+      "fmaNames": [
+        "left cingulate gyrus",
+        "right cingulate gyrus",
+        "left parahippocampal gyrus",
+        "right parahippocampal gyrus",
+        "left hippocampus",
+        "right hippocampus"
+      ],
+      "pieces": 6
+    },
+    {
+      "node": "cerebellum",
+      "name": "cerebellum",
+      "group": "hindbrain",
+      "color": "#b5458f",
+      "triangles": 4655,
+      "centroid": [
+        0.0001,
+        0.0479,
+        -0.0347
+      ],
+      "labelAnchor": [
+        -0.0154,
+        0.0347,
+        -0.0643
+      ],
+      "explodeDir": [
+        0.0015,
+        -0.7104,
+        -0.7038
+      ],
+      "fma": [
+        "FMA67944"
+      ],
+      "fmaNames": [
+        "cerebellum"
+      ],
+      "pieces": 2
+    },
+    {
+      "node": "pons",
+      "name": "pons",
+      "group": "brainstem",
+      "color": "#7a5c99",
+      "triangles": 4655,
+      "centroid": [
+        -0.0015,
+        0.0519,
+        -0.0003
+      ],
+      "labelAnchor": [
+        -0.0084,
+        0.0376,
+        -0.0005
+      ],
+      "explodeDir": [
+        -0.0493,
+        -0.9987,
+        -0.0102
+      ],
+      "fma": [
+        "FMA67943"
+      ],
+      "fmaNames": [
+        "pons"
+      ],
+      "pieces": 2
+    },
+    {
+      "node": "medulla_oblongata",
+      "name": "medulla oblongata",
+      "group": "brainstem",
+      "color": "#3f7f8c",
+      "triangles": 4655,
+      "centroid": [
+        -0.0001,
+        0.0284,
+        -0.0112
+      ],
+      "labelAnchor": [
+        0.0015,
+        0.0,
+        -0.0282
+      ],
+      "explodeDir": [
+        -0.0012,
+        -0.9796,
+        -0.2008
+      ],
+      "fma": [
+        "FMA62004"
+      ],
+      "fmaNames": [
+        "medulla oblongata"
+      ],
+      "pieces": 2
+    },
+    {
+      "node": "midbrain",
+      "name": "midbrain",
+      "group": "brainstem",
+      "color": "#c26d4a",
+      "triangles": 4656,
+      "centroid": [
+        -0.0012,
+        0.0731,
+        -0.0003
+      ],
+      "labelAnchor": [
+        -0.0071,
+        0.0642,
+        -0.0091
+      ],
+      "explodeDir": [
+        -0.1172,
+        -0.9925,
+        -0.0343
+      ],
+      "fma": [
+        "FMA61993",
+        "FMA73422",
+        "FMA73423",
+        "FMA73434",
+        "FMA73435"
+      ],
+      "fmaNames": [
+        "midbrain",
+        "right superior colliculus",
+        "left superior colliculus",
+        "right inferior colliculus",
+        "left inferior colliculus"
+      ],
+      "pieces": 6
+    },
+    {
+      "node": "hypothalamus",
+      "name": "hypothalamus",
+      "group": "diencephalon",
+      "color": "#d8a35d",
+      "triangles": 4656,
+      "centroid": [
+        -0.0007,
+        0.0771,
+        0.0208
+      ],
+      "labelAnchor": [
+        -0.0004,
+        0.073,
+        0.0303
+      ],
+      "explodeDir": [
+        -0.032,
+        -0.2739,
+        0.9612
+      ],
+      "fma": [
+        "FMA62008",
+        "FMA62327"
+      ],
+      "fmaNames": [
+        "hypothalamus",
+        "tuber cinereum"
+      ],
+      "pieces": 4
+    },
+    {
+      "node": "pineal_body",
+      "name": "pineal body",
+      "group": "diencephalon",
+      "color": "#d8a35d",
+      "triangles": 964,
+      "centroid": [
+        -0.0003,
+        0.0806,
+        -0.0131
+      ],
+      "labelAnchor": [
+        0.0,
+        0.0767,
+        -0.0206
+      ],
+      "explodeDir": [
+        -0.0202,
+        -0.1796,
+        -0.9835
+      ],
+      "fma": [
+        "FMA62033",
+        "FMA62032"
+      ],
+      "fmaNames": [
+        "pineal body",
+        "habenula"
+      ],
+      "pieces": 2
+    },
+    {
+      "node": "white_matter",
+      "name": "white matter",
+      "group": "cerebrum",
+      "color": "#efe7d6",
+      "triangles": 4655,
+      "centroid": [
+        -0.0009,
+        0.1036,
+        -0.0116
+      ],
+      "labelAnchor": [
+        -0.0132,
+        0.15,
+        -0.0424
+      ],
+      "explodeDir": [
+        -0.036,
+        0.8718,
+        -0.4886
+      ],
+      "fma": [
+        "FMA260794",
+        "FMA260791",
+        "FMA72907",
+        "FMA72906"
+      ],
+      "fmaNames": [
+        "white matter of left cerebral hemisphere",
+        "white matter of right cerebral hemisphere",
+        "left internal capsule",
+        "right internal capsule"
+      ],
+      "pieces": 4
+    },
+    {
+      "node": "ventricles",
+      "name": "ventricles",
+      "group": "ventricular system",
+      "color": "#1f8fd6",
+      "triangles": 4656,
+      "centroid": [
+        -0.0015,
+        0.0825,
+        0.0047
+      ],
+      "labelAnchor": [
+        -0.0153,
+        0.0986,
+        0.0471
+      ],
+      "explodeDir": [
+        -0.2996,
+        -0.0964,
+        0.9492
+      ],
+      "fma": [
+        "FMA78450",
+        "FMA78449",
+        "FMA78454",
+        "FMA78469",
+        "FMA78467"
+      ],
+      "fmaNames": [
+        "left lateral ventricle",
+        "right lateral ventricle",
+        "third ventricle",
+        "fourth ventricle",
+        "cerebral aqueduct"
+      ],
+      "pieces": 5
+    }
+  ],
+  "licence": "CC BY 4.0",
+  "credit": "BodyParts3D, \u00a9 The Database Center for Life Science licensed under CC Attribution 4.0 International",
+  "licenceNote": "The database licence page (updated 2025-02-27) states CC BY 4.0; the OBJ file headers still carry the earlier CC BY-SA 2.1 JP notice. We follow the current licence page.",
+  "provenance": {
+    "built": "2026-11-13",
+    "source": "BodyParts3D 4.0, PART-OF tree, 99% polygon reduction (dbarchive.biosciencedbc.jp)",
+    "recipe": "apps/worker3d/library/recipes/brain.json",
+    "rawTriangles": 322262,
+    "notes": [
+      "Lobes are grouped from BodyParts3D's gyri using the standard assignment (precentral gyrus to the frontal lobe; postcentral, superior parietal, supramarginal and angular to the parietal lobe).",
+      "BodyParts3D 4.0 lacks some cortical surfaces (e.g. the superior temporal and orbital gyri); the white matter mesh underneath fills those areas."
+    ]
+  }
+}

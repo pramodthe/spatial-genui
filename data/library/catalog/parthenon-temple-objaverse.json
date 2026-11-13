@@ -1,0 +1,117 @@
+{
+  "id": "parthenon-temple-objaverse",
+  "title": "Ancient Greek temple (3D model by Microsoft)",
+  "tier": "C",
+  "kind": "architecture",
+  "concept": {
+    "id": "objaverse:8390c61a76cb48c989ddf975a0a06c8d",
+    "name": "Ancient Greek temple"
+  },
+  "detail": "retrieved",
+  "keywords": [
+    "ancient greek temple",
+    "classical columns",
+    "parthenon"
+  ],
+  "glb": "assets/parthenon-temple-objaverse.glb",
+  "sizeM": [
+    0.3033,
+    0.1722,
+    0.6
+  ],
+  "triangles": 15968,
+  "parts": [
+    {
+      "node": "roof",
+      "name": "roof",
+      "group": null,
+      "color": "#e6194b",
+      "triangles": 128,
+      "centroid": [
+        -0.0004,
+        0.1456,
+        0.0085
+      ],
+      "labelAnchor": [
+        -0.0,
+        0.1722,
+        0.2859
+      ],
+      "explodeDir": [
+        -0.0072,
+        0.99,
+        0.1407
+      ],
+      "groups": [
+        1
+      ]
+    },
+    {
+      "node": "stylobate",
+      "name": "stylobate",
+      "group": null,
+      "color": "#3cb44b",
+      "triangles": 15807,
+      "centroid": [
+        0.0,
+        0.0688,
+        -0.0012
+      ],
+      "labelAnchor": [
+        0.1516,
+        0.0,
+        -0.3
+      ],
+      "explodeDir": [
+        0.0008,
+        -0.9977,
+        -0.0675
+      ],
+      "groups": [
+        2
+      ]
+    },
+    {
+      "node": "cella",
+      "name": "cella",
+      "group": null,
+      "color": "#4363d8",
+      "triangles": 33,
+      "centroid": [
+        0.0029,
+        0.0594,
+        -0.0179
+      ],
+      "labelAnchor": [
+        0.0323,
+        0.0121,
+        -0.2406
+      ],
+      "explodeDir": [
+        0.09,
+        -0.8262,
+        -0.5562
+      ],
+      "groups": [
+        3
+      ]
+    }
+  ],
+  "licence": "CC BY 4.0",
+  "credit": "Microsoft (Sketchfab), \"Parthenon\", https://sketchfab.com/3d-models/8390c61a76cb48c989ddf975a0a06c8d",
+  "provenance": {
+    "built": "2026-11-13",
+    "source": "https://sketchfab.com/3d-models/8390c61a76cb48c989ddf975a0a06c8d",
+    "objaverseUid": "8390c61a76cb48c989ddf975a0a06c8d",
+    "retrievedFor": "An ancient Greek temple like the Parthenon",
+    "dinoSimilarity": 0.6971,
+    "pickReason": "Candidate 2 is the only complete, elongated peripteral temple showing stylobate, columns, entablature, pediment and gabled roof in realistic Parthenon proportions.",
+    "authorUrl": "https://sketchfab.com/microsoft",
+    "scale": 0.014415,
+    "notes": [
+      "Made by Microsoft and shared on Sketchfab under CC BY 4.0; found through Objaverse 1.0 and chosen by Muse Ember from renders. Not checked by a subject expert.",
+      "Not real size: the real ancient greek temple is about 70 m across; it is shown 60 cm across (about 1:116).",
+      "Parts are regions cut by P3-SAM (Tencent Hunyuan3D-Part, non-commercial licence) and named by Muse Ember from a render of each region."
+    ]
+  }
+}

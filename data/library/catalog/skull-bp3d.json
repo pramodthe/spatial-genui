@@ -1,0 +1,678 @@
+{
+  "id": "skull-bp3d",
+  "title": "Human skull (22 bones, colour-coded)",
+  "tier": "A",
+  "kind": "anatomy",
+  "concept": {
+    "id": "FMA46565",
+    "name": "skull"
+  },
+  "detail": "individual-bones",
+  "keywords": [
+    "skull",
+    "cranium",
+    "head bones",
+    "jaw",
+    "mandible",
+    "facial bones"
+  ],
+  "glb": "assets/skull-bp3d.glb",
+  "sizeM": [
+    0.1512,
+    0.2147,
+    0.2087
+  ],
+  "triangles": 69986,
+  "parts": [
+    {
+      "node": "frontal_bone",
+      "name": "frontal bone",
+      "group": "cranium",
+      "color": "#e3a33b",
+      "triangles": 4981,
+      "centroid": [
+        0.0069,
+        0.1428,
+        0.0499
+      ],
+      "labelAnchor": [
+        0.0097,
+        0.1732,
+        0.0784
+      ],
+      "explodeDir": [
+        0.1121,
+        0.576,
+        0.8098
+      ],
+      "fma": [
+        "FMA52734"
+      ],
+      "fmaNames": [
+        "frontal bone"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "right_parietal_bone",
+      "name": "right parietal bone",
+      "group": "cranium",
+      "color": "#3b82d6",
+      "triangles": 4981,
+      "centroid": [
+        -0.0238,
+        0.1726,
+        -0.0368
+      ],
+      "labelAnchor": [
+        -0.0231,
+        0.2045,
+        -0.0541
+      ],
+      "explodeDir": [
+        -0.3026,
+        0.8298,
+        -0.4689
+      ],
+      "fma": [
+        "FMA52788"
+      ],
+      "fmaNames": [
+        "right parietal bone"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "left_parietal_bone",
+      "name": "left parietal bone",
+      "group": "cranium",
+      "color": "#3b82d6",
+      "triangles": 4980,
+      "centroid": [
+        0.025,
+        0.1704,
+        -0.0375
+      ],
+      "labelAnchor": [
+        0.0327,
+        0.1948,
+        -0.0648
+      ],
+      "explodeDir": [
+        0.3228,
+        0.8135,
+        -0.4837
+      ],
+      "fma": [
+        "FMA52789"
+      ],
+      "fmaNames": [
+        "left parietal bone"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "occipital_bone",
+      "name": "occipital bone",
+      "group": "cranium",
+      "color": "#46a045",
+      "triangles": 4980,
+      "centroid": [
+        0.0023,
+        0.1062,
+        -0.0636
+      ],
+      "labelAnchor": [
+        0.0084,
+        0.1228,
+        -0.1041
+      ],
+      "explodeDir": [
+        0.0357,
+        -0.0184,
+        -0.9992
+      ],
+      "fma": [
+        "FMA52735"
+      ],
+      "fmaNames": [
+        "occipital bone"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "right_temporal_bone",
+      "name": "right temporal bone",
+      "group": "cranium",
+      "color": "#d94a4a",
+      "triangles": 4928,
+      "centroid": [
+        -0.0475,
+        0.0885,
+        -0.0033
+      ],
+      "labelAnchor": [
+        -0.0627,
+        0.0731,
+        -0.0191
+      ],
+      "explodeDir": [
+        -0.9278,
+        -0.3675,
+        -0.0649
+      ],
+      "fma": [
+        "FMA52738"
+      ],
+      "fmaNames": [
+        "right temporal bone"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "left_temporal_bone",
+      "name": "left temporal bone",
+      "group": "cranium",
+      "color": "#d94a4a",
+      "triangles": 4936,
+      "centroid": [
+        0.0474,
+        0.0882,
+        -0.0031
+      ],
+      "labelAnchor": [
+        0.0629,
+        0.073,
+        -0.0187
+      ],
+      "explodeDir": [
+        0.9258,
+        -0.3731,
+        -0.0609
+      ],
+      "fma": [
+        "FMA52739"
+      ],
+      "fmaNames": [
+        "left temporal bone"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "sphenoid_bone",
+      "name": "sphenoid bone",
+      "group": "cranium",
+      "color": "#9a52c7",
+      "triangles": 4982,
+      "centroid": [
+        0.0019,
+        0.0944,
+        0.0301
+      ],
+      "labelAnchor": [
+        0.0375,
+        0.0926,
+        0.0528
+      ],
+      "explodeDir": [
+        0.0579,
+        -0.394,
+        0.9173
+      ],
+      "fma": [
+        "FMA52736"
+      ],
+      "fmaNames": [
+        "sphenoid bone"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "ethmoid_bone",
+      "name": "ethmoid bone",
+      "group": "cranium",
+      "color": "#e8c51e",
+      "triangles": 4981,
+      "centroid": [
+        0.0015,
+        0.0916,
+        0.0565
+      ],
+      "labelAnchor": [
+        -0.0002,
+        0.0843,
+        0.0805
+      ],
+      "explodeDir": [
+        0.0258,
+        -0.2685,
+        0.9629
+      ],
+      "fma": [
+        "FMA52740"
+      ],
+      "fmaNames": [
+        "ethmoid"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "right_nasal_bone",
+      "name": "right nasal bone",
+      "group": "face",
+      "color": "#1fae9c",
+      "triangles": 416,
+      "centroid": [
+        -0.0035,
+        0.0966,
+        0.0923
+      ],
+      "labelAnchor": [
+        -0.0029,
+        0.0881,
+        0.1042
+      ],
+      "explodeDir": [
+        -0.0372,
+        -0.1158,
+        0.9926
+      ],
+      "fma": [
+        "FMA53647"
+      ],
+      "fmaNames": [
+        "right nasal bone"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "left_nasal_bone",
+      "name": "left nasal bone",
+      "group": "face",
+      "color": "#1fae9c",
+      "triangles": 438,
+      "centroid": [
+        0.002,
+        0.0978,
+        0.0915
+      ],
+      "labelAnchor": [
+        0.0004,
+        0.0862,
+        0.1028
+      ],
+      "explodeDir": [
+        0.0217,
+        -0.1035,
+        0.9944
+      ],
+      "fma": [
+        "FMA53648"
+      ],
+      "fmaNames": [
+        "left nasal bone"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "right_zygomatic_bone",
+      "name": "right zygomatic bone",
+      "group": "face",
+      "color": "#ef7d22",
+      "triangles": 1556,
+      "centroid": [
+        -0.0459,
+        0.0822,
+        0.0576
+      ],
+      "labelAnchor": [
+        -0.0467,
+        0.0624,
+        0.0645
+      ],
+      "explodeDir": [
+        -0.5898,
+        -0.3226,
+        0.7403
+      ],
+      "fma": [
+        "FMA52892"
+      ],
+      "fmaNames": [
+        "right zygomatic bone"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "left_zygomatic_bone",
+      "name": "left zygomatic bone",
+      "group": "face",
+      "color": "#ef7d22",
+      "triangles": 1434,
+      "centroid": [
+        0.0467,
+        0.0842,
+        0.0567
+      ],
+      "labelAnchor": [
+        0.0484,
+        0.0635,
+        0.0637
+      ],
+      "explodeDir": [
+        0.6062,
+        -0.3006,
+        0.7363
+      ],
+      "fma": [
+        "FMA52893"
+      ],
+      "fmaNames": [
+        "left zygomatic bone"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "right_maxilla",
+      "name": "right maxilla",
+      "group": "face",
+      "color": "#e46aa6",
+      "triangles": 4982,
+      "centroid": [
+        -0.0179,
+        0.063,
+        0.0687
+      ],
+      "labelAnchor": [
+        -0.0082,
+        0.0431,
+        0.092
+      ],
+      "explodeDir": [
+        -0.2133,
+        -0.5292,
+        0.8212
+      ],
+      "fma": [
+        "FMA53649"
+      ],
+      "fmaNames": [
+        "right maxilla"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "left_maxilla",
+      "name": "left maxilla",
+      "group": "face",
+      "color": "#e46aa6",
+      "triangles": 4981,
+      "centroid": [
+        0.0188,
+        0.0625,
+        0.0682
+      ],
+      "labelAnchor": [
+        0.0086,
+        0.0429,
+        0.0919
+      ],
+      "explodeDir": [
+        0.224,
+        -0.535,
+        0.8146
+      ],
+      "fma": [
+        "FMA53650"
+      ],
+      "fmaNames": [
+        "left maxilla"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "mandible",
+      "name": "mandible",
+      "group": "face",
+      "color": "#c9b38c",
+      "triangles": 4981,
+      "centroid": [
+        0.0048,
+        0.0378,
+        0.0489
+      ],
+      "labelAnchor": [
+        0.0063,
+        0.0005,
+        0.0807
+      ],
+      "explodeDir": [
+        0.0564,
+        -0.8167,
+        0.5743
+      ],
+      "fma": [
+        "FMA52748"
+      ],
+      "fmaNames": [
+        "mandible"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "right_lacrimal_bone",
+      "name": "right lacrimal bone",
+      "group": "face",
+      "color": "#5a6fe0",
+      "triangles": 702,
+      "centroid": [
+        -0.0108,
+        0.0928,
+        0.0718
+      ],
+      "labelAnchor": [
+        -0.0109,
+        0.0894,
+        0.0777
+      ],
+      "explodeDir": [
+        -0.1455,
+        -0.1963,
+        0.9697
+      ],
+      "fma": [
+        "FMA53645"
+      ],
+      "fmaNames": [
+        "right lacrimal bone"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "left_lacrimal_bone",
+      "name": "left lacrimal bone",
+      "group": "face",
+      "color": "#5a6fe0",
+      "triangles": 640,
+      "centroid": [
+        0.0123,
+        0.089,
+        0.0708
+      ],
+      "labelAnchor": [
+        0.012,
+        0.0844,
+        0.078
+      ],
+      "explodeDir": [
+        0.1655,
+        -0.2468,
+        0.9548
+      ],
+      "fma": [
+        "FMA53646"
+      ],
+      "fmaNames": [
+        "left lacrimal bone"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "right_palatine_bone",
+      "name": "right palatine bone",
+      "group": "face",
+      "color": "#b06ab3",
+      "triangles": 1736,
+      "centroid": [
+        -0.0134,
+        0.0697,
+        0.0435
+      ],
+      "labelAnchor": [
+        -0.0005,
+        0.0543,
+        0.0626
+      ],
+      "explodeDir": [
+        -0.226,
+        -0.6374,
+        0.7366
+      ],
+      "fma": [
+        "FMA53655"
+      ],
+      "fmaNames": [
+        "right palatine bone"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "left_palatine_bone",
+      "name": "left palatine bone",
+      "group": "face",
+      "color": "#b06ab3",
+      "triangles": 1938,
+      "centroid": [
+        0.0136,
+        0.0701,
+        0.043
+      ],
+      "labelAnchor": [
+        0.0005,
+        0.0545,
+        0.0628
+      ],
+      "explodeDir": [
+        0.2317,
+        -0.6371,
+        0.7352
+      ],
+      "fma": [
+        "FMA53656"
+      ],
+      "fmaNames": [
+        "left palatine bone"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "right_inferior_nasal_concha",
+      "name": "right inferior nasal concha",
+      "group": "face",
+      "color": "#6fb36f",
+      "triangles": 714,
+      "centroid": [
+        -0.0111,
+        0.0666,
+        0.0628
+      ],
+      "labelAnchor": [
+        -0.0108,
+        0.0633,
+        0.0795
+      ],
+      "explodeDir": [
+        -0.1466,
+        -0.538,
+        0.8301
+      ],
+      "fma": [
+        "FMA54737"
+      ],
+      "fmaNames": [
+        "right inferior nasal concha"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "left_inferior_nasal_concha",
+      "name": "left inferior nasal concha",
+      "group": "face",
+      "color": "#6fb36f",
+      "triangles": 738,
+      "centroid": [
+        0.0113,
+        0.0686,
+        0.0689
+      ],
+      "labelAnchor": [
+        0.0116,
+        0.0624,
+        0.0829
+      ],
+      "explodeDir": [
+        0.1409,
+        -0.4849,
+        0.8632
+      ],
+      "fma": [
+        "FMA54738"
+      ],
+      "fmaNames": [
+        "left inferior nasal concha"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "vomer",
+      "name": "vomer",
+      "group": "face",
+      "color": "#a07850",
+      "triangles": 4981,
+      "centroid": [
+        0.0004,
+        0.0753,
+        0.0461
+      ],
+      "labelAnchor": [
+        0.0001,
+        0.0541,
+        0.0791
+      ],
+      "explodeDir": [
+        0.0077,
+        -0.5701,
+        0.8215
+      ],
+      "fma": [
+        "FMA9710"
+      ],
+      "fmaNames": [
+        "vomer"
+      ],
+      "pieces": 1
+    }
+  ],
+  "licence": "CC BY 4.0",
+  "credit": "BodyParts3D, \u00a9 The Database Center for Life Science licensed under CC Attribution 4.0 International",
+  "licenceNote": "The database licence page (updated 2025-02-27) states CC BY 4.0; the OBJ file headers still carry the earlier CC BY-SA 2.1 JP notice. We follow the current licence page.",
+  "provenance": {
+    "built": "2026-11-13",
+    "source": "BodyParts3D 4.0, PART-OF tree, 99% polygon reduction (dbarchive.biosciencedbc.jp)",
+    "recipe": "apps/worker3d/library/recipes/skull.json",
+    "rawTriangles": 127094,
+    "notes": [
+      "Bones only: the eye structures and the hyoid bone in BodyParts3D's skull tree are left out. BodyParts3D 4.0 has no teeth meshes."
+    ]
+  }
+}

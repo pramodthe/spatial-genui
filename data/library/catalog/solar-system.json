@@ -1,0 +1,436 @@
+{
+  "id": "solar-system",
+  "title": "The Solar System: the Sun, eight planets and their orbits",
+  "tier": "B",
+  "kind": "astronomy",
+  "concept": {
+    "id": "Q544",
+    "name": "Solar System"
+  },
+  "detail": "orbits-compressed",
+  "keywords": [
+    "solar system",
+    "planets",
+    "sun",
+    "orbits",
+    "order of the planets",
+    "inner planets",
+    "outer planets"
+  ],
+  "glb": "assets/solar-system.glb",
+  "sizeM": [
+    0.6099,
+    0.07,
+    0.6024
+  ],
+  "triangles": 36032,
+  "parts": [
+    {
+      "node": "sun",
+      "name": "Sun",
+      "group": "star",
+      "color": "#ffa31a",
+      "triangles": 4416,
+      "centroid": [
+        -0.0037,
+        0.035,
+        -0.0
+      ],
+      "labelAnchor": [
+        -0.0387,
+        0.035,
+        -0.0012
+      ],
+      "explodeDir": [
+        -1.0,
+        -0.0,
+        -0.0
+      ]
+    },
+    {
+      "node": "mercury",
+      "name": "Mercury",
+      "group": "planets",
+      "color": "#8a8784",
+      "triangles": 1792,
+      "centroid": [
+        0.0241,
+        0.035,
+        0.0195
+      ],
+      "labelAnchor": [
+        0.0264,
+        0.035,
+        0.0213
+      ],
+      "explodeDir": [
+        0.7775,
+        0.0,
+        0.6289
+      ]
+    },
+    {
+      "node": "orbit_of_mercury",
+      "name": "orbit of Mercury",
+      "group": "orbits",
+      "color": "#aab4c2",
+      "triangles": 1920,
+      "centroid": [
+        -0.0037,
+        0.035,
+        -0.0
+      ],
+      "labelAnchor": [
+        -0.0389,
+        0.035,
+        0.0
+      ],
+      "explodeDir": [
+        -1.0,
+        0.0,
+        -0.0
+      ]
+    },
+    {
+      "node": "venus",
+      "name": "Venus",
+      "group": "planets",
+      "color": "#d6a957",
+      "triangles": 1920,
+      "centroid": [
+        0.0027,
+        0.035,
+        0.046
+      ],
+      "labelAnchor": [
+        0.0031,
+        0.0349,
+        0.0506
+      ],
+      "explodeDir": [
+        0.0592,
+        -0.0,
+        0.9982
+      ]
+    },
+    {
+      "node": "orbit_of_venus",
+      "name": "orbit of Venus",
+      "group": "orbits",
+      "color": "#aab4c2",
+      "triangles": 1920,
+      "centroid": [
+        -0.0037,
+        0.035,
+        0.0
+      ],
+      "labelAnchor": [
+        -0.0514,
+        0.035,
+        0.0
+      ],
+      "explodeDir": [
+        -1.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "node": "earth",
+      "name": "Earth",
+      "group": "planets",
+      "color": "#2667d4",
+      "triangles": 1920,
+      "centroid": [
+        -0.0381,
+        0.035,
+        0.0424
+      ],
+      "labelAnchor": [
+        -0.0413,
+        0.0349,
+        0.046
+      ],
+      "explodeDir": [
+        -0.6681,
+        0.0,
+        0.7441
+      ]
+    },
+    {
+      "node": "orbit_of_earth",
+      "name": "orbit of Earth",
+      "group": "orbits",
+      "color": "#aab4c2",
+      "triangles": 1920,
+      "centroid": [
+        -0.0037,
+        0.035,
+        0.0
+      ],
+      "labelAnchor": [
+        -0.0595,
+        0.035,
+        0.0
+      ],
+      "explodeDir": [
+        -1.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "node": "mars",
+      "name": "Mars",
+      "group": "planets",
+      "color": "#b23f1c",
+      "triangles": 1920,
+      "centroid": [
+        -0.071,
+        0.035,
+        0.0047
+      ],
+      "labelAnchor": [
+        -0.0745,
+        0.0349,
+        0.0049
+      ],
+      "explodeDir": [
+        -0.9978,
+        -0.0,
+        0.0661
+      ]
+    },
+    {
+      "node": "orbit_of_mars",
+      "name": "orbit of Mars",
+      "group": "orbits",
+      "color": "#aab4c2",
+      "triangles": 1920,
+      "centroid": [
+        -0.0037,
+        0.035,
+        0.0
+      ],
+      "labelAnchor": [
+        -0.0724,
+        0.035,
+        0.0
+      ],
+      "explodeDir": [
+        -1.0,
+        -0.0,
+        0.0
+      ]
+    },
+    {
+      "node": "jupiter",
+      "name": "Jupiter",
+      "group": "planets",
+      "color": "#b07a4a",
+      "triangles": 1920,
+      "centroid": [
+        -0.0948,
+        0.035,
+        -0.085
+      ],
+      "labelAnchor": [
+        -0.1064,
+        0.0356,
+        -0.096
+      ],
+      "explodeDir": [
+        -0.7449,
+        -0.0,
+        -0.6672
+      ]
+    },
+    {
+      "node": "orbit_of_jupiter",
+      "name": "orbit of Jupiter",
+      "group": "orbits",
+      "color": "#aab4c2",
+      "triangles": 1920,
+      "centroid": [
+        -0.0037,
+        0.035,
+        -0.0
+      ],
+      "labelAnchor": [
+        -0.1295,
+        0.035,
+        0.0
+      ],
+      "explodeDir": [
+        -1.0,
+        -0.0,
+        -0.0
+      ]
+    },
+    {
+      "node": "saturn",
+      "name": "Saturn",
+      "group": "planets",
+      "color": "#cfaa5e",
+      "triangles": 1920,
+      "centroid": [
+        -0.0037,
+        0.035,
+        -0.169
+      ],
+      "labelAnchor": [
+        -0.0037,
+        0.0344,
+        -0.1836
+      ],
+      "explodeDir": [
+        -0.0221,
+        0.0,
+        -0.9998
+      ]
+    },
+    {
+      "node": "saturn_s_rings",
+      "name": "Saturn's rings",
+      "group": "rings",
+      "color": "#d8c7a2",
+      "triangles": 1024,
+      "centroid": [
+        -0.0037,
+        0.035,
+        -0.169
+      ],
+      "labelAnchor": [
+        -0.0054,
+        0.0497,
+        -0.1988
+      ],
+      "explodeDir": [
+        -0.0221,
+        -0.0,
+        -0.9998
+      ]
+    },
+    {
+      "node": "orbit_of_saturn",
+      "name": "orbit of Saturn",
+      "group": "orbits",
+      "color": "#aab4c2",
+      "triangles": 1920,
+      "centroid": [
+        -0.0037,
+        0.035,
+        -0.0
+      ],
+      "labelAnchor": [
+        -0.1739,
+        0.035,
+        0.0
+      ],
+      "explodeDir": [
+        -1.0,
+        -0.0,
+        -0.0
+      ]
+    },
+    {
+      "node": "uranus",
+      "name": "Uranus",
+      "group": "planets",
+      "color": "#5fbccd",
+      "triangles": 1920,
+      "centroid": [
+        0.1711,
+        0.035,
+        -0.163
+      ],
+      "labelAnchor": [
+        0.1779,
+        0.0354,
+        -0.1698
+      ],
+      "explodeDir": [
+        0.724,
+        -0.0,
+        -0.6898
+      ]
+    },
+    {
+      "node": "orbit_of_uranus",
+      "name": "orbit of Uranus",
+      "group": "orbits",
+      "color": "#aab4c2",
+      "triangles": 1920,
+      "centroid": [
+        -0.0037,
+        0.035,
+        -0.0
+      ],
+      "labelAnchor": [
+        -0.244,
+        0.035,
+        0.0
+      ],
+      "explodeDir": [
+        -1.0,
+        -0.0,
+        -0.0
+      ]
+    },
+    {
+      "node": "neptune",
+      "name": "Neptune",
+      "group": "planets",
+      "color": "#2747b8",
+      "triangles": 1920,
+      "centroid": [
+        0.2955,
+        0.035,
+        0.0209
+      ],
+      "labelAnchor": [
+        0.3049,
+        0.0348,
+        0.0213
+      ],
+      "explodeDir": [
+        0.9975,
+        -0.0,
+        0.0706
+      ]
+    },
+    {
+      "node": "orbit_of_neptune",
+      "name": "orbit of Neptune",
+      "group": "orbits",
+      "color": "#aab4c2",
+      "triangles": 1920,
+      "centroid": [
+        -0.0037,
+        0.035,
+        -0.0
+      ],
+      "labelAnchor": [
+        -0.3049,
+        0.035,
+        0.0
+      ],
+      "explodeDir": [
+        -1.0,
+        -0.0,
+        -0.0
+      ]
+    }
+  ],
+  "licence": "public domain data",
+  "credit": "NASA Planetary Fact Sheets (NSSDCA)",
+  "provenance": {
+    "built": "2026-11-13",
+    "source": "NASA Planetary Fact Sheets (NSSDCA): planets, Sun, Saturn's rings, Saturnian satellites",
+    "notes": [
+      "Not to scale. Orbit radii follow the square root of the true distances (Neptune at 30 cm), and planet sizes follow the square root of the true diameters, so the order and the rough proportions are right but small planets stay visible.",
+      "The Sun is shown much smaller than it would be at any planet scale. Orbits are drawn as circles in one plane; real orbits are slightly elliptical and tilted.",
+      "Axial tilts are true, so Uranus and Saturn's rings are tipped as in reality."
+    ]
+  }
+}

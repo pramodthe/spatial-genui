@@ -1,0 +1,192 @@
+{
+  "id": "microscope-objaverse",
+  "title": "Compound Light Microscope (3D model by go38)",
+  "tier": "C",
+  "kind": "biology",
+  "concept": {
+    "id": "objaverse:2c1befd921b3487a97d58931d489ebaf",
+    "name": "Compound Light Microscope"
+  },
+  "detail": "retrieved",
+  "keywords": [
+    "compound light microscope",
+    "microscope",
+    "microscope parts",
+    "school biology lab microscope"
+  ],
+  "glb": "assets/microscope-objaverse.glb",
+  "sizeM": [
+    0.1834,
+    0.35,
+    0.1439
+  ],
+  "triangles": 46572,
+  "parts": [
+    {
+      "node": "eyepiece",
+      "name": "eyepiece",
+      "group": null,
+      "color": "#e6194b",
+      "triangles": 2168,
+      "centroid": [
+        0.0561,
+        0.3268,
+        0.0018
+      ],
+      "labelAnchor": [
+        0.061,
+        0.35,
+        0.0018
+      ],
+      "explodeDir": [
+        0.3466,
+        0.9379,
+        0.0111
+      ],
+      "groups": [
+        1
+      ]
+    },
+    {
+      "node": "stage",
+      "name": "stage",
+      "group": null,
+      "color": "#3cb44b",
+      "triangles": 11648,
+      "centroid": [
+        -0.0028,
+        0.1096,
+        0.0076
+      ],
+      "labelAnchor": [
+        -0.0353,
+        0.0963,
+        0.047
+      ],
+      "explodeDir": [
+        -0.0421,
+        -0.9924,
+        0.1159
+      ],
+      "groups": [
+        2
+      ]
+    },
+    {
+      "node": "base",
+      "name": "base",
+      "group": null,
+      "color": "#4363d8",
+      "triangles": 14008,
+      "centroid": [
+        0.0281,
+        0.0724,
+        -0.0122
+      ],
+      "labelAnchor": [
+        0.076,
+        0.0,
+        -0.0592
+      ],
+      "explodeDir": [
+        0.2622,
+        -0.9583,
+        -0.114
+      ],
+      "groups": [
+        3
+      ]
+    },
+    {
+      "node": "focus_knob",
+      "name": "focus knob",
+      "group": null,
+      "color": "#ffe119",
+      "triangles": 3264,
+      "centroid": [
+        0.0562,
+        0.0955,
+        0.053
+      ],
+      "labelAnchor": [
+        0.0663,
+        0.0814,
+        0.0692
+      ],
+      "explodeDir": [
+        0.5067,
+        -0.7173,
+        0.4783
+      ],
+      "groups": [
+        4
+      ]
+    },
+    {
+      "node": "body_tube",
+      "name": "body tube",
+      "group": null,
+      "color": "#f58231",
+      "triangles": 6465,
+      "centroid": [
+        -0.0304,
+        0.2257,
+        0.0018
+      ],
+      "labelAnchor": [
+        -0.0499,
+        0.2681,
+        0.0018
+      ],
+      "explodeDir": [
+        -0.5147,
+        0.8568,
+        0.0308
+      ],
+      "groups": [
+        5
+      ]
+    },
+    {
+      "node": "objective_lenses",
+      "name": "objective lenses",
+      "group": null,
+      "color": "#911eb4",
+      "triangles": 9019,
+      "centroid": [
+        -0.0559,
+        0.1625,
+        0.0043
+      ],
+      "labelAnchor": [
+        -0.0879,
+        0.1576,
+        0.03
+      ],
+      "explodeDir": [
+        -0.973,
+        -0.2181,
+        0.0751
+      ],
+      "groups": [
+        6
+      ]
+    }
+  ],
+  "licence": "CC BY 4.0",
+  "credit": "go38 (Sketchfab), \"\u986f\u5fae\u93e1 Microscope\", https://sketchfab.com/3d-models/2c1befd921b3487a97d58931d489ebaf",
+  "provenance": {
+    "built": "2026-11-13",
+    "source": "https://sketchfab.com/3d-models/2c1befd921b3487a97d58931d489ebaf",
+    "objaverseUid": "2c1befd921b3487a97d58931d489ebaf",
+    "retrievedFor": "A compound light microscope, the kind used in a school biology lab",
+    "dinoSimilarity": 0.8944,
+    "pickReason": "Candidate 1 shows all required parts\u2014inclined eyepiece, turret objective lenses, stage, focus knobs, curved arm and rectangular base\u2014with the most realistic school-microscope proportions, whereas candidate 2 has an abnormal open U-shaped base and distorted proportions.",
+    "authorUrl": "https://sketchfab.com/go38",
+    "scale": 0.116667,
+    "notes": [
+      "Made by go38 and shared on Sketchfab under CC BY 4.0; found through Objaverse 1.0 and chosen by Muse Ember from renders. Not checked by a subject expert.",
+      "Parts are regions cut by P3-SAM (Tencent Hunyuan3D-Part, non-commercial licence) and named by Muse Ember from a render of each region."
+    ]
+  }
+}

@@ -1,0 +1,243 @@
+{
+  "id": "planets-to-scale",
+  "title": "The eight planets at their true relative sizes",
+  "tier": "B",
+  "kind": "astronomy",
+  "concept": {
+    "id": "Q634",
+    "name": "planets of the Solar System"
+  },
+  "detail": "relative-sizes",
+  "keywords": [
+    "planets",
+    "planet sizes",
+    "compare planets",
+    "how big",
+    "relative size",
+    "mercury",
+    "venus",
+    "earth",
+    "mars",
+    "jupiter",
+    "saturn",
+    "uranus",
+    "neptune"
+  ],
+  "glb": "assets/planets-to-scale.glb",
+  "sizeM": [
+    0.6609,
+    0.1345,
+    0.2301
+  ],
+  "triangles": 24960,
+  "parts": [
+    {
+      "node": "mercury",
+      "name": "Mercury",
+      "group": "planets",
+      "color": "#8a8784",
+      "triangles": 1056,
+      "centroid": [
+        -0.3282,
+        0.0672,
+        -0.0
+      ],
+      "labelAnchor": [
+        -0.3304,
+        0.0672,
+        -0.0002
+      ],
+      "explodeDir": [
+        -1.0,
+        0.0,
+        -0.0
+      ]
+    },
+    {
+      "node": "venus",
+      "name": "Venus",
+      "group": "planets",
+      "color": "#d6a957",
+      "triangles": 1056,
+      "centroid": [
+        -0.3002,
+        0.0672,
+        0.0
+      ],
+      "labelAnchor": [
+        -0.3058,
+        0.0673,
+        0.0004
+      ],
+      "explodeDir": [
+        -1.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "node": "earth",
+      "name": "Earth",
+      "group": "planets",
+      "color": "#2667d4",
+      "triangles": 1056,
+      "centroid": [
+        -0.2685,
+        0.0672,
+        -0.0
+      ],
+      "labelAnchor": [
+        -0.2745,
+        0.0674,
+        -0.0004
+      ],
+      "explodeDir": [
+        -1.0,
+        0.0,
+        -0.0
+      ]
+    },
+    {
+      "node": "mars",
+      "name": "Mars",
+      "group": "planets",
+      "color": "#b23f1c",
+      "triangles": 1056,
+      "centroid": [
+        -0.2393,
+        0.0672,
+        -0.0
+      ],
+      "labelAnchor": [
+        -0.2425,
+        0.0673,
+        -0.0002
+      ],
+      "explodeDir": [
+        -1.0,
+        -0.0,
+        -0.0
+      ]
+    },
+    {
+      "node": "jupiter",
+      "name": "Jupiter",
+      "group": "planets",
+      "color": "#b07a4a",
+      "triangles": 4416,
+      "centroid": [
+        -0.1488,
+        0.0672,
+        -0.0
+      ],
+      "labelAnchor": [
+        -0.216,
+        0.0674,
+        -0.0022
+      ],
+      "explodeDir": [
+        -1.0,
+        0.0,
+        -0.0
+      ]
+    },
+    {
+      "node": "saturn",
+      "name": "Saturn",
+      "group": "planets",
+      "color": "#cfaa5e",
+      "triangles": 4416,
+      "centroid": [
+        0.0671,
+        0.0672,
+        -0.0
+      ],
+      "labelAnchor": [
+        0.1238,
+        0.0681,
+        -0.0017
+      ],
+      "explodeDir": [
+        1.0,
+        0.0,
+        -0.0
+      ]
+    },
+    {
+      "node": "saturn_s_rings",
+      "name": "Saturn's rings",
+      "group": "rings",
+      "color": "#d8c7a2",
+      "triangles": 3072,
+      "centroid": [
+        0.0671,
+        0.0672,
+        0.0
+      ],
+      "labelAnchor": [
+        0.1958,
+        0.0675,
+        0.0001
+      ],
+      "explodeDir": [
+        1.0,
+        -0.0,
+        0.0
+      ]
+    },
+    {
+      "node": "uranus",
+      "name": "Uranus",
+      "group": "planets",
+      "color": "#5fbccd",
+      "triangles": 4416,
+      "centroid": [
+        0.2398,
+        0.0672,
+        -0.0
+      ],
+      "labelAnchor": [
+        0.2638,
+        0.068,
+        0.0001
+      ],
+      "explodeDir": [
+        1.0,
+        -0.0,
+        -0.0
+      ]
+    },
+    {
+      "node": "neptune",
+      "name": "Neptune",
+      "group": "planets",
+      "color": "#2747b8",
+      "triangles": 4416,
+      "centroid": [
+        0.3072,
+        0.0672,
+        0.0
+      ],
+      "labelAnchor": [
+        0.3304,
+        0.0676,
+        -0.0007
+      ],
+      "explodeDir": [
+        1.0,
+        -0.0,
+        0.0
+      ]
+    }
+  ],
+  "licence": "public domain data",
+  "credit": "NASA Planetary Fact Sheets (NSSDCA)",
+  "provenance": {
+    "built": "2026-11-13",
+    "source": "NASA Planetary Fact Sheets (NSSDCA): planets, Sun, Saturn's rings, Saturnian satellites",
+    "notes": [
+      "Planet diameters are to scale with each other (Earth's 12,756 km shown as 1.2 cm); axial tilts are true (Uranus lies on its side at 97.8 degrees, Venus is upside down at 177.4 degrees).",
+      "Distances are not to scale: the planets sit in a row in order from the Sun. The Sun is left out; at this scale it would be 1.31 m across."
+    ]
+  }
+}

@@ -15,5 +15,7 @@ bench/results/*.log
 bench/results/*/jobs/
 bench/results/*/refs/
 
-# 3D v2 experiment: downloaded datasets and generated assets (never in git)
-/data/
+# Downloaded datasets, work files, saved courses and the database (never in git)
+/data/*
+# ...except the app's 3D models, so a fresh clone or a hosted copy has them without generating them again
+!/data/library/

@@ -1,0 +1,277 @@
+{
+  "id": "molecule-ethanol",
+  "title": "Ethanol molecule (C2H6O), ball-and-stick",
+  "tier": "B",
+  "kind": "chemistry",
+  "concept": {
+    "id": "pubchem:702",
+    "name": "Ethanol"
+  },
+  "detail": "ball-and-stick",
+  "keywords": [
+    "c2h6o",
+    "ethanol"
+  ],
+  "glb": "assets/molecule-ethanol.glb",
+  "sizeM": [
+    0.2097,
+    0.1719,
+    0.1423
+  ],
+  "triangles": 6144,
+  "parts": [
+    {
+      "node": "oxygen_1",
+      "name": "oxygen 1",
+      "group": "oxygen",
+      "color": "#ff0d0d",
+      "triangles": 1280,
+      "centroid": [
+        -0.084,
+        0.057,
+        0.0264
+      ],
+      "labelAnchor": [
+        -0.1031,
+        0.0515,
+        0.0326
+      ],
+      "explodeDir": [
+        -0.9064,
+        -0.3124,
+        0.2844
+      ],
+      "element": "O",
+      "atomIndex": 1
+    },
+    {
+      "node": "carbon_1",
+      "name": "carbon 1",
+      "group": "carbon",
+      "color": "#404040",
+      "triangles": 1280,
+      "centroid": [
+        -0.0293,
+        0.1086,
+        -0.0003
+      ],
+      "labelAnchor": [
+        -0.0468,
+        0.1226,
+        -0.0021
+      ],
+      "explodeDir": [
+        -0.7907,
+        0.6122,
+        -0.0087
+      ],
+      "element": "C",
+      "atomIndex": 2
+    },
+    {
+      "node": "carbon_2",
+      "name": "carbon 2",
+      "group": "carbon",
+      "color": "#404040",
+      "triangles": 1280,
+      "centroid": [
+        0.0471,
+        0.0709,
+        0.0004
+      ],
+      "labelAnchor": [
+        0.0687,
+        0.0649,
+        0.0004
+      ],
+      "explodeDir": [
+        0.9522,
+        -0.3053,
+        0.0071
+      ],
+      "element": "C",
+      "atomIndex": 3
+    },
+    {
+      "node": "hydrogen_1",
+      "name": "hydrogen 1",
+      "group": "hydrogen",
+      "color": "#e6e6e6",
+      "triangles": 320,
+      "centroid": [
+        -0.0448,
+        0.1266,
+        -0.0571
+      ],
+      "labelAnchor": [
+        -0.0508,
+        0.1348,
+        -0.0668
+      ],
+      "explodeDir": [
+        -0.5385,
+        0.4884,
+        -0.6867
+      ],
+      "element": "H",
+      "atomIndex": 4
+    },
+    {
+      "node": "hydrogen_2",
+      "name": "hydrogen 2",
+      "group": "hydrogen",
+      "color": "#e6e6e6",
+      "triangles": 320,
+      "centroid": [
+        -0.0295,
+        0.1578,
+        0.0366
+      ],
+      "labelAnchor": [
+        -0.0338,
+        0.1692,
+        0.0436
+      ],
+      "explodeDir": [
+        -0.3432,
+        0.8372,
+        0.4258
+      ],
+      "element": "H",
+      "atomIndex": 5
+    },
+    {
+      "node": "hydrogen_3",
+      "name": "hydrogen 3",
+      "group": "hydrogen",
+      "color": "#e6e6e6",
+      "triangles": 320,
+      "centroid": [
+        0.0908,
+        0.1095,
+        -0.019
+      ],
+      "labelAnchor": [
+        0.1042,
+        0.1132,
+        -0.0213
+      ],
+      "explodeDir": [
+        0.9485,
+        0.2465,
+        -0.1987
+      ],
+      "element": "H",
+      "atomIndex": 6
+    },
+    {
+      "node": "hydrogen_4",
+      "name": "hydrogen 4",
+      "group": "hydrogen",
+      "color": "#e6e6e6",
+      "triangles": 320,
+      "centroid": [
+        0.0613,
+        0.0516,
+        0.0571
+      ],
+      "labelAnchor": [
+        0.071,
+        0.0456,
+        0.0654
+      ],
+      "explodeDir": [
+        0.6769,
+        -0.3794,
+        0.6307
+      ],
+      "element": "H",
+      "atomIndex": 7
+    },
+    {
+      "node": "hydrogen_5",
+      "name": "hydrogen 5",
+      "group": "hydrogen",
+      "color": "#e6e6e6",
+      "triangles": 320,
+      "centroid": [
+        0.0471,
+        0.0211,
+        -0.036
+      ],
+      "labelAnchor": [
+        0.0554,
+        0.0115,
+        -0.042
+      ],
+      "explodeDir": [
+        0.5366,
+        -0.7378,
+        -0.4095
+      ],
+      "element": "H",
+      "atomIndex": 8
+    },
+    {
+      "node": "hydrogen_6",
+      "name": "hydrogen 6",
+      "group": "hydrogen",
+      "color": "#e6e6e6",
+      "triangles": 320,
+      "centroid": [
+        -0.0842,
+        0.0141,
+        -0.0075
+      ],
+      "labelAnchor": [
+        -0.094,
+        0.0042,
+        -0.0098
+      ],
+      "explodeDir": [
+        -0.7589,
+        -0.6477,
+        -0.0679
+      ],
+      "element": "H",
+      "atomIndex": 9
+    },
+    {
+      "node": "bonds",
+      "name": "bonds",
+      "group": "bonds",
+      "color": "#c9ced6",
+      "triangles": 384,
+      "centroid": [
+        -0.0035,
+        0.082,
+        0.0017
+      ],
+      "labelAnchor": [
+        -0.0874,
+        0.0116,
+        -0.0044
+      ],
+      "explodeDir": [
+        -0.636,
+        -0.709,
+        0.3047
+      ]
+    }
+  ],
+  "licence": "public domain data",
+  "credit": "PubChem (NCBI/NLM), CID 702",
+  "provenance": {
+    "built": "2026-11-13",
+    "source": "https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/cid/702/record/SDF?record_type=3d",
+    "formula": "C2H6O",
+    "iupacName": "ethanol",
+    "atoms": 9,
+    "bonds": 8,
+    "scaleMPerAngstrom": 0.0562,
+    "notes": [
+      "Atom positions are PubChem's computed 3D conformer: one low-energy shape; real molecules flex and rotate about single bonds.",
+      "Ball sizes are a fraction of each element's radius so bonds stay visible (ball-and-stick, not space-filling)."
+    ]
+  }
+}

@@ -1,0 +1,170 @@
+{
+  "id": "office-chair-objaverse",
+  "title": "Office Chair (3D model by j.a.m)",
+  "tier": "C",
+  "kind": "everyday",
+  "concept": {
+    "id": "objaverse:41973aa1808d4a13b84c24497fc77c63",
+    "name": "Office Chair"
+  },
+  "detail": "retrieved",
+  "keywords": [
+    "desk chair",
+    "office chair",
+    "swivel chair"
+  ],
+  "glb": "assets/office-chair-objaverse.glb",
+  "sizeM": [
+    0.6092,
+    0.95,
+    0.5946
+  ],
+  "triangles": 93152,
+  "parts": [
+    {
+      "node": "seat",
+      "name": "seat",
+      "group": null,
+      "color": "#e6194b",
+      "triangles": 11950,
+      "centroid": [
+        0.0298,
+        0.3844,
+        0.0823
+      ],
+      "labelAnchor": [
+        -0.011,
+        0.3371,
+        0.2628
+      ],
+      "explodeDir": [
+        0.2363,
+        -0.7195,
+        0.6531
+      ],
+      "groups": [
+        1,
+        5
+      ]
+    },
+    {
+      "node": "backrest",
+      "name": "backrest",
+      "group": null,
+      "color": "#3cb44b",
+      "triangles": 15452,
+      "centroid": [
+        -0.1897,
+        0.664,
+        -0.0043
+      ],
+      "labelAnchor": [
+        -0.2863,
+        0.9459,
+        -0.0045
+      ],
+      "explodeDir": [
+        -0.7083,
+        0.7058,
+        -0.0161
+      ],
+      "groups": [
+        2,
+        3
+      ]
+    },
+    {
+      "node": "star_base",
+      "name": "star base",
+      "group": null,
+      "color": "#ffe119",
+      "triangles": 42510,
+      "centroid": [
+        0.0087,
+        0.052,
+        -0.0076
+      ],
+      "labelAnchor": [
+        0.2427,
+        0.0,
+        -0.1879
+      ],
+      "explodeDir": [
+        0.0206,
+        -0.9996,
+        -0.0179
+      ],
+      "groups": [
+        4
+      ]
+    },
+    {
+      "node": "armrest",
+      "name": "armrest",
+      "group": null,
+      "color": "#911eb4",
+      "triangles": 6616,
+      "centroid": [
+        0.0665,
+        0.5606,
+        -0.0019
+      ],
+      "labelAnchor": [
+        0.149,
+        0.6428,
+        -0.2685
+      ],
+      "explodeDir": [
+        0.6137,
+        0.7893,
+        -0.0179
+      ],
+      "groups": [
+        6,
+        7
+      ]
+    },
+    {
+      "node": "gas_lift",
+      "name": "gas lift",
+      "group": null,
+      "color": "#f032e6",
+      "triangles": 16624,
+      "centroid": [
+        0.0406,
+        0.3079,
+        -0.0027
+      ],
+      "labelAnchor": [
+        0.0432,
+        0.1325,
+        -0.0022
+      ],
+      "explodeDir": [
+        0.236,
+        -0.9716,
+        -0.0159
+      ],
+      "groups": [
+        8,
+        9
+      ]
+    }
+  ],
+  "licence": "CC BY 4.0",
+  "credit": "j.a.m (Sketchfab), \"Office Chair\", https://sketchfab.com/3d-models/41973aa1808d4a13b84c24497fc77c63",
+  "provenance": {
+    "built": "2026-11-13",
+    "source": "https://sketchfab.com/3d-models/41973aa1808d4a13b84c24497fc77c63",
+    "objaverseUid": "41973aa1808d4a13b84c24497fc77c63",
+    "retrievedFor": "An office chair on wheels",
+    "dinoSimilarity": 0.7697,
+    "pickReason": "Candidate 3 is a complete realistic office chair with visible seat, mesh backrest, armrests, gas lift, five-star base and casters matching all requested parts.",
+    "authorUrl": "https://sketchfab.com/j.a.m",
+    "scale": 0.009337,
+    "notes": [
+      "Made by j.a.m and shared on Sketchfab under CC BY 4.0; found through Objaverse 1.0 and chosen by Muse Ember from renders. Not checked by a subject expert.",
+      "Parts are the model's physically separate pieces, grouped by size and named by Muse Ember from a render of each group; pieces the author modelled as one (e.g. a guitar's body and neck) stay one part."
+    ]
+  }
+}

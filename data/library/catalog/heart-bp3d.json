@@ -1,0 +1,856 @@
+{
+  "id": "heart-bp3d",
+  "title": "Human heart (chambers, valves and great vessels)",
+  "tier": "A",
+  "kind": "anatomy",
+  "concept": {
+    "id": "FMA7088",
+    "name": "heart"
+  },
+  "detail": "chambers-valves-great-vessels",
+  "keywords": [
+    "heart",
+    "cardiac",
+    "circulation",
+    "blood flow",
+    "cardiovascular",
+    "valves",
+    "ventricle",
+    "atrium",
+    "aorta"
+  ],
+  "glb": "assets/heart-bp3d.glb",
+  "sizeM": [
+    0.1408,
+    0.1845,
+    0.1271
+  ],
+  "triangles": 59992,
+  "parts": [
+    {
+      "node": "tricuspid_valve",
+      "name": "tricuspid valve",
+      "group": "valves",
+      "color": "#f3e6c4",
+      "triangles": 4366,
+      "centroid": [
+        -0.0091,
+        0.0514,
+        0.0217
+      ],
+      "labelAnchor": [
+        -0.0002,
+        0.0263,
+        0.0312
+      ],
+      "explodeDir": [
+        -0.194,
+        -0.8667,
+        0.4596
+      ],
+      "fma": [
+        "FMA7238",
+        "FMA7239",
+        "FMA7240"
+      ],
+      "fmaNames": [
+        "anterior leaflet of tricuspid valve",
+        "posterior leaflet of tricuspid valve",
+        "septal leaflet of tricuspid valve"
+      ],
+      "pieces": 3
+    },
+    {
+      "node": "mitral_valve",
+      "name": "mitral valve",
+      "group": "valves",
+      "color": "#f3e6c4",
+      "triangles": 4366,
+      "centroid": [
+        0.0217,
+        0.0531,
+        -0.0035
+      ],
+      "labelAnchor": [
+        0.0493,
+        0.0376,
+        0.0095
+      ],
+      "explodeDir": [
+        0.482,
+        -0.8726,
+        -0.0786
+      ],
+      "fma": [
+        "FMA7242",
+        "FMA7243"
+      ],
+      "fmaNames": [
+        "anterior leaflet of mitral valve",
+        "posterior leaflet of mitral valve"
+      ],
+      "pieces": 2
+    },
+    {
+      "node": "aortic_valve",
+      "name": "aortic valve",
+      "group": "valves",
+      "color": "#f3e6c4",
+      "triangles": 2150,
+      "centroid": [
+        0.0099,
+        0.0822,
+        0.0069
+      ],
+      "labelAnchor": [
+        0.0126,
+        0.0763,
+        0.0156
+      ],
+      "explodeDir": [
+        0.6287,
+        -0.6411,
+        0.4402
+      ],
+      "fma": [
+        "FMA7252",
+        "FMA7253",
+        "FMA7254"
+      ],
+      "fmaNames": [
+        "right posterior cusp of aortic valve",
+        "anterior cusp of aortic valve",
+        "left posterior cusp of aortic valve"
+      ],
+      "pieces": 3
+    },
+    {
+      "node": "pulmonary_valve",
+      "name": "pulmonary valve",
+      "group": "valves",
+      "color": "#f3e6c4",
+      "triangles": 3638,
+      "centroid": [
+        0.015,
+        0.0914,
+        0.0304
+      ],
+      "labelAnchor": [
+        0.022,
+        0.0914,
+        0.0456
+      ],
+      "explodeDir": [
+        0.4436,
+        -0.0256,
+        0.8959
+      ],
+      "fma": [
+        "FMA7247",
+        "FMA7249",
+        "FMA7250"
+      ],
+      "fmaNames": [
+        "left anterior cusp of pulmonary valve",
+        "right anterior cusp of pulmonary valve",
+        "posterior cusp of pulmonary valve"
+      ],
+      "pieces": 3
+    },
+    {
+      "node": "papillary_muscles_of_right_ventricle",
+      "name": "papillary muscles of right ventricle",
+      "group": "muscles",
+      "color": "#8c2f2a",
+      "triangles": 2418,
+      "centroid": [
+        0.0118,
+        0.0412,
+        0.0339
+      ],
+      "labelAnchor": [
+        0.0278,
+        0.0209,
+        0.0472
+      ],
+      "explodeDir": [
+        0.1888,
+        -0.8178,
+        0.5436
+      ],
+      "fma": [
+        "FMA7260",
+        "FMA7261",
+        "FMA7262"
+      ],
+      "fmaNames": [
+        "anterior papillary muscle of right ventricle",
+        "posterior papillary muscle of right ventricle",
+        "septal papillary muscle of right ventricle"
+      ],
+      "pieces": 3
+    },
+    {
+      "node": "papillary_muscles_of_left_ventricle",
+      "name": "papillary muscles of left ventricle",
+      "group": "muscles",
+      "color": "#8c2f2a",
+      "triangles": 1596,
+      "centroid": [
+        0.0414,
+        0.0422,
+        0.021
+      ],
+      "labelAnchor": [
+        0.0609,
+        0.0311,
+        0.0282
+      ],
+      "explodeDir": [
+        0.6062,
+        -0.7335,
+        0.3073
+      ],
+      "fma": [
+        "FMA7264",
+        "FMA7265"
+      ],
+      "fmaNames": [
+        "lateral papillary muscle of left ventricle",
+        "anterolateral head of lateral papillary muscle of left ventricle"
+      ],
+      "pieces": 2
+    },
+    {
+      "node": "right_atrium",
+      "name": "right atrium",
+      "group": "chambers",
+      "color": "#2f5bd3",
+      "triangles": 4367,
+      "centroid": [
+        -0.0259,
+        0.0688,
+        0.0115
+      ],
+      "labelAnchor": [
+        -0.0378,
+        0.0217,
+        0.0068
+      ],
+      "explodeDir": [
+        -0.7035,
+        -0.6385,
+        0.3121
+      ],
+      "fma": [
+        "FMA9457"
+      ],
+      "fmaNames": [
+        "wall of right atrium"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "left_atrium",
+      "name": "left atrium",
+      "group": "chambers",
+      "color": "#d1323b",
+      "triangles": 4366,
+      "centroid": [
+        0.0133,
+        0.0776,
+        -0.0148
+      ],
+      "labelAnchor": [
+        0.033,
+        0.0596,
+        -0.0408
+      ],
+      "explodeDir": [
+        0.5381,
+        -0.5938,
+        -0.5982
+      ],
+      "fma": [
+        "FMA9531"
+      ],
+      "fmaNames": [
+        "wall of left atrium"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "right_ventricle",
+      "name": "right ventricle",
+      "group": "chambers",
+      "color": "#1f43b8",
+      "triangles": 4366,
+      "centroid": [
+        0.0066,
+        0.0576,
+        0.0367
+      ],
+      "labelAnchor": [
+        0.0382,
+        0.0219,
+        0.0492
+      ],
+      "explodeDir": [
+        0.1305,
+        -0.6806,
+        0.7209
+      ],
+      "fma": [
+        "FMA9291"
+      ],
+      "fmaNames": [
+        "cavity of right ventricle"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "left_ventricle",
+      "name": "left ventricle",
+      "group": "chambers",
+      "color": "#b81d29",
+      "triangles": 4367,
+      "centroid": [
+        0.0369,
+        0.0552,
+        0.0042
+      ],
+      "labelAnchor": [
+        0.0582,
+        0.0203,
+        0.0338
+      ],
+      "explodeDir": [
+        0.703,
+        -0.7065,
+        0.0809
+      ],
+      "fma": [
+        "FMA9466"
+      ],
+      "fmaNames": [
+        "cavity of left ventricle"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "right_coronary_artery",
+      "name": "right coronary artery",
+      "group": "coronary vessels",
+      "color": "#ff3b1f",
+      "triangles": 4366,
+      "centroid": [
+        0.013,
+        0.0406,
+        0.0267
+      ],
+      "labelAnchor": [
+        0.0521,
+        0.0166,
+        0.0395
+      ],
+      "explodeDir": [
+        0.2186,
+        -0.8668,
+        0.4481
+      ],
+      "fma": [
+        "FMA50039"
+      ],
+      "fmaNames": [
+        "right coronary artery"
+      ],
+      "pieces": 29
+    },
+    {
+      "node": "left_coronary_artery",
+      "name": "left coronary artery",
+      "group": "coronary vessels",
+      "color": "#ff3b1f",
+      "triangles": 4366,
+      "centroid": [
+        0.0469,
+        0.0525,
+        0.0273
+      ],
+      "labelAnchor": [
+        0.0566,
+        0.0206,
+        0.0424
+      ],
+      "explodeDir": [
+        0.6972,
+        -0.5907,
+        0.4061
+      ],
+      "fma": [
+        "FMA50040"
+      ],
+      "fmaNames": [
+        "left coronary artery"
+      ],
+      "pieces": 25
+    },
+    {
+      "node": "cardiac_veins",
+      "name": "cardiac veins",
+      "group": "coronary vessels",
+      "color": "#15287a",
+      "triangles": 4366,
+      "centroid": [
+        -0.0011,
+        0.0456,
+        0.0199
+      ],
+      "labelAnchor": [
+        0.031,
+        0.0163,
+        0.0426
+      ],
+      "explodeDir": [
+        -0.0224,
+        -0.9197,
+        0.3921
+      ],
+      "fma": [
+        "FMA4717",
+        "FMA4706",
+        "FMA4707",
+        "FMA4714",
+        "FMA4716"
+      ],
+      "fmaNames": [
+        "anterior cardiac venous tree",
+        "coronary sinus",
+        "great cardiac vein",
+        "small cardiac vein",
+        "right marginal vein"
+      ],
+      "pieces": 7
+    },
+    {
+      "node": "ascending_aorta",
+      "name": "ascending aorta",
+      "group": "great vessels",
+      "color": "#c4121f",
+      "triangles": 396,
+      "centroid": [
+        -0.0001,
+        0.0957,
+        0.0086
+      ],
+      "labelAnchor": [
+        -0.0041,
+        0.1188,
+        0.0237
+      ],
+      "explodeDir": [
+        -0.0131,
+        0.3755,
+        0.9267
+      ],
+      "fma": [
+        "FMA3736"
+      ],
+      "fmaNames": [
+        "ascending aorta"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "arch_of_aorta",
+      "name": "arch of aorta",
+      "group": "great vessels",
+      "color": "#c4121f",
+      "triangles": 670,
+      "centroid": [
+        0.0039,
+        0.1336,
+        -0.0163
+      ],
+      "labelAnchor": [
+        0.0109,
+        0.1505,
+        -0.0362
+      ],
+      "explodeDir": [
+        0.0863,
+        0.9266,
+        -0.3661
+      ],
+      "fma": [
+        "FMA3768"
+      ],
+      "fmaNames": [
+        "arch of aorta"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "brachiocephalic_trunk",
+      "name": "brachiocephalic trunk",
+      "group": "great vessels",
+      "color": "#c4121f",
+      "triangles": 262,
+      "centroid": [
+        -0.0182,
+        0.168,
+        -0.0024
+      ],
+      "labelAnchor": [
+        -0.0243,
+        0.1799,
+        -0.0016
+      ],
+      "explodeDir": [
+        -0.2331,
+        0.972,
+        -0.0309
+      ],
+      "fma": [
+        "FMA3932"
+      ],
+      "fmaNames": [
+        "brachiocephalic artery"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "left_common_carotid_artery",
+      "name": "left common carotid artery",
+      "group": "great vessels",
+      "color": "#c4121f",
+      "triangles": 79,
+      "centroid": [
+        0.0044,
+        0.1595,
+        -0.0123
+      ],
+      "labelAnchor": [
+        0.0005,
+        0.183,
+        -0.0082
+      ],
+      "explodeDir": [
+        0.0646,
+        0.9816,
+        -0.1798
+      ],
+      "fma": [
+        "FMA4058"
+      ],
+      "fmaNames": [
+        "left common carotid artery"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "left_subclavian_artery",
+      "name": "left subclavian artery",
+      "group": "great vessels",
+      "color": "#c4121f",
+      "triangles": 222,
+      "centroid": [
+        0.0113,
+        0.1661,
+        -0.0203
+      ],
+      "labelAnchor": [
+        0.0194,
+        0.1845,
+        -0.019
+      ],
+      "explodeDir": [
+        0.1464,
+        0.9537,
+        -0.2626
+      ],
+      "fma": [
+        "FMA4694"
+      ],
+      "fmaNames": [
+        "left subclavian artery"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "pulmonary_trunk",
+      "name": "pulmonary trunk",
+      "group": "great vessels",
+      "color": "#2547c4",
+      "triangles": 1302,
+      "centroid": [
+        0.0158,
+        0.1114,
+        0.0223
+      ],
+      "labelAnchor": [
+        0.0226,
+        0.1119,
+        0.0366
+      ],
+      "explodeDir": [
+        0.4745,
+        0.5739,
+        0.6675
+      ],
+      "fma": [
+        "FMA8612"
+      ],
+      "fmaNames": [
+        "pulmonary trunk"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "right_pulmonary_artery",
+      "name": "right pulmonary artery",
+      "group": "great vessels",
+      "color": "#2547c4",
+      "triangles": 678,
+      "centroid": [
+        -0.0229,
+        0.1029,
+        -0.0176
+      ],
+      "labelAnchor": [
+        -0.0692,
+        0.069,
+        -0.0484
+      ],
+      "explodeDir": [
+        -0.7445,
+        0.3446,
+        -0.5717
+      ],
+      "fma": [
+        "FMA50872"
+      ],
+      "fmaNames": [
+        "right pulmonary artery"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "left_pulmonary_artery",
+      "name": "left pulmonary artery",
+      "group": "great vessels",
+      "color": "#2547c4",
+      "triangles": 4366,
+      "centroid": [
+        0.0332,
+        0.106,
+        -0.0209
+      ],
+      "labelAnchor": [
+        0.0651,
+        0.0728,
+        -0.0508
+      ],
+      "explodeDir": [
+        0.7989,
+        0.3294,
+        -0.5033
+      ],
+      "fma": [
+        "FMA50873"
+      ],
+      "fmaNames": [
+        "left pulmonary artery"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "superior_vena_cava",
+      "name": "superior vena cava",
+      "group": "great vessels",
+      "color": "#1b3aa0",
+      "triangles": 598,
+      "centroid": [
+        -0.0266,
+        0.1288,
+        0.0018
+      ],
+      "labelAnchor": [
+        -0.0356,
+        0.1472,
+        0.0051
+      ],
+      "explodeDir": [
+        -0.5885,
+        0.8075,
+        0.0396
+      ],
+      "fma": [
+        "FMA4720"
+      ],
+      "fmaNames": [
+        "superior vena cava"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "inferior_vena_cava",
+      "name": "inferior vena cava",
+      "group": "great vessels",
+      "color": "#1b3aa0",
+      "triangles": 773,
+      "centroid": [
+        -0.0264,
+        0.0252,
+        0.0029
+      ],
+      "labelAnchor": [
+        -0.0278,
+        0.0,
+        0.0128
+      ],
+      "explodeDir": [
+        -0.3657,
+        -0.9299,
+        0.0403
+      ],
+      "fma": [
+        "FMA10951"
+      ],
+      "fmaNames": [
+        "inferior vena cava"
+      ],
+      "pieces": 2
+    },
+    {
+      "node": "right_superior_pulmonary_vein",
+      "name": "right superior pulmonary vein",
+      "group": "great vessels",
+      "color": "#e0353f",
+      "triangles": 324,
+      "centroid": [
+        -0.0369,
+        0.085,
+        -0.0168
+      ],
+      "labelAnchor": [
+        -0.0467,
+        0.0866,
+        -0.0165
+      ],
+      "explodeDir": [
+        -0.8957,
+        -0.1773,
+        -0.4079
+      ],
+      "fma": [
+        "FMA49914"
+      ],
+      "fmaNames": [
+        "right superior pulmonary vein"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "right_inferior_pulmonary_vein",
+      "name": "right inferior pulmonary vein",
+      "group": "great vessels",
+      "color": "#e0353f",
+      "triangles": 196,
+      "centroid": [
+        -0.0322,
+        0.0576,
+        -0.0312
+      ],
+      "labelAnchor": [
+        -0.0444,
+        0.051,
+        -0.036
+      ],
+      "explodeDir": [
+        -0.5691,
+        -0.6113,
+        -0.55
+      ],
+      "fma": [
+        "FMA49911"
+      ],
+      "fmaNames": [
+        "right inferior pulmonary vein"
+      ],
+      "pieces": 1
+    },
+    {
+      "node": "left_superior_pulmonary_vein",
+      "name": "left superior pulmonary vein",
+      "group": "great vessels",
+      "color": "#e0353f",
+      "triangles": 472,
+      "centroid": [
+        0.0429,
+        0.0803,
+        -0.0197
+      ],
+      "labelAnchor": [
+        0.0702,
+        0.0591,
+        -0.0059
+      ],
+      "explodeDir": [
+        0.8813,
+        -0.2456,
+        -0.4038
+      ],
+      "fma": [
+        "FMA49916"
+      ],
+      "fmaNames": [
+        "left superior pulmonary vein"
+      ],
+      "pieces": 2
+    },
+    {
+      "node": "left_inferior_pulmonary_vein",
+      "name": "left inferior pulmonary vein",
+      "group": "great vessels",
+      "color": "#e0353f",
+      "triangles": 556,
+      "centroid": [
+        0.0405,
+        0.0635,
+        -0.0335
+      ],
+      "labelAnchor": [
+        0.0606,
+        0.0529,
+        -0.026
+      ],
+      "explodeDir": [
+        0.6758,
+        -0.4805,
+        -0.559
+      ],
+      "fma": [
+        "FMA49913"
+      ],
+      "fmaNames": [
+        "left inferior pulmonary vein"
+      ],
+      "pieces": 3
+    }
+  ],
+  "licence": "CC BY 4.0",
+  "credit": "BodyParts3D, \u00a9 The Database Center for Life Science licensed under CC Attribution 4.0 International",
+  "licenceNote": "The database licence page (updated 2025-02-27) states CC BY 4.0; the OBJ file headers still carry the earlier CC BY-SA 2.1 JP notice. We follow the current licence page.",
+  "provenance": {
+    "built": "2026-11-13",
+    "source": "BodyParts3D 4.0, PART-OF tree, 99% polygon reduction (dbarchive.biosciencedbc.jp)",
+    "recipe": "apps/worker3d/library/recipes/heart.json",
+    "rawTriangles": 195208,
+    "notes": [
+      "BodyParts3D 4.0 has no ventricular wall (myocardium) mesh: the ventricles are casts of their cavities, the atria have walls.",
+      "Pulmonary arteries and veins keep only their main trunks near the heart (branches inside the lungs are left out); the inferior vena cava is clipped to the heart's neighbourhood.",
+      "Ventricular walls are RECONSTRUCTED, not scanned: BodyParts3D has only the ventricle cavities, so each cavity was grown by a typical wall thickness (left 8 mm, right 3 mm, within normal adult ranges and chosen so the coronary arteries lie on the surface) and the walls fused into a septum. The ventricles' outer shape is an approximation."
+    ]
+  }
+}

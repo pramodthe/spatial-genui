@@ -194,7 +194,9 @@ def finalize(glb: Path, work: Path) -> None:
             order.append(name)
     label = np.array([order.index(named.get(int(r), "other")) for r in region], dtype=np.int64)
     write_parts(work, [len(m.faces) for m in meshes], shape, label, order)
-    print(json.dumps({"ok": True, "parts": order, "faces": int(len(region))}))
+    area = shape.area_faces
+    shares = [round(float(area[label == i].sum() / area.sum()), 4) for i in range(len(order))]
+    print(json.dumps({"ok": True, "parts": order, "shares": shares, "faces": int(len(region))}))
 
 
 def assign(glb: Path, work: Path) -> None:

@@ -36,6 +36,8 @@ MAX_GROUPS = len(PALETTE)
 SEED_SHARE = 0.02  # a piece with at least this share of the surface starts its own group
 DESK_SIZE_M = 0.6  # things too big for a desk are shown at this size, with the scale stated
 MAX_REAL_SIZE_M = 2.5
+MIN_REAL_SIZE_M = 0.05  # smaller things (a cell, a molecule) are shown enlarged, with the magnification stated
+MAGNIFIED_SIZE_M = 0.3
 TURN_DEG = {"front": 0, "side": -90, "back": 180, "opposite side": 90}  # turn that brings this render view to +Z (side = seen from +X)
 
 
@@ -157,8 +159,12 @@ def ingest(glb: Path, work: Path, out: Path, refine: bool = False) -> dict:
     extent = float(np.max(np.ptp(kept, axis=0)))
     real = float(names.get("sizeM") or 0)
     scale_note = None
-    if 0 < real <= MAX_REAL_SIZE_M:
+    if MIN_REAL_SIZE_M <= real <= MAX_REAL_SIZE_M:
         scale = real / extent
+    elif 0 < real < MIN_REAL_SIZE_M:
+        scale = MAGNIFIED_SIZE_M / extent
+        scale_note = (f"Not real size: the real {names.get('title', 'object').lower()} is about {real * 1000:g} mm across; "
+                      f"it is shown {MAGNIFIED_SIZE_M * 100:.0f} cm across (about {MAGNIFIED_SIZE_M / real:,.0f} times larger).")
     else:
         scale = DESK_SIZE_M / extent
         if real > 0:

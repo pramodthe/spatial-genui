@@ -440,6 +440,28 @@ Rebuild the assets: download BodyParts3D into `data/bodyparts3d/` (see the build
   - A verification step (Ember checks each named region before it reaches a lesson).
   - Wire the segmented TRELLIS and retrieved models into the library through `retrieved.py ingest`.
 
+**M5 self-check, library and lessons (Nov 13).**
+- **Self-check** (`bench3d:verify-parts`): Muse Ember looks at each named part again, in solid red with the rest faint, and keeps it, renames it, or merges it into the main body. It is told to be strict, since a wrong label teaches something false.
+  - On the 18 models it mostly removes bad parts. Parts the Opus check scores 1–2 fell from 7 to 3 (retrieved) and from 15 to 10 (TRELLIS); average part quality rose (3.75 → 4.00, 3.50 → 3.63); good parts fell slightly (17 → 16, 34 → 30); overall usability is unchanged (2.83).
+  - Its verdicts vary between runs: one run merged the TRELLIS engine's wrong "piston", the next kept it.
+  - A bug found on the way: region names with underscores didn't match verdicts written with spaces.
+- **Library** (offline curation with the Opus part check; the automatic path has no Opus):
+  - The guitar, lunar lander and Parthenon moved to their P3-SAM versions (Opus 3 → 4, 2 → 3, 1 → 2). The office chair, bicycle and volcano kept their earlier versions (better or tied).
+  - New TRELLIS.2 assets (tier D), with credit and the P3-SAM licence note: flower (petal, stem, stamen, pistil, sepal) and plant cell (nucleus, cell wall, vacuole, mitochondrion, membrane, chloroplast, endoplasmic reticulum).
+  - Things too small for a desk are now enlarged with the magnification stated ("about 3,000 times larger").
+- **Lessons on the four Phase 3 topics** the library lacked (flower, plant cell, engine strokes, gear ratio; 2 runs each; Muse Ember; the router picked the TRELLIS model 8/8):
+
+  | | Fidelity | Correctness | Clarity | Hands-on | Panel buttons by hand | Median time | Cost / lesson |
+  |---|---|---|---|---|---|---|---|
+  | Built from shapes | 4.00 | 4.62 | 3.75 | 4.38 | 23/23 | 51 s | $0.014 |
+  | TRELLIS.2 + P3-SAM parts | 3.75 | 4.00 | 3.12 | 4.00 | 24/24 | 36 s | $0.010 |
+
+- **What this shows:**
+  - The generated models don't beat shapes here.
+  - **Mechanisms lose:** an engine-stroke or gear lesson needs moving parts. A generated mesh is static, while Ember's code-built pistons and gears turn; the TRELLIS engine was also a whole engine block, not one cylinder. The engine and gear-train assets are retired to `data/library-retired/`, so those topics go back to code (the routing rule of section 4.1: generators for real-world objects, code for concepts and mechanisms).
+  - **Biology ties on fidelity** but loses clarity because the real-size flower (10 cm) sits small and far away with tiny labels. Next: scale small models up further in lessons.
+  - Library lessons are still faster and cheaper.
+
 ## 10. Sources
 
 - SceneCraft: An LLM Agent for Synthesizing 3D Scene as Blender Code. https://arxiv.org/abs/2403.01248

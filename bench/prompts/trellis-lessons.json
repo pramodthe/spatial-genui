@@ -1,0 +1,6 @@
+[
+  { "id": "flower-parts", "tier": "T5", "domain": "biology", "prompt": "Teach me the parts of a flower and what each part does.", "expectAssets": ["flower-trellis"] },
+  { "id": "plant-cell", "tier": "T5", "domain": "biology", "prompt": "Teach me the parts of a plant cell, with a short quiz.", "expectAssets": ["plant-cell-trellis"] },
+  { "id": "engine-strokes", "tier": "T5", "domain": "mechanical", "prompt": "Show me how a car engine cylinder works, stroke by stroke.", "expectAssets": ["engine-cylinder-trellis"] },
+  { "id": "gear-ratio", "tier": "T5", "domain": "mechanical", "prompt": "Teach me how two gears change speed and turning force.", "expectAssets": ["gear-train-trellis"] }
+]

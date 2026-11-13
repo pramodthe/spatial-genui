@@ -27,7 +27,8 @@
     "bench3d:repair": "tsx src/three-d/repair.ts",
     "assets:acquire": "tsx src/three-d/acquire-cli.ts",
     "bench3d:check-refs": "tsx src/three-d/check-references.ts",
-    "bench3d:compare": "tsx src/three-d/compare-models.ts"
+    "bench3d:compare": "tsx src/three-d/compare-models.ts",
+    "bench:rq4": "tsx src/bench-rq4.ts"
   },
   "engines": {
     "node": ">=22.12.0"

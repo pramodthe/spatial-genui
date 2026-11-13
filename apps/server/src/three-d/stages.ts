@@ -69,12 +69,36 @@ State only structure that the request gives or that every such object has (gears
 
 const REFERENCE_STYLE = ' A single physical object shown whole, on a plain light grey background, soft even studio lighting, realistic colors, clear shapes. No text, no labels, no arrows, no other objects.';
 
-const REFERENCE_CHECK_SYSTEM = `You check a reference picture before a 3D model is built from it; a wrong picture gives a wrong model. You get what the object is and the facts the picture must show. Look closely and be strict about structure (what connects to what, what lies in one plane, what is inside what). Reply with only a JSON object:
-{"score": <1-5: 5 = every fact holds and the structure is unambiguous; 4 = right, one small flaw; 3 = recognisable but a fact is wrong or can't be told; 2 = several facts wrong; 1 = the wrong object>,
+const REFERENCE_CHECK_SYSTEM = `You check a reference picture before a 3D model is built from it; a wrong picture gives a wrong model. You get what the object is and the facts the picture must show. Look closely and be strict about structure (what connects to what, what lies in one plane, what is inside what).
+The 3D generator sees only this one picture and must guess every depth. So also ask: could the arrangement be read two ways? Parts that overlap in the picture, or flat parts seen at a slant, hide whether they lie in one plane, one behind the other, or at an angle to each other. If a fact about arrangement holds only on the likeliest reading, it does not hold: name it as a problem and say what view would settle it. Reply with only a JSON object:
+{"score": <1-5: 5 = every fact holds and no arrangement could be read two ways; 4 = right, one small flaw; 3 = recognisable but a fact is wrong, can't be told, or holds only on one reading of the depth; 2 = several facts wrong; 1 = the wrong object>,
  "problems": ["<each fact that does not hold or can't be told from the picture, and anything else wrong: several objects, cropped, text, an impossible shape>"]}`;
 
 export type ReferenceAttempt = { file: string; score: number; problems: string[] };
 export type CheckedReference = { path: string; score: number; brief: string; mustShow: string[]; attempts: ReferenceAttempt[] };
+
+/** What a picture of the object must show: Ember's brief for the image generator and the checkable facts. */
+export async function briefReference(opts: { name: string; describe: string; parts: string[] }): Promise<{ asked: string; brief: string; mustShow: string[] }> {
+  const asked = `Object: ${opts.name}. ${opts.describe}${opts.parts.length ? `\nParts a lesson will label: ${opts.parts.join(', ')}.` : ''}`;
+  const reply = await complete([{ role: 'system', content: BRIEF_SYSTEM }, { role: 'user', content: asked }], await ember());
+  const planned = parseJson<{ brief?: string; mustShow?: string[] }>(reply.text);
+  return {
+    asked, brief: typeof planned?.brief === 'string' && planned.brief.length > 20 ? planned.brief : opts.describe,
+    mustShow: (planned?.mustShow ?? []).map(String).slice(0, 7),
+  };
+}
+
+/** Ember's check of one picture against the facts it must show: a score of 1-5 and what is wrong. */
+export async function checkReference(asked: string, mustShow: string[], jpeg: Buffer): Promise<{ score: number; problems: string[] }> {
+  const reply = await complete([{ role: 'system', content: REFERENCE_CHECK_SYSTEM }, {
+    role: 'user', content: [
+      { type: 'text', text: `${asked}\nThe picture must show:\n${mustShow.map((f) => `- ${f}`).join('\n') || '- the object, whole and recognisable'}` },
+      { type: 'image_url', image_url: { url: dataUrl(jpeg) } },
+    ],
+  }], await ember());
+  const verdict = parseJson<{ score?: number; problems?: string[] }>(reply.text);
+  return { score: typeof verdict?.score === 'number' ? verdict.score : 0, problems: (verdict?.problems ?? []).map(String).slice(0, 6) };
+}
 
 /**
  * A reference picture that has been checked: Ember writes the brief and the facts the picture must
@@ -82,12 +106,7 @@ export type CheckedReference = { path: string; score: number; brief: string; mus
  * problems named (up to `tries` pictures). Returns the best one and its score; files go in `dir`.
  */
 export async function checkedReference(opts: { name: string; describe: string; parts: string[]; dir: string; tries?: number; onTry?: (n: number) => void }): Promise<CheckedReference> {
-  const model = await ember();
-  const asked = `Object: ${opts.name}. ${opts.describe}${opts.parts.length ? `\nParts a lesson will label: ${opts.parts.join(', ')}.` : ''}`;
-  const briefReply = await complete([{ role: 'system', content: BRIEF_SYSTEM }, { role: 'user', content: asked }], model);
-  const planned = parseJson<{ brief?: string; mustShow?: string[] }>(briefReply.text);
-  const brief = typeof planned?.brief === 'string' && planned.brief.length > 20 ? planned.brief : opts.describe;
-  const mustShow = (planned?.mustShow ?? []).map(String).slice(0, 7);
+  const { asked, brief, mustShow } = await briefReference(opts);
   const attempts: ReferenceAttempt[] = [];
   let problems: string[] = [];
   for (let n = 1; n <= (opts.tries ?? 3); n++) {
@@ -96,16 +115,10 @@ export async function checkedReference(opts: { name: string; describe: string; p
     const picture = await museImage(prompt);
     const file = join(opts.dir, `reference-${n}.jpg`);
     await writeFile(file, picture.jpeg);
-    const reply = await complete([{ role: 'system', content: REFERENCE_CHECK_SYSTEM }, {
-      role: 'user', content: [
-        { type: 'text', text: `${asked}\nThe picture must show:\n${mustShow.map((f) => `- ${f}`).join('\n') || '- the object, whole and recognisable'}` },
-        { type: 'image_url', image_url: { url: dataUrl(picture.jpeg) } },
-      ],
-    }], model);
-    const verdict = parseJson<{ score?: number; problems?: string[] }>(reply.text);
-    problems = (verdict?.problems ?? []).map(String).slice(0, 6);
-    attempts.push({ file, score: typeof verdict?.score === 'number' ? verdict.score : 0, problems });
-    if (attempts[attempts.length - 1].score >= 4) break;
+    const verdict = await checkReference(asked, mustShow, picture.jpeg);
+    problems = verdict.problems;
+    attempts.push({ file, ...verdict });
+    if (verdict.score >= 4) break;
   }
   const best = attempts.reduce((a, b) => (b.score > a.score ? b : a));
   return { path: best.file, score: best.score, brief, mustShow, attempts };

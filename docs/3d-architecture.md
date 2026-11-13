@@ -497,6 +497,10 @@ reference picture: Ember briefs it, Muse Image draws it, Ember checks it (redraw
     - A face-on picture leaves depth to the generator: the new model's base plate is ragged at the back. The brief now asks for a slightly turned and raised view.
     - Ember's first brief invented structure ("the base plate behind the gears") and marked a correct picture down for it, causing two needless redraws. The brief may now state only structure the request gives or every such object has.
     - Not every error starts in the picture: the engine's reference was good, and its faults came from part naming.
+  - **The 12 original Phase 3 pictures, checked afterwards** (`bench3d:check-refs`; TRELLIS.2 had built a model from each, n = 12):
+    - Checking facts only: pictures scoring 4-5 led to models averaging 4.00 (judge), pictures scoring 1-3 to 3.29. It flagged 5 of the 7 models the judge scored 3 or lower. Typical flaws: no ladder on the lunar lander, no vent in the volcano, no leaf on the flower.
+    - It passed the old gear-train picture, though. That picture is not wrong in 2D; its depth can be read two ways (gears overlapping, seen at a slant), and the generator read it the wrong way.
+    - The checker now also asks whether an arrangement could be read two ways. With that it flags all 7 weak models, and 3 of the 5 good ones (e.g. the guitar's slanted sound hole). A false alarm costs a redraw or two, not correctness, since the best picture of three is still used.
 - **Not done yet:**
   - The "model ready" notice exists on the desktop page only, not inside the headset.
   - The page flow hasn't been run in the emulator.

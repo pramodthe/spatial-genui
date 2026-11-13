@@ -17,7 +17,7 @@ export default async function run({ frame, page }) {
       if (!lesson) return void (await genui.generate('/example'));
       const [id, index] = lesson.split('/');
       const reply = await (await fetch(`/api/courses/${id}/lessons/${index}`)).json();
-      await genui.mount((reply.lesson ?? reply).code);
+      await genui.openWritten((reply.lesson ?? reply).code, 'handle-smoke'); // as the picker opens it, so the picker docks
     }, lesson);
     await new Promise((r) => setTimeout(r, 1500));
   }

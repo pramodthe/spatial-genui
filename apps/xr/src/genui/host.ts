@@ -13,6 +13,7 @@ import {
   Pressed,
   RayInteractable,
   Vector3,
+  VisibilityState,
   XRPlane as XRPlaneComponent,
   type Entity,
   type Object3D,
@@ -118,16 +119,21 @@ const MAX_CONTENT_SIZE_M = 0.8;
 // parts laid out in front of its model is set further back to make room.
 const MIN_FRONT_GAP_M = 0.3;
 const MAX_SET_BACK_M = 0.45;
-// A spot the learner chose by dragging a lesson is used for the next one while they stay near it.
+// Lessons keep opening at the session's spot while the learner stays this near it.
 const KEEP_SPOT_WITHIN_M = 1.5;
+// A panel's top edge stays within this slope above the eye line (10 degrees): no reading upwards.
+const PANEL_TOP_RISE = Math.tan((10 * Math.PI) / 180);
 // A near-hand pinch grabs everything within a few centimetres of the pinch point.
 const MIN_GRAB_GAP_M = 0.04;
 
 let world: World | null = null;
 let current: Mounted | null = null;
 let onRuntimeError: ((message: string) => void) | null = null;
-/** Where the learner last put a lesson down with its move handle. */
-let chosenSpot: { position: Vector3; yaw: number } | null = null;
+/**
+ * Where this session's lessons stand, so they don't land wherever the learner happens to be looking when
+ * each one opens: found for the first lesson, moved when the learner drags a lesson by its handle.
+ */
+let lessonSpot: { position: Vector3; surface: string | null } | null = null;
 const tmpHead = new Vector3();
 const tmpForward = new Vector3();
 
@@ -137,6 +143,16 @@ export function initGenUIHost(w: World, handlers: { onRuntimeError: (message: st
   // Library models' cut-away view uses per-material clipping planes.
   w.renderer.localClippingEnabled = true;
   w.registerSystem(GenUISystem);
+}
+
+/** Find a fresh spot for the next lesson (a new XR session, or a test that moved the viewpoint). */
+export function forgetLessonSpot() {
+  lessonSpot = null;
+}
+
+/** Where the mounted lesson stands, in world space, or null when there is none. */
+export function lessonPosition(out: Vector3): Vector3 | null {
+  return current?.root?.parent?.getWorldPosition(out) ?? null;
 }
 
 export function unmountGenerated() {
@@ -383,7 +399,7 @@ export async function mountGenerated(code: string): Promise<MountReport> {
   // The handle lies on the desk in front of everything, nearest the learner.
   mounted.handle = createMoveHandle(world, anchor, {
     offset: [0, Math.max(-0.1, Math.min(0, extent.isEmpty() ? 0 : extent.min.y)) + MOVE_HANDLE_RADIUS_M, front + 0.07],
-    onMoved: () => (chosenSpot = { position: anchor.position.clone(), yaw: anchor.rotation.y }),
+    onMoved: () => (lessonSpot = { position: anchor.position.clone(), surface: null }),
   });
   mounted.handle.setShown(true);
   mounted.handleRest = { offset: mounted.handle.offset.clone(), root: root.position.clone() };
@@ -434,6 +450,15 @@ class GenUISystem extends createSystem({
 }) {
   init(): void {
     planeEntities = () => this.queries.planes.entities;
+    let immersive = false;
+    this.cleanupFuncs.push(
+      this.world.visibilityState.subscribe((visibility) => {
+        // Entering or leaving XR changes the viewpoint: the next lesson finds its place afresh.
+        const now = visibility !== VisibilityState.NonImmersive;
+        if (now !== immersive) forgetLessonSpot();
+        immersive = now;
+      }),
+    );
     this.queries.pressed.subscribe('qualify', (entity) => {
       current?.pressHandlers.get(entity)?.();
     });
@@ -457,11 +482,12 @@ class GenUISystem extends createSystem({
     if (!mounted) return;
     // Textures are painted a few milliseconds per frame, so a lesson never stalls the headset.
     mounted.kit?.pump(5);
-    if (mounted.declutterIn !== null && mounted.rigs.length > 0 && [...mounted.panels.values()].every((p) => p.document)) {
+    if (mounted.declutterIn !== null && [...mounted.panels.values()].every((p) => p.document)) {
       // UIKit lays panels out over a few frames; measure once their sizes are real.
       if (mounted.declutterIn-- <= 0) {
         mounted.declutterIn = null;
-        layoutLessonPanels(mounted);
+        if (mounted.rigs.length > 0) layoutLessonPanels(mounted);
+        else keepPanelsInView(mounted);
       }
     }
     for (const rig of mounted.rigs) {
@@ -537,37 +563,31 @@ function track(mounted: Mounted, entity: Entity, object: Object3D): Entity {
 }
 
 /**
- * Put the lesson on the learner's desk: a detected horizontal surface below the eyes, in front and within
- * reach (SPEC.md Phase 4). Without one (no plane detection, or nothing suitable), it floats at seated desk
- * height in front. `front` is how far the lesson reaches toward the learner from its centre: it is set back
- * far enough that nothing starts in their face. A spot the learner dragged the last lesson to wins over
- * both. Returns the surface's label, or null when floating.
+ * Put the lesson at the session's spot. The first lesson finds it: the learner's desk (a detected
+ * horizontal surface below the eyes, in front and within reach; SPEC.md Phase 4) or, without one, floating
+ * at seated desk height in front. Later lessons open there too, and a lesson the learner drags moves it.
+ * `front` is how far this lesson reaches toward the learner from its centre: it is set back far enough
+ * that nothing starts in their face. Returns the surface's label, or null when floating.
  */
 function placeInSeatedReach(anchor: Group, front: number): string | null {
   const camera = world!.camera;
   camera.getWorldPosition(tmpHead);
-  if (chosenSpot && chosenSpot.position.distanceTo(tmpHead) < KEEP_SPOT_WITHIN_M) {
-    anchor.position.copy(chosenSpot.position);
-    anchor.rotation.y = chosenSpot.yaw;
-    return null;
+  if (!lessonSpot || lessonSpot.position.distanceTo(tmpHead) > KEEP_SPOT_WITHIN_M) {
+    camera.getWorldDirection(tmpForward);
+    tmpForward.y = 0;
+    if (tmpForward.lengthSq() < 1e-6) tmpForward.set(0, 0, -1);
+    tmpForward.normalize();
+    const desk = findDesk(tmpHead, tmpForward);
+    const position = desk ? desk.point.clone() : tmpHead.clone().addScaledVector(tmpForward, REACH_DISTANCE_M).setY(tmpHead.y - BELOW_EYES_M);
+    lessonSpot = { position, surface: desk?.label ?? null };
   }
-  camera.getWorldDirection(tmpForward);
-  tmpForward.y = 0;
-  if (tmpForward.lengthSq() < 1e-6) tmpForward.set(0, 0, -1);
-  tmpForward.normalize();
-  const desk = findDesk(tmpHead, tmpForward);
-  if (desk) {
-    anchor.position.copy(desk.point);
-  } else {
-    anchor.position.copy(tmpHead).addScaledVector(tmpForward, REACH_DISTANCE_M);
-    anchor.position.y = tmpHead.y - BELOW_EYES_M;
-  }
+  anchor.position.copy(lessonSpot.position);
   const away = tmpForward.set(anchor.position.x - tmpHead.x, 0, anchor.position.z - tmpHead.z);
   const gap = away.length() - front;
   if (gap < MIN_FRONT_GAP_M && away.lengthSq() > 1e-6) anchor.position.addScaledVector(away.normalize(), Math.min(MIN_FRONT_GAP_M - gap, MAX_SET_BACK_M));
   // root's +Z must face the viewer, so yaw toward the head.
   anchor.rotation.y = Math.atan2(tmpHead.x - anchor.position.x, tmpHead.z - anchor.position.z);
-  return desk?.label ?? null;
+  return lessonSpot.surface;
 }
 
 // A desk or table: 15-90 cm below the eyes (not the floor, not a shelf), big enough for a lesson, ahead.
@@ -678,8 +698,8 @@ function guard(mounted: Mounted, fn: () => void): () => void {
 }
 
 /**
- * Lesson layout for library models (SceneCraft's split: the agent says what panels exist, code says
- * where). Runs once, after every panel has laid out and has its real size, in root's frame:
+ * Lesson layout for library models that show their labels (SceneCraft's split: the agent says what panels
+ * exist, code says where). Runs once, after every panel has laid out and has its real size, in root's frame:
  * - the model and its labels stay where the rig put them;
  * - the lesson's main panel (the one the agent placed highest, or the only one) goes centred above
  *   them, in front of the model's front face and high enough that it hides nothing from the eye;
@@ -702,6 +722,9 @@ function layoutLessonPanels(mounted: Mounted, again?: { main: Object3D }) {
     return local;
   };
   const labels = new Set(mounted.rigs.flatMap((rig) => rig.labelHolders()));
+  // With no labels showing (a quiz hides them) there are no label columns to clear: the panels stay where
+  // the agent put them, beside the model as in every drawn lesson.
+  if (![...labels].some((label) => label.visible)) return keepPanelsInView(mounted);
   const model = new Box3();
   for (const rig of mounted.rigs) for (const part of rig.partObjects()) model.union(boxIn(part));
   if (model.isEmpty()) return;
@@ -833,6 +856,29 @@ function layoutLessonPanels(mounted: Mounted, again?: { main: Object3D }) {
       layoutLessonPanels(mounted, { main: main.holder });
       if (mounted.layout) mounted.layout.labelScale = labelScale;
     }
+  }
+}
+
+/**
+ * Drawn lessons place their own panels. One that stands taller than the learner's eye line (a long panel,
+ * or a lesson on a high desk) would have them reading upwards: lower it until its top is just above eye
+ * level, but never into the surface the lesson stands on.
+ */
+function keepPanelsInView(mounted: Mounted) {
+  const root = mounted.root;
+  if (!root || !world) return;
+  root.updateMatrixWorld(true);
+  const eye = world.camera.getWorldPosition(new Vector3());
+  const base = root.parent ? root.parent.getWorldPosition(new Vector3()).y : -Infinity;
+  const scale = root.getWorldScale(new Vector3()).y || 1;
+  const centre = new Vector3();
+  for (const panel of mounted.panels.values()) {
+    const box = new Box3().setFromObject(panel.holder);
+    if (box.isEmpty() || panel.holder.parent !== root) continue;
+    box.getCenter(centre);
+    const limit = eye.y + PANEL_TOP_RISE * Math.hypot(centre.x - eye.x, centre.z - eye.z);
+    const drop = Math.min(box.max.y - limit, box.min.y - (base + 0.02));
+    if (drop > 0.005) panel.holder.position.y -= drop / scale;
   }
 }
 

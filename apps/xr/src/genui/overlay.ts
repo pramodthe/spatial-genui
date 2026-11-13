@@ -1,4 +1,4 @@
-import { aimPoint, capture, inspectMounted, debugRay, debugRoot, mountGenerated, unmountGenerated, type MountReport } from './host.js';
+import { aimPoint, capture, forgetLessonSpot, inspectMounted, debugRay, debugRoot, mountGenerated, unmountGenerated, type MountReport } from './host.js';
 import { EXAMPLE_LESSONS, type SavedLesson } from './lessons.js';
 import { inspectPicker, pickerCourses, setPickerHidden } from './picker.js';
 import { inspectMoveHandles, setMoveHandlesHidden } from './handle.js';
@@ -444,6 +444,7 @@ export async function repair() {
 
 function clear() {
   unmountGenerated();
+  forgetLessonSpot(); // the next lesson finds its place afresh
   state.code = null;
   state.runtimeErrors = [];
   repairButton.hidden = true;

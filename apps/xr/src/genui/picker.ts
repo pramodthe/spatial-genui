@@ -15,7 +15,7 @@ import { EXAMPLE_LESSONS } from './lessons';
 import { cancelListening, isListening, startListening, stopAndTranscribe, voiceAvailable } from './voice';
 import type { LessonStatus } from './overlay';
 import { courseProgress, createCourse, fetchCourseLesson, listCourses, polishCourseLesson, type CourseSummary } from './courses';
-import { capture } from './host';
+import { capture, lessonPosition } from './host';
 import { createMoveHandle, type MoveHandle } from './handle';
 
 /**
@@ -117,6 +117,7 @@ class LessonPickerSystem extends createSystem({
   private readonly titles = new Map<string, string>();
   private readonly head = new Vector3();
   private readonly forward = new Vector3();
+  private readonly lesson = new Vector3();
 
   init(): void {
     picker = this;
@@ -198,11 +199,11 @@ class LessonPickerSystem extends createSystem({
   }
 
   private onStatus(status: LessonStatus) {
-    const before = this.status.phase;
     this.status = status;
-    // Dock beside a lesson once it is in; come back to the centre when there is none.
+    // Dock beside a lesson once it is in (each new lesson, in case it stands somewhere else); come back to
+    // the centre when there is none.
     const dock = status.phase === 'ready' || (this.docked && (status.phase === 'building' || status.phase === 'fixing' || status.phase === 'broken'));
-    if (dock !== this.docked || (status.phase === 'ready' && before !== 'ready')) {
+    if (dock !== this.docked || status.phase === 'ready') {
       this.docked = dock;
       this.applySize();
       if (this.inXR) this.place();
@@ -370,13 +371,17 @@ class LessonPickerSystem extends createSystem({
     this.document?.getElementById('heading')?.setProperties({ text: course ? ascii(course.title) : this.docked ? 'Pick another lesson' : 'What do you want to learn?' });
   }
 
-  /** Stand the picker in front of (or, docked, to the left of) where the learner is looking, facing them. */
+  /**
+   * Stand the picker in front of where the learner is looking or, docked, to the left of the lesson (not of
+   * their gaze: they are often looking at the picker itself when the next lesson arrives), facing them.
+   */
   private place() {
     if (this.moved) return;
     const spot = this.docked ? DOCKED : CENTRE;
     const camera = this.world.camera;
     camera.getWorldPosition(this.head);
-    camera.getWorldDirection(this.forward);
+    if (this.docked && lessonPosition(this.lesson)) this.forward.subVectors(this.lesson, this.head);
+    else camera.getWorldDirection(this.forward);
     this.forward.y = 0;
     if (this.forward.lengthSq() < 1e-6) this.forward.set(0, 0, -1);
     this.forward.normalize().applyAxisAngle(Object3DUp, spot.yaw);

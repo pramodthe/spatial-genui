@@ -202,3 +202,20 @@ ${error}
 
 Fix the problem and reply with the complete corrected module in one \`\`\`js code block.`;
 }
+
+/**
+ * Look-and-fix: the agent is shown pictures of its own lesson as it rendered and revises it once.
+ * Sent after the lesson's code, with the pictures attached.
+ */
+export const REVIEW_MESSAGE = `These pictures show your lesson as it renders in the headset: the model close up, the whole lesson
+with its panel, and the model from the other side. Look at them as a strict model maker and teacher would.
+
+First list the visible defects, most damaging first (at most 6, one line each): wrong proportions or a
+shape that does not read as the real thing, parts floating, buried or misaligned, well-known parts missing,
+flat or untextured surfaces, parts facing the wrong way, things hidden behind others, the panel covering
+the model, text cut off or too small, a model too small or too large for its stand.
+
+Then reply with the complete improved module in one \`\`\`js code block. Fix the defects you listed and add
+the secondary forms and fine detail a carefully made model would have. Keep every interaction, the panel's
+content and everything that already looks right; do not start over.
+If the lesson already looks like a carefully made exhibit and nothing needs fixing, reply with only: LOOKS GOOD`;

@@ -6,7 +6,7 @@ import { dryRun } from './sandbox.js';
 import { complete, defaultTarget, type ChatMessage, type LlmTarget } from './llm.js';
 import { assetStubs, librarySection, libraryCatalog } from './library.js';
 import { routeAssets, type Route } from './router.js';
-import { SYSTEM_PROMPT, repairMessage } from './prompt.js';
+import { REVIEW_MESSAGE, SYSTEM_PROMPT, repairMessage } from './prompt.js';
 import { extractCode, validateModule } from './validate.js';
 import { checkSurface, compileSurface, extractJson, surfaceFrom, type Surface } from './a2ui/catalog.js';
 import { A2UI_SYSTEM_PROMPT, TEMPLATE_SYSTEM_PROMPT, jsonRepairMessage } from './a2ui/prompts.js';
@@ -55,6 +55,10 @@ export type GenerationResult = {
   route?: Route;
   /** Parallel generation (RQ4): when the plan, the first part and each part were ready (ms from the start). */
   timings?: ParallelResult['timings'];
+  /** Look-and-fix: the agent saw its lesson and changed nothing. */
+  kept?: boolean;
+  /** Look-and-fix: what the agent said it saw wrong (its reply before the code). */
+  critique?: string;
   /** On-demand assets: models being fetched or generated in the background for this lesson (see three-d/acquire.ts). */
   pendingAssets?: { jobId: string; name: string }[];
 };
@@ -67,7 +71,9 @@ export type GenerationResult = {
 export async function generate(
   prompt: string,
   options: {
-    previousCode?: string; clientError?: string; target?: LlmTarget; log?: boolean; library?: boolean; onDemand?: boolean; format?: GenUIFormat;
+    previousCode?: string; clientError?: string; target?: LlmTarget;
+    /** Look-and-fix: pictures (data URLs) of previousCode as it rendered; the agent revises it once. */
+    pictures?: string[]; log?: boolean; library?: boolean; onDemand?: boolean; format?: GenUIFormat;
     /** Parallel generation: the planner model (default: the same as target) and the event stream. */
     planner?: LlmTarget; onEvent?: (event: RunEvent) => void; plannerFallback?: boolean;
   } = {},
@@ -103,6 +109,11 @@ export async function generate(
       { role: 'assistant', content: '```js\n' + options.previousCode + '\n```' },
       { role: 'user', content: repairMessage(`In the headset runtime: ${options.clientError}`) },
     );
+  } else if (options.previousCode && options.pictures?.length && format === 'code') {
+    messages.push(
+      { role: 'assistant', content: '```js\n' + options.previousCode + '\n```' },
+      { role: 'user', content: [{ type: 'text', text: REVIEW_MESSAGE }, ...options.pictures.map((url) => ({ type: 'image_url' as const, image_url: { url } }))] },
+    );
   }
 
   const attempts: Attempt[] = [];
@@ -134,6 +145,11 @@ export async function generate(
     messages.push({ role: 'assistant', content: reply.text });
 
     let code: string | null;
+    if (i === 0 && options.pictures?.length && /^\s*LOOKS GOOD\b/.test(reply.text) && options.previousCode) {
+      // The agent looked at its lesson and kept it.
+      return { ...result, ok: true, code: options.previousCode, kept: true, totalMs: Math.round(performance.now() - started) };
+    }
+    if (i === 0 && options.pictures?.length) result.critique = reply.text.split('```')[0].trim().slice(0, 2000);
     if (format === 'code') {
       code = extractCode(reply.text);
     } else {

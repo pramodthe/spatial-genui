@@ -12,7 +12,7 @@ export type CourseSummary = {
   error?: string;
   lessons: CourseLessonSummary[];
 };
-export type CourseLesson = CourseLessonSummary & { prompt: string; code?: string };
+export type CourseLesson = CourseLessonSummary & { prompt: string; code?: string; polish?: 'running' | 'done' | 'kept' | 'failed' };
 
 export async function listCourses(): Promise<CourseSummary[]> {
   const res = await fetch('/api/courses');
@@ -42,4 +42,12 @@ export function courseProgress(course: CourseSummary): string {
   const writing = course.lessons.findIndex((l) => l.status === 'generating');
   if (writing >= 0) return `Writing lesson ${writing + 1} of ${course.lessons.length}...`;
   return `${ready} of ${course.lessons.length} lessons ready`;
+}
+
+/**
+ * Look-and-fix: send pictures of a lesson as it rendered here. The server's agent revises the lesson once
+ * from what it sees; the revision is what opens next time.
+ */
+export async function polishCourseLesson(courseId: string, index: number, pictures: string[]): Promise<void> {
+  await fetch(`/api/courses/${courseId}/lessons/${index}/polish`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ pictures }) });
 }

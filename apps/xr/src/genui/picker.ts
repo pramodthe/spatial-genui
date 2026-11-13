@@ -14,7 +14,8 @@ import {
 import { EXAMPLE_LESSONS } from './lessons';
 import { cancelListening, isListening, startListening, stopAndTranscribe, voiceAvailable } from './voice';
 import type { LessonStatus } from './overlay';
-import { courseProgress, createCourse, fetchCourseLesson, listCourses, type CourseSummary } from './courses';
+import { courseProgress, createCourse, fetchCourseLesson, listCourses, polishCourseLesson, type CourseSummary } from './courses';
+import { capture } from './host';
 
 /**
  * In-headset lesson picker. The desktop prompt box is a DOM overlay, which an immersive session doesn't
@@ -48,6 +49,8 @@ const SHELF_ROWS = 3;
 const COURSE_STEPS = 5;
 // How often the shelf asks the server while a course is being planned or written.
 const COURSE_POLL_MS = 4000;
+// A lesson's textures and panels are in by now; its pictures then go to the agent for one revision.
+const REVIEW_AFTER_MS = 7000;
 const STEP_STATES = { pending: 'Pinch to write it', generating: 'Writing...', ready: 'Ready: pinch to open', failed: 'Failed: pinch to retry' } as const;
 
 const PHASES: Record<LessonStatus['phase'], { dot: string; background: string }> = {
@@ -237,11 +240,29 @@ class LessonPickerSystem extends createSystem({
       if (lesson.status === 'ready' && lesson.code) {
         this.titles.set(lesson.prompt, lesson.title);
         handlers?.open(lesson.code, lesson.prompt);
+        if (!lesson.polish) this.reviewLater(course.id, index, lesson.prompt);
       }
     } catch {
       // The shelf below shows what the server says next.
     }
     await this.refreshCourses();
+  }
+
+  /**
+   * Look-and-fix: once a newly written lesson has settled on the desk, send pictures of it to the server, where
+   * the agent revises it from what it sees. Skipped if the learner has moved on or the lesson broke.
+   */
+  private reviewLater(courseId: string, index: number, prompt: string) {
+    window.setTimeout(() => {
+      if (this.status.phase !== 'ready' || this.status.prompt !== prompt) return;
+      const size = { width: 1024, height: 768, quality: 0.8 };
+      const pictures = [
+        capture({ ...size, zoom: 1.2 }),
+        capture({ ...size, subject: 'all', azimuth: 8, elevation: 10 }),
+        capture({ ...size, zoom: 1.2, azimuth: 205, elevation: 18 }),
+      ].filter((p): p is string => Boolean(p));
+      if (pictures.length) void polishCourseLesson(courseId, index, pictures).catch(() => {});
+    }, REVIEW_AFTER_MS);
   }
 
   async refreshCourses() {

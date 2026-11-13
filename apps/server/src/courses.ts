@@ -32,6 +32,14 @@ export type CourseLesson = {
   model?: string;
   seconds?: number;
   generatedAt?: string;
+  /**
+   * Look-and-fix: the first time a lesson is opened, the headset sends pictures of it and the agent revises
+   * it once from what it sees. `code` is then the revision and `firstCode` what was written blind.
+   */
+  polish?: 'running' | 'done' | 'kept' | 'failed';
+  firstCode?: string;
+  /** What the agent said it saw wrong in the pictures. */
+  critique?: string;
 };
 
 export type Course = {
@@ -75,7 +83,10 @@ function load() {
     try {
       const course = JSON.parse(readFileSync(join(COURSES_DIR, file), 'utf8')) as Course;
       // Work a restart interrupted goes back in the queue (lessons) or is given up (a plan that never arrived).
-      for (const lesson of course.lessons) if (lesson.status === 'generating') lesson.status = 'pending';
+      for (const lesson of course.lessons) {
+        if (lesson.status === 'generating') lesson.status = 'pending';
+        if (lesson.polish === 'running') delete lesson.polish;
+      }
       if (course.status === 'planning') Object.assign(course, { status: 'failed', error: 'The server restarted while planning.' });
       courses.set(course.id, course);
     } catch (err) {
@@ -90,7 +101,7 @@ function save(course: Course) {
 
 /** A course without its lessons' code, for lists and status polling. */
 export function summary(course: Course) {
-  return { ...course, lessons: course.lessons.map(({ code: _code, prompt: _prompt, ...rest }) => rest) };
+  return { ...course, lessons: course.lessons.map(({ code: _code, firstCode: _first, critique: _critique, prompt: _prompt, ...rest }) => rest) };
 }
 
 export function listCourses() {
@@ -192,4 +203,34 @@ export function openLesson(course: Course, index: number): CourseLesson | undefi
   queue(course, index, true);
   if (lesson.status === 'ready') queue(course, index + 1);
   return lesson;
+}
+
+const POLISH = process.env.COURSE_POLISH !== '0';
+
+/**
+ * Look-and-fix for a course lesson: pictures of it as it rendered go back to the agent, which revises it
+ * once. Runs in the build queue; the revision replaces the lesson for the next time it is opened.
+ */
+export function polishLesson(course: Course, index: number, pictures: string[]): boolean {
+  const lesson = course.lessons[index];
+  if (!POLISH || !lesson || lesson.status !== 'ready' || !lesson.code || lesson.polish) return false;
+  lesson.polish = 'running';
+  working = working.then(async () => {
+    try {
+      const result = await generate(lesson.prompt, { previousCode: lesson.code, pictures, onDemand: false });
+      await recordSpend(result.attempts.map((a) => ({ model: result.model, promptTokens: a.promptTokens, completionTokens: a.completionTokens })));
+      if (!result.ok || !result.code) throw new Error(result.error ?? 'no revision');
+      lesson.critique = result.critique;
+      if (result.kept) {
+        lesson.polish = 'kept';
+      } else {
+        Object.assign(lesson, { firstCode: lesson.code, code: result.code, polish: 'done' });
+      }
+    } catch (err) {
+      lesson.polish = 'failed';
+      console.warn(`Polishing "${lesson.title}" failed: ${(err as Error).message}`);
+    }
+    await save(course);
+  }).catch((err) => console.error(err));
+  return true;
 }

@@ -10,7 +10,7 @@ import { loadModel } from './models.js';
 import { EXAMPLE_MODULE } from './prompt.js';
 import { admit, admitVoice, recordSpend, spendToday, visitorOf } from './guard.js';
 import { transcribe } from './voice.js';
-import { getCourse, listCourses, openLesson, startCourse, summary } from './courses.js';
+import { getCourse, listCourses, openLesson, polishLesson, startCourse, summary } from './courses.js';
 
 const MAX_BODY_BYTES = 200_000;
 const KIT_FILE = fileURLToPath(new URL('./kit/kit.js', import.meta.url));
@@ -99,6 +99,16 @@ const server = createServer(async (req, res) => {
       if (refusal) return send(res, refusal.status, { ok: false, error: refusal.error, reason: refusal.reason });
       return send(res, 200, summary(startCourse(prompt)));
     }
+    // Look-and-fix: pictures of a course lesson as the headset rendered it; the agent revises it in the background.
+    const polishMatch = req.method === 'POST' && req.url?.match(/^\/api\/courses\/([a-f0-9]{8})\/lessons\/(\d)\/polish$/);
+    if (polishMatch) {
+      const course = getCourse(polishMatch[1]);
+      if (!course) return send(res, 404, { error: 'Unknown course' });
+      const body = await readJson(req, MAX_PICTURES_BYTES);
+      const pictures = (Array.isArray(body.pictures) ? body.pictures : []).filter((p: unknown): p is string => typeof p === 'string' && p.startsWith('data:image/jpeg;base64,')).slice(0, 3);
+      if (pictures.length === 0) return send(res, 400, { error: 'Send { "pictures": [JPEG data URLs] }.' });
+      return send(res, 202, { started: polishLesson(course, Number(polishMatch[2]), pictures) });
+    }
     if (req.method === 'GET' && req.url === '/api/courses') return send(res, 200, { courses: listCourses() });
     const courseMatch = req.method === 'GET' && req.url?.match(/^\/api\/courses\/([a-f0-9]{8})(?:\/lessons\/(\d))?$/);
     if (courseMatch) {
@@ -175,12 +185,15 @@ async function readBytes(req: IncomingMessage, limit: number): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-async function readJson(req: IncomingMessage): Promise<any> {
+// Three review pictures of a lesson, as base64 JPEG.
+const MAX_PICTURES_BYTES = 2_500_000;
+
+async function readJson(req: IncomingMessage, limit = MAX_BODY_BYTES): Promise<any> {
   let size = 0;
   const chunks: Buffer[] = [];
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > MAX_BODY_BYTES) throw new Error('Request body too large.');
+    if (size > limit) throw new Error('Request body too large.');
     chunks.push(chunk);
   }
   return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');

@@ -33,6 +33,29 @@ AGAIN = 2  # times a dropped sandbox call is made again
 REFUSALS = 3  # finish is sent back this many times at most
 SHAPES = ("prism", "box", "ball", "sheet", "rounded_path", "lathe", "rod", "tube", "bevel", "smooth", "cut", "copies", "material")
 SPLIT_SHAPES = ("take_box", "take_cylinder")
+SPLIT_TURNS = 60  # looking at each cut costs turns a build from nothing does not need
+PROFILE_TOOL = {"type": "function", "name": "profile", "description": "Measure one object's shape in a single call: it is sliced into 12 slabs along each axis, and each slab reports how far the surface reaches in the other two directions (mm). A jump between neighbouring slabs marks a joint: where a turret meets a deck, where a barrel leaves a turret, where a track ends. Use this instead of running code to measure.",
+                "parameters": {"type": "object", "additionalProperties": False, "required": ["part"], "properties": {"part": {"type": "string", "description": "exact object name, such as body"}}}}
+PROFILE = """
+import json as _json
+_o = bpy.data.objects.get({name!r})
+if _o is None:
+    print(_json.dumps({{"error": "no object named " + {name!r}}}))
+else:
+    _p = [_o.matrix_world @ v.co * 1000 for v in _o.data.vertices]
+    _out = {{}}
+    for _k, _axis in enumerate("xyz"):
+        _lo, _hi = min(q[_k] for q in _p), max(q[_k] for q in _p)
+        _rows, _n = [], 12
+        _a, _b = [j for j in range(3) if j != _k]
+        for _i in range(_n):
+            _s0, _s1 = _lo + (_hi - _lo) * _i / _n, _lo + (_hi - _lo) * (_i + 1) / _n
+            _in = [q for q in _p if _s0 <= q[_k] <= _s1]
+            if _in:
+                _rows.append("%s %d..%d: %s %d..%d, %s %d..%d (%d points)" % (_axis, _s0, _s1, "xyz"[_a], min(q[_a] for q in _in), max(q[_a] for q in _in), "xyz"[_b], min(q[_b] for q in _in), max(q[_b] for q in _in), len(_in)))
+        _out[_axis] = _rows
+    print(_json.dumps(_out))
+"""
 TOOLS = [
     {"type": "function", "name": "run_python", "description": "Run a step of Python against the live scene. Whatever earlier steps built is still there, and constants and functions you defined stay defined. Returns any error, what the scene now holds, and two renders.",
      "parameters": {"type": "object", "additionalProperties": False, "required": ["intent", "code"], "properties": {"intent": {"type": "string", "description": "What this step adds, in a few words a person can read"}, "code": {"type": "string"}}}},
@@ -71,14 +94,16 @@ Call finish only when the main parts, their attachments and the fine detail are 
 SPLIT = """You are given a finished, textured 3D model of one object as a single mesh, already loaded in a live Blender scene as the object "body". It looks right but it is one lump:
 a learner in a mixed-reality headset can't pull anything off it. Your job is to turn it into real, separately named parts WITHOUT changing how it looks.
 
-First understand it. Call list_parts for its extent in mm, and look at it from the front, side, top and an angle. Decide which side is which, and which real parts a learner should be able
+First understand it, in at most 3 calls: look at it from the front, side and top, and call profile("body") once for its measurements. Never run code only to measure.
+Decide which side is which, and which real parts a learner should be able
 to take off (for a tank: the turret, the gun barrel, each track, the hull; for a microscope: the eyepiece, the arm, the stage, the base).
 
 Then take the parts out one at a time, the most separate first:
 - take_box(obj, name, low, high, group) and take_cylinder(obj, name, start, end, radius, group) move the faces inside a volume out of an object into a new named object. You can take from "body"
   or from a part you already took (take the turret, then take the gun barrel out of the turret). Get an object by name with bpy.data.objects["body"].
-- After each take, look at the new part alone (look with parts=[its name] draws only that part) and at what is left (parts=["body"]). If the cut took too much or too little, undo and take again with a better volume.
-  A good cut follows the real joint between the parts.
+- After each take, look at the new part alone (look with parts=[its name] draws only that part). Keep a cut that is roughly right: a part that carries a thin strip of its neighbour is fine,
+  and a piece that belongs to another part can be taken out of it next (a turret cut that also holds the gun: keep it, then take the gun out of the turret). Undo only a cut that split a part
+  in half or took a different part, and never undo the same part more than once. A learner gains more from 5 rough parts than from one perfect lump.
 - When the last pieces are out, rename what is left of "body" to what it really is (obj.name = "hull"; obj["part"] = "hull"; obj["group"] = "hull").
 Rules:
 - Never move, scale or rotate a part: together the parts must still look exactly like the model you were given. Never delete geometry. Never rebuild a part from new shapes.
@@ -205,6 +230,12 @@ class Live:
         return {"parts": [{k: row[k] for k in ("name", "group", "material", "from", "to")} for row in scene["parts"]][:160],
                 "floating": floating(scene)[:20], "note": "floating lists parts that touch nothing else"}, []
 
+    def profile(self, args):
+        scene = json.loads(sandbox([*self.steps, PROFILE.format(name=args.get("part", "body"))], ())["scene.json"])
+        if scene["error"]:
+            return {"error": scene["error"][-300:]}, []
+        return json.loads(scene["printed"].strip().splitlines()[-1]), []
+
     def look(self, args):
         wanted = [v for v in args["views"] if v in VIEWS][:3] or ["three_quarter"]
         parts = args.get("parts") or []
@@ -286,11 +317,11 @@ class Live:
             content += self.images(sandbox(self.steps, ("three_quarter", "front")), ("three_quarter", "front"))
         conversation = [{"type": "message", "role": "user", "content": content}]
         warned = False
-        for turn in range(TURNS):
+        for turn in range(SPLIT_TURNS if ASSETS else TURNS):
             if self.spent >= TOKENS - CHECK_RESERVE:
                 self.say(f"stopping: {self.spent} tokens")
                 break
-            response = meta.respond({"instructions": (SPLIT if ASSETS else SYSTEM) + "\n" + api(), "tools": TOOLS, "max_output_tokens": 32768, "reasoning": {"effort": "medium"}, "input": conversation,
+            response = meta.respond({"instructions": (SPLIT if ASSETS else SYSTEM) + "\n" + api(), "tools": [*TOOLS, PROFILE_TOOL] if ASSETS else TOOLS, "max_output_tokens": 32768, "reasoning": {"effort": "medium"}, "input": conversation,
                                      "prompt_cache_key": f"build-{abs(hash(self.brief)) % 10**8}"})
             self.calls += 1
             usage = response.get("usage") or {}

@@ -257,7 +257,7 @@ Each milestone ends with something visible in the headset or emulator and a meas
 v2 is built as an experiment that can be removed without a trace:
 
 - **Code:** branch `exp/3d-v2` in the worktree `.claude/worktrees/3d-v2`, started from the committed Phase 3 baseline (`phase-3-3d`). The main checkout is not touched.
-- **Modal:** everything v2 deploys uses its own names: apps `spatial-genui-3d-v2` (TRELLIS.2) and `spatial-genui-3d-v2-retrieval` (DINOv3), volume `genui-assets-v2`. The Phase 3 backend (`spatial-genui-3d`) keeps running unchanged. GPU functions scale to zero, so nothing is billed while idle.
+- **Modal:** everything v2 deploys uses its own names: apps `spatial-genui-3d-v2` (TRELLIS.2), `spatial-genui-3d-v2-retrieval` (DINOv3) and `spatial-genui-3d-v2-parts` (P3-SAM), volume `genui-assets-v2`. The Phase 3 backend (`spatial-genui-3d`) keeps running unchanged. GPU functions scale to zero, so nothing is billed while idle.
 - **Large data** (BodyParts3D, the Objaverse index and downloads in `data/objaverse/`, generated assets in `data/library/`) lives in `data/` (git-ignored) or the Modal volume, never in git.
 
 To remove v2 entirely:
@@ -266,7 +266,7 @@ To remove v2 entirely:
 git worktree remove --force .claude/worktrees/3d-v2   # also deletes its git-ignored data/ (Objaverse index, built assets)
 git branch -D exp/3d-v2
 cd apps/worker3d && uv run modal app stop spatial-genui-3d-v2 && uv run modal app stop spatial-genui-3d-v2-retrieval \
-  && uv run modal volume delete genui-assets-v2
+  && uv run modal app stop spatial-genui-3d-v2-parts && uv run modal volume delete genui-assets-v2
 ```
 
 To adopt it: merge `exp/3d-v2` into the main line after its milestone checks pass.
@@ -406,6 +406,39 @@ Rebuild the assets: download BodyParts3D into `data/bodyparts3d/` (see the build
   - PartField (NVIDIA License: non-commercial research and educational use only).
   - P3-SAM (Tencent Hunyuan 3D-Part Community License: not valid in the EU, UK or South Korea, Tencent's terms elsewhere).
   - Both run on a Modal GPU. Choosing one is a licensing decision (section 9).
+
+**M5 with P3-SAM (Nov 13).** Chosen: P3-SAM, accepting a non-commercial limit. Its Sonata backbone's weights are CC BY-NC 4.0, so P3-SAM is effectively non-commercial too, like PartField. Fine for the competition and education; replace it before any commercial use. Each segmented asset's provenance says so.
+- **Deployment:** `apps/worker3d/modal_parts.py`, Modal app `spatial-genui-3d-v2-parts` (L40S, A10G or L4; scales to zero; repo pinned to `e96be06`).
+  - Segments a mesh in 15–41 s of GPU time, 3–31 regions per model.
+  - We send our own merged mesh with P3-SAM's cleaning off, so its face numbers are ours.
+  - Prompt batch 8, because upstream's 32 needs more than a 24 GB GPU.
+- **Naming** (`bench3d:name-regions`, `segment.py regions` / `finalize`):
+  1. Tiny regions merge into the neighbour they share most edges with (at most 16 regions).
+  2. Muse Ember names every region from one highlight render each, in the lesson's words.
+  3. Regions with the same name become one part.
+- **Opus 5.5 part check on the same 18 models** (same check as above):
+
+  | | Usable overall | Average part | Good parts (4–5) per model |
+  |---|---|---|---|
+  | Retrieved: SAM 3.1 only | 2.33 | 3.43 | 1.8 |
+  | Retrieved: P3-SAM regions, SAM 3.1 votes name them | 2.17 | 4.00 | 2.2 |
+  | Retrieved: P3-SAM regions, Ember names them | 2.83 | 3.75 | 2.8 |
+  | TRELLIS.2: SAM 3.1 only | 1.83 | 3.23 | 1.4 |
+  | TRELLIS.2: P3-SAM, SAM votes | 1.83 | 3.81 | 1.2 |
+  | TRELLIS.2: P3-SAM, Ember names | 2.83 | 3.50 | 2.8 |
+
+- **Results:**
+  - P3-SAM's regions are geometrically clean. With SAM naming them, part quality rises (average part 3.2–3.4 → 3.8–4.0), but few regions collect enough votes to be named.
+  - Ember names every region and knows technical words (descent stage, crankshaft, mitochondrion): twice as many good parts per model, and usability 1.8–2.3 → 2.8.
+  - **Best results:**
+    - TRELLIS flower 5/5, every part right.
+    - Retrieved bicycle 4/5: both wheels, saddle, handlebar and pedals perfect.
+    - Saturn with Titan and its rings 4/5.
+    - Guitars: body and bridge perfect.
+  - **Weak:** some technical names are wrong on generated insides (a TRELLIS engine's "piston" and "connecting rod", a heart's "right atrium", a temple's "pediment"). Thin parts (chains, strings) stay hard. A painted-on feature such as a sound hole can't be cut by any 3D method.
+- **Next:**
+  - A verification step (Ember checks each named region before it reaches a lesson).
+  - Wire the segmented TRELLIS and retrieved models into the library through `retrieved.py ingest`.
 
 ## 10. Sources
 

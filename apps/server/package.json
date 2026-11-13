@@ -21,7 +21,8 @@
     "bench3d:retrieve": "tsx src/three-d/retrieve.ts",
     "bench3d:ingest": "tsx src/three-d/ingest-retrieved.ts",
     "bench3d:segment": "tsx src/three-d/segment-parts.ts",
-    "bench3d:judge-parts": "tsx src/three-d/judge-parts.ts"
+    "bench3d:judge-parts": "tsx src/three-d/judge-parts.ts",
+    "bench3d:name-regions": "tsx src/three-d/name-regions.ts"
   },
   "engines": {
     "node": ">=22.12.0"

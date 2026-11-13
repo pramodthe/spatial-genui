@@ -92,6 +92,22 @@ Effects. Each returns an object to add.
 - kit.shadow(radius, opacity): a soft contact shadow on the desk (y = 0) under something free-standing.
 - kit.stand(radius, { accent, color, height }): a low display base with a soft shadow. Put the model on
   it: model.position.y = stand.userData.top.
+Cards and quizzes.
+- kit.card(text, { width?, color? }): a small card with a word or short phrase on it (plain ASCII), facing
+  +z. Returns a group: name tags, flashcards. card.userData.setColor(color) recolors it.
+- kit.matchQuiz({ root, traits, isGrabbed, items, tray, onChange }): a grab-and-drop quiz. Each item is a
+  card the user picks up and drops on the place it names. A right drop snaps there and turns green; a
+  wrong one flies back to the tray and flashes red. It makes the cards, the glowing target dots and the
+  grab traits itself; call it after the model is in root and call quiz.update(time, delta) in update().
+    const quiz = kit.matchQuiz({
+      root, traits, isGrabbed,
+      items: [{ text: 'Left ventricle', at: [0.03, 0.12, 0.04] }, ...],  // at: the spot it names, in root space,
+                                                                         // on the model's surface on the user's side (+z)
+      tray: [0, 0.04, 0.2],                                              // centre of the row where cards wait, in front of the model
+      onChange({ right, total, misses, done, last }) { panel.set('score', { text: right + ' of ' + total }); },
+    });
+  Use 3 to 6 items with targets at least 0.07 m apart. Do not make the model itself grabbable in a quiz
+  (the targets must stay put). quiz.reset() starts over (wire it to a button).
 Panels.
 - kit.theme({ accent }) returns CSS for ui(), so all panels share one look. Use it as
   <style>\${kit.theme({ accent: '#ffb347' })}</style><div class="panel">...</div> with ui width 0.3-0.36.

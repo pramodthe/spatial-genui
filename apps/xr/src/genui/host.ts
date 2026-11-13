@@ -19,7 +19,7 @@ import {
   type UIKitDocument,
   type World,
 } from '@iwsdk/core';
-import { captureLesson, type CaptureOptions } from './capture';
+import { captureLesson, expandByMesh, type CaptureOptions } from './capture';
 import { assetHandle, assetIdsIn, creditsFor, preloadAssets } from './library';
 import type { TeachingRig } from './rig';
 
@@ -610,7 +610,7 @@ function fitToComfortSize(root: Object3D, panelHolders: Set<Object3D>, warnings:
   const box = new Box3();
   const visit = (object: Object3D) => {
     if (panelHolders.has(object) || (object as { isLine?: boolean }).isLine) return;
-    if ((object as { isMesh?: boolean }).isMesh) box.expandByObject(object, false);
+    if ((object as { isMesh?: boolean }).isMesh) expandByMesh(box, object);
     for (const child of object.children) visit(child);
   };
   visit(root);

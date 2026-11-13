@@ -12,9 +12,9 @@ import os
 from pathlib import Path
 
 import bpy
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
-__all__ = ["start", "materials", "material", "prism", "box", "ball", "sheet", "rounded_path", "lathe", "rod", "tube", "bevel", "smooth", "cut", "copies"]
+__all__ = ["start", "materials", "material", "prism", "box", "ball", "sheet", "rounded_path", "lathe", "rod", "tube", "bevel", "smooth", "cut", "copies", "load_model", "take_box", "take_cylinder"]
 
 MM = 0.001
 OUT = Path(os.environ.get("BUILD_OUT", "."))
@@ -285,6 +285,102 @@ def copies(obj, placements, turn_axis="z"):
     return made
 
 
+def load_model(name, file, longest, group, turn=0):
+    """Load a supplied model file as ONE object, scaled so its longest side is `longest` mm, standing on z = 0 and centred on x = 0, y = 0.
+    turn rotates it about z in degrees (use it so the object's front faces -y). It keeps its own textures."""
+    path = Path(os.environ.get("BUILD_ASSETS", ".")) / Path(file).name
+    before = set(bpy.context.scene.objects)
+    bpy.ops.import_scene.gltf(filepath=str(path))
+    made = [o for o in bpy.context.scene.objects if o not in before]
+    meshes = [o for o in made if o.type == "MESH"]
+    if not meshes:
+        raise ValueError(f"{file} holds no mesh")
+    bpy.ops.object.select_all(action="DESELECT")
+    for o in meshes:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = meshes[0]
+    bpy.ops.object.parent_clear(type="CLEAR_KEEP_TRANSFORM")
+    if len(meshes) > 1:
+        bpy.ops.object.join()
+    obj = bpy.context.view_layer.objects.active
+    for o in made:
+        if o != obj and o.name in bpy.context.scene.objects and o.type != "MESH":
+            bpy.data.objects.remove(o)
+    bpy.context.view_layer.update()
+    obj.data.transform(Matrix.Rotation(math.radians(turn), 4, "Z") @ obj.matrix_world)
+    obj.matrix_world = Matrix.Identity(4)
+    points = [Vector(v.co) for v in obj.data.vertices]
+    low = Vector((min(p[k] for p in points) for k in range(3)))
+    high = Vector((max(p[k] for p in points) for k in range(3)))
+    factor = longest * MM / max(high - low)
+    centre = (low + high) / 2
+    for vertex in obj.data.vertices:
+        vertex.co = Vector(((vertex.co.x - centre.x) * factor, (vertex.co.y - centre.y) * factor, (vertex.co.z - low.z) * factor))
+    obj.data.update()
+    obj.name = name
+    obj["group"], obj["part"] = group, name
+    bpy.context.view_layer.update()  # the reported extent is read from the bounding box
+    return obj
+
+
+def _take(obj, name, group, inside, planes=()):
+    """Move the faces of obj whose centres pass `inside` (a test on a point in mm) into a new object.
+    The mesh is first cut along `planes` ((point in mm, normal) pairs), so the taken piece ends in a straight edge instead of a ragged one."""
+    import bmesh
+    source = bmesh.new()
+    source.from_mesh(obj.data)
+    for point, normal in planes:
+        bmesh.ops.bisect_plane(source, geom=source.verts[:] + source.edges[:] + source.faces[:], plane_co=obj.matrix_world.inverted() @ (Vector(point) * MM), plane_no=Vector(normal), dist=1e-6)
+    source.to_mesh(obj.data)
+    chosen = [f for f in source.faces if inside(obj.matrix_world @ f.calc_center_median() / MM)]
+    if not chosen:
+        source.free()
+        raise ValueError(f"take: no part of {obj.name!r} lies inside that volume; check its extent with list_parts")
+    if len(chosen) == len(source.faces):
+        source.free()
+        raise ValueError(f"take: the volume holds ALL of {obj.name!r}; make it tighter around the part")
+    taken = bmesh.new()
+    taken.from_mesh(obj.data)
+    keep = {f.index for f in chosen}
+    bmesh.ops.delete(taken, geom=[f for f in taken.faces if f.index not in keep], context="FACES")
+    bmesh.ops.delete(source, geom=chosen, context="FACES")
+    mesh = bpy.data.meshes.new(name)
+    taken.to_mesh(mesh)
+    source.to_mesh(obj.data)
+    taken.free()
+    source.free()
+    obj.data.update()
+    part = bpy.data.objects.new(name, mesh)
+    part.matrix_world = obj.matrix_world.copy()
+    bpy.context.scene.collection.objects.link(part)
+    for material in obj.data.materials:
+        part.data.materials.append(material)
+    part["group"], part["part"] = group, name.split(".")[0]
+    bpy.context.view_layer.update()
+    return part
+
+
+def take_box(obj, name, low, high, group):
+    """Take the piece of obj inside the box from corner low to corner high (x, y, z in mm) out as its own named part. Returns the new part; obj keeps the rest."""
+    low, high = [min(low[k], high[k]) for k in range(3)], [max(low[k], high[k]) for k in range(3)]
+    axes = ((1, 0, 0), (0, 1, 0), (0, 0, 1))
+    planes = [(low, axes[k]) for k in range(3)] + [(high, axes[k]) for k in range(3)]
+    return _take(obj, name, group, lambda p: all(low[k] <= p[k] <= high[k] for k in range(3)), planes)
+
+
+def take_cylinder(obj, name, start, end, radius, group):
+    """Take the piece of obj inside a cylinder from point start to point end (mm) with the given radius out as its own named part: turrets, wheels, barrels, lids."""
+    a, b = Vector(start), Vector(end)
+    axis = b - a
+    length = axis.length
+    axis = axis / length
+
+    def inside(p):
+        along = (p - a).dot(axis)
+        return 0 <= along <= length and ((p - a) - axis * along).length <= radius
+    return _take(obj, name, group, inside, [(a, axis), (b, axis)])
+
+
 def mesh_part(name, triangles, origin, direction, material, group, roll=0):
     """Place a supplied triangle mesh whole, without scaling. Local +z follows direction; roll rotates about it in degrees. Coordinates and origin are mm."""
     axis = Vector(direction)
@@ -389,6 +485,20 @@ def material(name, base, roughness=0.6, metallic=0.0, transmission=0.0, wear=0.0
 
 
 def fit_view(view, section_at=0, size=(1000, 750), samples=14) -> None:
+    """A standard view. A view given as {"view", "parts", "alone": True} draws only those parts, to judge a part taken out of a whole."""
+    hidden = []
+    if isinstance(view, dict) and view.get("alone") and view.get("parts"):
+        hidden = [o for o in bpy.context.scene.objects if o.type == "MESH" and o.name not in view["parts"] and not o.hide_render]
+    for obj in hidden:
+        obj.hide_render = True
+    try:
+        _fit_view(view, section_at, size, samples)
+    finally:
+        for obj in hidden:
+            obj.hide_render = False
+
+
+def _fit_view(view, section_at=0, size=(1000, 750), samples=14) -> None:
     """One standard view of the whole scene, framed from what was built, so a model never places a camera. Angled views frame the detail, so a full-height door can't shrink a sill to nothing."""
     size = tuple(view.get("size", size)) if isinstance(view, dict) else size
     focus = view.get("parts", []) if isinstance(view, dict) else []

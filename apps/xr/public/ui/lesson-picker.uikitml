@@ -73,6 +73,45 @@
     font-size: 2.1;
   }
 
+  .section {
+    flex-direction: column;
+    gap: 1.6;
+  }
+
+  .line {
+    flex-direction: row;
+    align-items: center;
+    gap: 1.6;
+    padding-top: 1.6;
+    padding-bottom: 1.6;
+    padding-left: 2.2;
+    padding-right: 2.2;
+    border-radius: 2;
+    border-width: 0.15;
+    border-color: #4a4e57;
+    background-color: #262930;
+    cursor: pointer;
+  }
+
+  .line:hover {
+    background-color: #2f6fdb;
+    border-color: #8db4f5;
+  }
+
+  .line-title {
+    flex-grow: 1;
+    flex-shrink: 1;
+    color: #fafaf7;
+    font-size: 2.6;
+    font-weight: 700;
+  }
+
+  .line-state {
+    flex-shrink: 0;
+    color: #d6d9de;
+    font-size: 2.1;
+  }
+
   .voice {
     flex-direction: row;
     align-items: center;
@@ -149,28 +188,69 @@
   <span id="eyebrow" class="eyebrow">MIXED REALITY LESSONS</span>
   <span id="heading" class="heading">What do you want to learn?</span>
   <span id="hint" class="hint">Point at a card, then pinch.</span>
-  <div class="row">
-    <div id="lesson-0" class="card">
-      <span id="lesson-0-title" class="card-title">Lesson</span>
-      <span id="lesson-0-sub" class="card-sub">...</span>
+  <div id="home" class="section">
+    <div class="row">
+      <div id="lesson-0" class="card">
+        <span id="lesson-0-title" class="card-title">Lesson</span>
+        <span id="lesson-0-sub" class="card-sub">...</span>
+      </div>
+      <div id="lesson-1" class="card">
+        <span id="lesson-1-title" class="card-title">Lesson</span>
+        <span id="lesson-1-sub" class="card-sub">...</span>
+      </div>
     </div>
-    <div id="lesson-1" class="card">
-      <span id="lesson-1-title" class="card-title">Lesson</span>
-      <span id="lesson-1-sub" class="card-sub">...</span>
+    <div class="row">
+      <div id="lesson-2" class="card">
+        <span id="lesson-2-title" class="card-title">Lesson</span>
+        <span id="lesson-2-sub" class="card-sub">...</span>
+      </div>
+      <div id="lesson-3" class="card">
+        <span id="lesson-3-title" class="card-title">Lesson</span>
+        <span id="lesson-3-sub" class="card-sub">...</span>
+      </div>
+    </div>
+    <div id="voice" class="voice">
+      <span id="voice-label" class="voice-label">Ask for a course: pinch, then say it</span>
+    </div>
+    <span id="shelf-label" class="eyebrow" style="display: none">MY COURSES</span>
+    <div id="course-0" class="line" style="display: none">
+      <span id="course-0-title" class="line-title">Course</span>
+      <span id="course-0-state" class="line-state">...</span>
+    </div>
+    <div id="course-1" class="line" style="display: none">
+      <span id="course-1-title" class="line-title">Course</span>
+      <span id="course-1-state" class="line-state">...</span>
+    </div>
+    <div id="course-2" class="line" style="display: none">
+      <span id="course-2-title" class="line-title">Course</span>
+      <span id="course-2-state" class="line-state">...</span>
     </div>
   </div>
-  <div class="row">
-    <div id="lesson-2" class="card">
-      <span id="lesson-2-title" class="card-title">Lesson</span>
-      <span id="lesson-2-sub" class="card-sub">...</span>
+  <div id="course" class="section" style="display: none">
+    <span id="course-sub" class="hint">...</span>
+    <div id="step-0" class="line" style="display: none">
+      <span id="step-0-title" class="line-title">Lesson</span>
+      <span id="step-0-state" class="line-state">...</span>
     </div>
-    <div id="lesson-3" class="card">
-      <span id="lesson-3-title" class="card-title">Lesson</span>
-      <span id="lesson-3-sub" class="card-sub">...</span>
+    <div id="step-1" class="line" style="display: none">
+      <span id="step-1-title" class="line-title">Lesson</span>
+      <span id="step-1-state" class="line-state">...</span>
     </div>
-  </div>
-  <div id="voice" class="voice">
-    <span id="voice-label" class="voice-label">Ask your own: pinch here, then say it</span>
+    <div id="step-2" class="line" style="display: none">
+      <span id="step-2-title" class="line-title">Lesson</span>
+      <span id="step-2-state" class="line-state">...</span>
+    </div>
+    <div id="step-3" class="line" style="display: none">
+      <span id="step-3-title" class="line-title">Lesson</span>
+      <span id="step-3-state" class="line-state">...</span>
+    </div>
+    <div id="step-4" class="line" style="display: none">
+      <span id="step-4-title" class="line-title">Lesson</span>
+      <span id="step-4-state" class="line-state">...</span>
+    </div>
+    <div id="back" class="voice">
+      <span class="voice-label">Back to all lessons</span>
+    </div>
   </div>
   <div id="status" class="status">
     <div id="status-dot" class="dot"></div>

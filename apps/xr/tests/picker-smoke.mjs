@@ -1,6 +1,7 @@
 // The in-headset lesson picker (src/genui/picker.ts), in the managed browser's emulated XR session.
 // Usage: npx @iwsdk/cli browser run tests/picker-smoke.mjs --timeout 105000
 //   PICKER_STEP=inspect      (default) where the picker is and what it shows
+//   PICKER_STEP=course       the course shelf: show the newest saved course and open its first written lesson
 //   PICKER_STEP=auto-repair  a lesson that crashes while loading is repaired once without asking, then the
 //                            picker shows it ready. Uses "/example" (the server's built-in example module,
 //                            no model call), so it costs nothing.
@@ -22,6 +23,21 @@ export default async function run({ frame, page }) {
       onSurface: window.genui.inspect()?.onSurface ?? null,
       status: window.genui.state.lastMount?.ok ?? null,
     }));
+  }
+  if (step === 'course') {
+    // The course shelf: list the newest saved course's lessons and open its first written lesson, as a
+    // pinch on the rows would. Opening a lesson makes the server start the next one (a model call).
+    return target.evaluate(async () => {
+      const genui = window.genui;
+      await genui.courses.refresh();
+      const course = genui.inspectPicker().courses[0];
+      if (!course) return { error: 'No saved course. Create one: POST /api/courses { "prompt": "..." }' };
+      genui.courses.show(course.id);
+      const ready = course.lessons.indexOf('ready');
+      if (ready >= 0) await genui.courses.step(ready);
+      await new Promise((r) => setTimeout(r, 3000));
+      return { opened: ready, mount: genui.state.lastMount, runtimeErrors: genui.state.runtimeErrors, picker: genui.inspectPicker() };
+    });
   }
   if (step === 'auto-repair') {
     return target.evaluate(async () => {

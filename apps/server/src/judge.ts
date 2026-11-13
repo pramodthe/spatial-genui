@@ -31,11 +31,25 @@ Score the generated component from 1 (very poor) to 5 (excellent) on:
 
 Reply with only a JSON object: {"fidelity": n, "clarity": n, "correctness": n, "handsOn": n, "notes": "one sentence"}`;
 
+// --looks adds a craft score, kept beside the four above (never averaged into them, so runs judged before
+// it existed stay comparable). It is what a learner sees first: is the 3D model well made?
+const LOOKS_PROMPT = JUDGE_PROMPT.replace(
+  '\nReply with only a JSON object: {',
+  `- looks: how well made is the 3D model itself, apart from the panel? 1 = a few plain boxes, spheres or
+  cylinders in flat colors; 3 = recognisable, right proportions, some secondary parts and materials;
+  5 = a carefully made scale model: true shapes, fine repeated detail, varied materials and surface texture.
+  (3 if the request needs no 3D model.)
+
+Reply with only a JSON object: {"looks": n, `,
+);
+
 const cli = parseCli(process.argv.slice(2), {
   values: ['judges', 'concurrency'],
-  usage: 'npm run bench:judge -- <results dir> [--judges id,id] [--concurrency n]',
+  booleans: ['looks'],
+  usage: 'npm run bench:judge -- <results dir> [--judges id,id] [--concurrency n] [--looks]',
 });
 const args = cli.flags;
+const withLooks = cli.booleans.has('looks');
 const dir = resolve(cli.positional[0] ?? '');
 if (!existsSync(join(dir, 'browser.jsonl'))) {
   console.error('Usage: npm run bench:judge -- <results dir with browser.jsonl> [--judges id,id]');
@@ -79,7 +93,7 @@ await Promise.all(Array.from({ length: concurrency }, async () => {
       // Inside the try: a missing screenshot becomes an error row, not a crash of the whole run.
       const image = (await readFile(join(dir, row.shot!))).toString('base64');
       const reply = await complete([
-        { role: 'system', content: JUDGE_PROMPT },
+        { role: 'system', content: withLooks ? LOOKS_PROMPT : JUDGE_PROMPT },
         {
           role: 'user',
           content: [
@@ -91,7 +105,9 @@ await Promise.all(Array.from({ length: concurrency }, async () => {
       const parsed = JSON.parse(reply.text.match(/\{[\s\S]*\}/)?.[0] ?? 'null');
       const scores = Object.fromEntries(DIMENSIONS.map((d) => [d, Number(parsed?.[d])]));
       if (!DIMENSIONS.every((d) => scores[d] >= 1 && scores[d] <= 5)) throw new Error(`Unparseable reply: ${reply.text.slice(0, 200)}`);
-      await appendFile(judgeFile, JSON.stringify({ ...base, scores, notes: String(parsed.notes ?? '').slice(0, 300) }) + '\n');
+      const looks = withLooks ? Number(parsed?.looks) : undefined;
+      if (withLooks && !(looks! >= 1 && looks! <= 5)) throw new Error(`No looks score in the reply: ${reply.text.slice(0, 200)}`);
+      await appendFile(judgeFile, JSON.stringify({ ...base, scores, looks, notes: String(parsed.notes ?? '').slice(0, 300) }) + '\n');
       console.error(`${judge.id.padEnd(18)} ${row.model.padEnd(18)} ${row.promptId.padEnd(15)} ${DIMENSIONS.map((d) => scores[d]).join(' ')}`);
     } catch (err) {
       await appendFile(judgeFile, JSON.stringify({ ...base, error: (err as Error).message.slice(0, 300) }) + '\n');

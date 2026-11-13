@@ -36,6 +36,24 @@ export type CaptureOptions = {
 
 const FOV_DEG = 32;
 
+/**
+ * Grow `box` by a mesh as it is now. An instanced mesh keeps the bounds of the first time it was measured,
+ * and lessons move instances every frame (flow beads, sparks), so its bounds are taken afresh; one whose
+ * instances have not been placed yet (all at the origin, full size) is left out.
+ */
+export function expandByMesh(box: Box3, object: Object3D) {
+  const instanced = object as Object3D & { isInstancedMesh?: boolean; count?: number; instanceMatrix?: { array: ArrayLike<number> }; computeBoundingBox?: () => void };
+  if (instanced.isInstancedMesh && instanced.instanceMatrix) {
+    const m = instanced.instanceMatrix.array;
+    let placed = false;
+    // An unplaced instance still has the identity matrix (1 on the diagonal: every fifth entry of its 16).
+    for (let i = 0; i < (instanced.count ?? 0) * 16 && !placed; i++) placed = m[i] !== ((i % 16) % 5 === 0 ? 1 : 0);
+    if (!placed) return;
+    instanced.computeBoundingBox?.();
+  }
+  box.expandByObject(object, false);
+}
+
 export function captureLesson(world: World, root: Object3D, panelHolders: Set<Object3D>, options: CaptureOptions = {}): string | null {
   const width = Math.round(options.width ?? 1280);
   const height = Math.round(options.height ?? 960);
@@ -50,7 +68,7 @@ export function captureLesson(world: World, root: Object3D, panelHolders: Set<Ob
     if (options.subject !== 'all' && panelHolders.has(object)) return;
     const kind = object as { isMesh?: boolean; isPoints?: boolean; isSprite?: boolean; name?: string };
     // Shadows, glows and particle clouds are dressing: they shouldn't push the camera back.
-    if (kind.isMesh && object.name !== 'contact shadow') box.expandByObject(object, false);
+    if (kind.isMesh && object.name !== 'contact shadow') expandByMesh(box, object);
     for (const child of object.children) visit(child);
   };
   visit(root);

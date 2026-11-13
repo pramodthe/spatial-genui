@@ -992,6 +992,204 @@ export function createKit(THREE, options = {}) {
     return group;
   }
 
+  // --- Cards and quizzes ----------------------------------------------------------------------------------
+
+  const CARD = { width: 0.1, height: 0.044, depth: 0.007 };
+  const CARD_COLORS = { idle: '#2a2f38', right: '#1f7a3a', wrong: '#a32a3a' };
+
+  /** Text drawn on a canvas, wrapped and shrunk to fit: the face of a card. Dry runs have no canvas. */
+  function textFace(text, width, height, color) {
+    if (dry || typeof document === 'undefined') return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = Math.round((512 * height) / width);
+    const context = canvas.getContext('2d');
+    if (!context) return null;
+    const words = String(text).split(/\s+/).filter(Boolean);
+    let size = 76;
+    let lines = [];
+    for (; size >= 26; size -= 6) {
+      context.font = `700 ${size}px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif`;
+      lines = [];
+      let line = '';
+      for (const word of words) {
+        const next = line ? `${line} ${word}` : word;
+        if (line && context.measureText(next).width > canvas.width - 48) {
+          lines.push(line);
+          line = word;
+        } else {
+          line = next;
+        }
+      }
+      if (line) lines.push(line);
+      const widest = Math.max(...lines.map((l) => context.measureText(l).width));
+      if (lines.length * size * 1.18 <= canvas.height - 28 && widest <= canvas.width - 40) break;
+    }
+    context.fillStyle = color;
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    lines.forEach((l, i) => context.fillText(l, canvas.width / 2, canvas.height / 2 + (i - (lines.length - 1) / 2) * size * 1.18));
+    const tex = own(new THREE.CanvasTexture(canvas));
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 4;
+    return tex;
+  }
+
+  /**
+   * A small card with a word or short phrase on it, facing +z: name tags, flashcards, answers to sort.
+   * Returns a group (add it to root; pass it to traits to make it grabbable). Options: width, height,
+   * color, textColor. card.userData.setColor(color) recolors it.
+   */
+  function card(text, o = {}) {
+    const width = o.width ?? CARD.width;
+    const height = o.height ?? CARD.height;
+    const body = own(new THREE.MeshStandardMaterial({ color: o.color ?? CARD_COLORS.idle, roughness: 0.6 }));
+    const group = new THREE.Group();
+    group.name = `card: ${text}`;
+    group.add(new THREE.Mesh(roundedBox(width, height, CARD.depth, 0.004), body));
+    const face = textFace(text, width, height, o.textColor ?? '#fafaf7');
+    if (face) {
+      // The same text on both sides, so a card turned in the hand still reads.
+      for (const side of [1, -1]) {
+        const label = new THREE.Mesh(own(new THREE.PlaneGeometry(width * 0.94, height * 0.94)), own(new THREE.MeshBasicMaterial({ map: face, transparent: true, depthWrite: false })));
+        label.position.z = side * (CARD.depth / 2 + 0.0004);
+        if (side < 0) label.rotation.y = Math.PI;
+        label.raycast = noHit;
+        group.add(label);
+      }
+    }
+    group.userData.text = String(text);
+    group.userData.setColor = (color) => body.color.set(color);
+    return group;
+  }
+
+  /**
+   * A grab-and-drop matching quiz. Each item is a card the learner picks up and drops on the place it
+   * belongs: a part of the model, a bin, a slot. A right drop snaps the card there and turns it green; a
+   * wrong one sends it back to the tray and flashes red.
+   *   const quiz = kit.matchQuiz({
+   *     root, traits, isGrabbed,
+   *     items: [{ text: 'Left ventricle', at: [0.03, 0.12, 0.02] }, ...],   // at: where it belongs, in root space
+   *     tray: [0, 0.03, 0.16],                                              // centre of the row where cards wait
+   *     onChange({ right, total, misses, done, last }) { ... },             // last: { text, correct } or null
+   *   });
+   *   return { root, update(time, delta) { quiz.update(time, delta); } };
+   * Options: radius (how near a drop must land, default 0.05), markers (false hides the target dots),
+   * shuffle (false keeps the cards in the given order). quiz.reset() starts over.
+   */
+  function matchQuiz(o = {}) {
+    const { root, traits, isGrabbed } = o;
+    if (!root?.isObject3D || typeof traits !== 'function' || typeof isGrabbed !== 'function') {
+      throw new Error('kit.matchQuiz: pass { root, traits, isGrabbed } from build() along with items.');
+    }
+    if (!Array.isArray(o.items) || o.items.length < 2) throw new Error('kit.matchQuiz: give at least 2 items of { text, at: [x, y, z] }.');
+    const radius = o.radius ?? 0.05;
+    const tray = new THREE.Vector3(...vec3(o.tray ?? [0, 0.03, 0.16], 'matchQuiz tray'));
+    const total = o.items.length;
+    // Cards wait in rows of four, far enough apart that each is its own grab target.
+    const perRow = Math.min(4, total);
+    const order = o.items.map((_, i) => i);
+    if (o.shuffle !== false && !dry) {
+      for (let i = order.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [order[i], order[j]] = [order[j], order[i]];
+      }
+    }
+    const markerMaterial = material('light', { color: o.markerColor ?? '#ffd27a', glow: 1.6 });
+    const markerShape = own(new THREE.SphereGeometry(0.006, 16, 12));
+    const entries = o.items.map((item, i) => {
+      const at = new THREE.Vector3(...vec3(item.at, 'matchQuiz item.at'));
+      const slot = order.indexOf(i);
+      const home = new THREE.Vector3(
+        tray.x + ((slot % perRow) - (perRow - 1) / 2) * (CARD.width + 0.045),
+        tray.y + Math.floor(slot / perRow) * (CARD.height + 0.03),
+        tray.z,
+      );
+      const mesh = card(item.text, { width: o.cardWidth });
+      mesh.position.copy(home);
+      root.add(mesh);
+      traits(mesh, { grab: true });
+      let marker = null;
+      if (o.markers !== false) {
+        marker = new THREE.Mesh(markerShape, markerMaterial);
+        marker.name = 'quiz target';
+        marker.position.copy(at);
+        root.add(marker);
+      }
+      return { item, at, home, mesh, marker, held: false, placed: false, flash: 0 };
+    });
+    const state = { right: 0, misses: 0 };
+    const report = (last) => o.onChange?.({ right: state.right, total, misses: state.misses, done: state.right === total, last });
+    const rest = new THREE.Quaternion();
+
+    /** A card has just been let go: where did it land? */
+    function settle(entry) {
+      let nearest = null;
+      let distance = Infinity;
+      for (const other of entries) {
+        if (other.placed) continue;
+        const d = entry.mesh.position.distanceTo(other.at);
+        if (d < distance) [nearest, distance] = [other, d];
+      }
+      if (!nearest || distance > radius) return; // let go in the open: it goes back to the tray, no penalty
+      if (nearest === entry) {
+        entry.placed = true;
+        entry.flash = 0; // a red flash from an earlier miss must not undo the green
+        state.right++;
+        entry.mesh.userData.setColor(CARD_COLORS.right);
+        if (entry.marker) entry.marker.visible = false;
+        report({ text: entry.item.text, correct: true });
+      } else {
+        state.misses++;
+        entry.flash = 0.7;
+        entry.mesh.userData.setColor(CARD_COLORS.wrong);
+        report({ text: entry.item.text, correct: false });
+      }
+    }
+
+    return {
+      cards: entries.map((e) => e.mesh),
+      update(_time, delta = 0.016) {
+        const ease = 1 - Math.exp(-delta * 9);
+        for (const entry of entries) {
+          const held = isGrabbed(entry.mesh);
+          if (entry.held && !held && !entry.placed) settle(entry);
+          entry.held = held;
+          if (entry.flash > 0) {
+            entry.flash -= delta;
+            if (entry.flash <= 0) entry.mesh.userData.setColor(CARD_COLORS.idle);
+          }
+          if (held) continue;
+          // A placed card rests just above its target; any other drifts back to its place in the tray.
+          const goal = entry.placed ? entry.at : entry.home;
+          const lift = entry.placed ? CARD.height * 0.8 : 0;
+          entry.mesh.position.x += (goal.x - entry.mesh.position.x) * ease;
+          entry.mesh.position.y += (goal.y + lift - entry.mesh.position.y) * ease;
+          entry.mesh.position.z += (goal.z - entry.mesh.position.z) * ease;
+          entry.mesh.quaternion.slerp(rest, ease);
+        }
+      },
+      /** For tests and "show me": put item `index` down at item `onto`'s place, as a learner's drop would. */
+      drop(index, onto = index) {
+        const entry = entries[index];
+        if (!entry || entry.placed || !entries[onto]) return;
+        entry.mesh.position.copy(entries[onto].at);
+        settle(entry);
+      },
+      reset() {
+        state.right = 0;
+        state.misses = 0;
+        for (const entry of entries) {
+          entry.placed = false;
+          entry.flash = 0;
+          entry.mesh.userData.setColor(CARD_COLORS.idle);
+          if (entry.marker) entry.marker.visible = true;
+        }
+        report(null);
+      },
+    };
+  }
+
   // --- Panels ---------------------------------------------------------------------------------------------
 
   /**
@@ -1107,6 +1305,7 @@ export function createKit(THREE, options = {}) {
     material, texture, theme,
     roundedBox, extrude, lathe, tube, gear, instances, along, merge,
     glow, particles, ring, shadow, stand, arrow,
+    card, matchQuiz,
     finalize, pump, dispose,
     presets: Object.keys(PRESETS),
     textures: Object.keys(TEXTURES),

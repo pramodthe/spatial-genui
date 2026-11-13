@@ -14,6 +14,7 @@ import {
 import { EXAMPLE_LESSONS } from './lessons';
 import { cancelListening, isListening, startListening, stopAndTranscribe, voiceAvailable } from './voice';
 import type { LessonStatus } from './overlay';
+import { courseProgress, createCourse, fetchCourseLesson, listCourses, type CourseSummary } from './courses';
 
 /**
  * In-headset lesson picker. The desktop prompt box is a DOM overlay, which an immersive session doesn't
@@ -21,6 +22,9 @@ import type { LessonStatus } from './overlay';
  * With no lesson it stands front and centre; once a lesson is ready it docks to the learner's left, out of
  * the lesson's way but a glance away, to pick another. It also shows build progress and, when a lesson
  * breaks after the automatic repair, a "Fix it" button.
+ *
+ * Below the cards is the course shelf: a spoken subject becomes a saved course, planned at once and written
+ * in the background (courses.ts). A course row opens its list of lessons; a ready lesson opens with a pinch.
  */
 
 type PickerHandlers = {
@@ -30,6 +34,8 @@ type PickerHandlers = {
   fresh: () => void;
   /** A request the learner spoke (written live). */
   ask: (prompt: string) => void;
+  /** Open a lesson that is already written (from a saved course). */
+  open: (code: string, prompt: string) => void;
   onStatus: (listener: (status: LessonStatus) => void) => () => void;
 };
 
@@ -38,6 +44,11 @@ const CENTRE = { width: 0.5, distance: 0.6, belowEyes: 0.12, yaw: 0 };
 const DOCKED = { width: 0.32, distance: 0.5, belowEyes: 0.3, yaw: (60 * Math.PI) / 180 };
 // Frames to wait after entering XR before placing: the first frames can still have the pre-session camera pose.
 const SETTLE_FRAMES = 20;
+const SHELF_ROWS = 3;
+const COURSE_STEPS = 5;
+// How often the shelf asks the server while a course is being planned or written.
+const COURSE_POLL_MS = 4000;
+const STEP_STATES = { pending: 'Pinch to write it', generating: 'Writing...', ready: 'Ready: pinch to open', failed: 'Failed: pinch to retry' } as const;
 
 const PHASES: Record<LessonStatus['phase'], { dot: string; background: string }> = {
   idle: { dot: '#8a8f99', background: '#262930' },
@@ -69,6 +80,14 @@ export function inspectPicker() {
   return picker.inspect();
 }
 
+/** For tests: what a learner does on the course shelf by voice and pinch. */
+export const pickerCourses = {
+  request: (subject: string) => picker?.requestCourse(subject),
+  show: (id: string | null) => picker?.showCourse(id),
+  step: (index: number) => picker?.openStep(index),
+  refresh: () => picker?.refreshCourses(),
+};
+
 class LessonPickerSystem extends createSystem({
   documents: { required: [PanelUI, PanelDocument] },
 }) {
@@ -81,6 +100,12 @@ class LessonPickerSystem extends createSystem({
   private docked = false;
   private placeIn = -1;
   private ticker = 0;
+  private courses: CourseSummary[] = [];
+  /** The course whose lessons are listed (null: the home view). */
+  private shown: string | null = null;
+  private coursePoll = 0;
+  /** Titles of course lessons opened here, by their request, for the status line. */
+  private readonly titles = new Map<string, string>();
   private readonly head = new Vector3();
   private readonly forward = new Vector3();
 
@@ -105,10 +130,12 @@ class LessonPickerSystem extends createSystem({
       this.world.visibilityState.subscribe((visibility) => {
         this.inXR = visibility !== VisibilityState.NonImmersive;
         if (this.inXR) this.placeIn = SETTLE_FRAMES;
+        if (this.inXR) void this.refreshCourses();
         this.refreshVisibility();
       }),
       handlers!.onStatus((status) => this.onStatus(status)),
       () => clearInterval(this.ticker),
+      () => clearTimeout(this.coursePoll),
       () => cancelListening(),
       () => (picker = null),
     );
@@ -148,6 +175,8 @@ class LessonPickerSystem extends createSystem({
       phase: this.status.phase,
       position: [at.x, at.y, at.z].map((v) => Math.round(v * 1000) / 1000),
       cards: EXAMPLE_LESSONS.map((lesson, i) => ({ id: `lesson-${i}`, title: lesson.title })),
+      shown: this.shown,
+      courses: this.courses.map((c) => ({ id: c.id, title: c.title, status: c.status, progress: courseProgress(c), lessons: c.lessons.map((l) => l.status) })),
     };
   }
 
@@ -175,6 +204,89 @@ class LessonPickerSystem extends createSystem({
     document.getElementById('fresh')?.addEventListener('click', () => handlers?.fresh());
     document.getElementById('voice')?.addEventListener('click', () => void this.toggleVoice());
     if (!voiceAvailable()) this.setVoice('Voice input is not available in this browser.', '#3a3d44');
+    for (let i = 0; i < SHELF_ROWS; i++) document.getElementById(`course-${i}`)?.addEventListener('click', () => this.showCourse(this.courses[i]?.id ?? null));
+    for (let i = 0; i < COURSE_STEPS; i++) document.getElementById(`step-${i}`)?.addEventListener('click', () => void this.openStep(i));
+    document.getElementById('back')?.addEventListener('click', () => this.showCourse(null));
+    void this.refreshCourses();
+  }
+
+  /** A spoken (or typed) subject becomes a saved course: planned now, written in the background. */
+  async requestCourse(subject: string) {
+    try {
+      const course = await createCourse(subject);
+      this.courses = [course, ...this.courses.filter((c) => c.id !== course.id)];
+      this.showCourse(course.id);
+      this.pollCourses();
+    } catch (err) {
+      this.setVoice(`That didn't work: ${ascii((err as Error).message)}`, '#3a3d44');
+    }
+  }
+
+  showCourse(id: string | null) {
+    this.shown = id && this.courses.some((c) => c.id === id) ? id : null;
+    this.applySize();
+    this.renderCourses();
+  }
+
+  /** A lesson row: open it if it is written; otherwise the server starts writing it. */
+  async openStep(index: number) {
+    const course = this.courses.find((c) => c.id === this.shown);
+    if (!course?.lessons[index]) return;
+    try {
+      const lesson = await fetchCourseLesson(course.id, index);
+      if (lesson.status === 'ready' && lesson.code) {
+        this.titles.set(lesson.prompt, lesson.title);
+        handlers?.open(lesson.code, lesson.prompt);
+      }
+    } catch {
+      // The shelf below shows what the server says next.
+    }
+    await this.refreshCourses();
+  }
+
+  async refreshCourses() {
+    try {
+      this.courses = await listCourses();
+    } catch {
+      return; // the server may be restarting; the next poll or visit tries again
+    }
+    if (this.shown && !this.courses.some((c) => c.id === this.shown)) this.shown = null;
+    this.renderCourses();
+    this.pollCourses();
+  }
+
+  /** Keep asking while something is being planned or written. */
+  private pollCourses() {
+    clearTimeout(this.coursePoll);
+    const active = this.courses.some((c) => c.status === 'planning' || c.lessons.some((l) => l.status === 'generating'));
+    if (active) this.coursePoll = window.setTimeout(() => void this.refreshCourses(), COURSE_POLL_MS);
+  }
+
+  private renderCourses() {
+    const document = this.document;
+    if (!document) return;
+    const course = this.courses.find((c) => c.id === this.shown);
+    document.getElementById('home')?.setProperties({ display: course ? 'none' : 'flex' });
+    document.getElementById('course')?.setProperties({ display: course ? 'flex' : 'none' });
+    document.getElementById('shelf-label')?.setProperties({ display: this.courses.length ? 'flex' : 'none' });
+    for (let i = 0; i < SHELF_ROWS; i++) {
+      const row = this.courses[i];
+      document.getElementById(`course-${i}`)?.setProperties({ display: row ? 'flex' : 'none' });
+      if (!row) continue;
+      document.getElementById(`course-${i}-title`)?.setProperties({ text: ascii(row.title) });
+      document.getElementById(`course-${i}-state`)?.setProperties({ text: courseProgress(row) });
+    }
+    if (!course) return;
+    document.getElementById('course-sub')?.setProperties({
+      text: ascii(course.status === 'failed' ? `Could not be planned: ${course.error ?? ''}` : course.subtitle || 'Pinch a lesson to open it.'),
+    });
+    for (let i = 0; i < COURSE_STEPS; i++) {
+      const lesson = course.lessons[i];
+      document.getElementById(`step-${i}`)?.setProperties({ display: lesson ? 'flex' : 'none', borderColor: lesson?.status === 'ready' ? '#3cb44b' : '#4a4e57' });
+      if (!lesson) continue;
+      document.getElementById(`step-${i}-title`)?.setProperties({ text: `${i + 1}. ${ascii(lesson.title)}` });
+      document.getElementById(`step-${i}-state`)?.setProperties({ text: STEP_STATES[lesson.status] });
+    }
   }
 
   /** Pinch once to start talking, again to finish; the request is then written live. */
@@ -196,8 +308,8 @@ class LessonPickerSystem extends createSystem({
       if (!text) {
         this.setVoice("I didn't catch that. Pinch here and try again.", '#1f3354');
       } else {
-        this.setVoice(`You asked: "${ascii(text)}"`, '#1f3354');
-        handlers?.ask(text);
+        this.setVoice(`Planning a course on: "${ascii(text)}"`, '#1f3354');
+        await this.requestCourse(text);
       }
     } catch (err) {
       this.setVoice(`Voice failed: ${ascii((err as Error).message)}`, '#3a3d44');
@@ -217,8 +329,9 @@ class LessonPickerSystem extends createSystem({
     const width = this.docked ? DOCKED.width : CENTRE.width;
     // Height is generous so the width is what sets the scale (as the host does for lesson panels).
     this.document?.setTargetDimensions(width, width * 4);
-    this.document?.getElementById('hint')?.setProperties({ display: this.docked ? 'none' : 'flex' });
-    this.document?.getElementById('heading')?.setProperties({ text: this.docked ? 'Pick another lesson' : 'What do you want to learn?' });
+    const course = this.courses.find((c) => c.id === this.shown);
+    this.document?.getElementById('hint')?.setProperties({ display: this.docked || course ? 'none' : 'flex' });
+    this.document?.getElementById('heading')?.setProperties({ text: course ? ascii(course.title) : this.docked ? 'Pick another lesson' : 'What do you want to learn?' });
   }
 
   /** Stand the picker in front of (or, docked, to the left of) where the learner is looking, facing them. */
@@ -241,7 +354,7 @@ class LessonPickerSystem extends createSystem({
     if (!document) return;
     const { phase, prompt, message, since } = this.status;
     const seconds = Math.max(0, Math.round((performance.now() - since) / 1000));
-    const title = EXAMPLE_LESSONS.find((lesson) => lesson.prompt === prompt)?.title ?? 'your lesson';
+    const title = EXAMPLE_LESSONS.find((lesson) => lesson.prompt === prompt)?.title ?? (prompt && this.titles.get(prompt)) ?? 'your lesson';
     const text = {
       idle: 'Pick a lesson to start.',
       building: `Writing ${title === 'your lesson' ? title : `the ${title} lesson`}${message ? ` (${ascii(message)})` : ''}... ${seconds} s`,

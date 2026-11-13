@@ -15,7 +15,7 @@ image = (modal.Image.debian_slim(python_version="3.13")
 
 
 @app.function(image=image, cpu=8.0, memory=8192, timeout=290, block_network=True)
-def live_step(kit: str, steps: list, views: list, export: bool = False, measure: str = "", relations: dict | None = None):
+def live_step(kit: str, steps: list, views: list, export: bool = False, measure: str = "", relations: dict | None = None, assets: dict | None = None):
     """A model's live scene. The scene is the list of code steps it has run, replayed in order, so it needs no saved file, an undo only drops the last step, and every
     size stays in readable code. The last step's failure comes back as feedback, and the steps before it still stand. Comes back in pieces, as the network is blocked.
     `measure` is builder/measure.py, which travels like the kit. A measurement that fails is reported and costs the step nothing."""
@@ -34,6 +34,11 @@ def live_step(kit: str, steps: list, views: list, export: bool = False, measure:
     for old in out.iterdir():
         old.unlink()
     os.environ["BUILD_OUT"] = str(out)
+    held = Path("/tmp/assets")  # models a step may load with load_model(), sent with the call
+    held.mkdir(exist_ok=True)
+    for name, data in (assets or {}).items():
+        (held / Path(name).name).write_bytes(data)
+    os.environ["BUILD_ASSETS"] = str(held)
     module = types.ModuleType("blender_kit")
     exec(compile(kit, "blender_kit.py", "exec"), module.__dict__)
     sys.modules["blender_kit"] = module

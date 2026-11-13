@@ -32,6 +32,7 @@ VIEWS = ("three_quarter", "other_side", "front", "back", "side", "top")
 AGAIN = 2  # times a dropped sandbox call is made again
 REFUSALS = 3  # finish is sent back this many times at most
 SHAPES = ("prism", "box", "ball", "sheet", "rounded_path", "lathe", "rod", "tube", "bevel", "smooth", "cut", "copies", "material")
+SPLIT_SHAPES = ("take_box", "take_cylinder")
 TOOLS = [
     {"type": "function", "name": "run_python", "description": "Run a step of Python against the live scene. Whatever earlier steps built is still there, and constants and functions you defined stay defined. Returns any error, what the scene now holds, and two renders.",
      "parameters": {"type": "object", "additionalProperties": False, "required": ["intent", "code"], "properties": {"intent": {"type": "string", "description": "What this step adds, in a few words a person can read"}, "code": {"type": "string"}}}},
@@ -67,9 +68,30 @@ Call finish only when the main parts, their attachments and the fine detail are 
 """
 
 
+SPLIT = """You are given a finished, textured 3D model of one object as a single mesh, already loaded in a live Blender scene as the object "body". It looks right but it is one lump:
+a learner in a mixed-reality headset can't pull anything off it. Your job is to turn it into real, separately named parts WITHOUT changing how it looks.
+
+First understand it. Call list_parts for its extent in mm, and look at it from the front, side, top and an angle. Decide which side is which, and which real parts a learner should be able
+to take off (for a tank: the turret, the gun barrel, each track, the hull; for a microscope: the eyepiece, the arm, the stage, the base).
+
+Then take the parts out one at a time, the most separate first:
+- take_box(obj, name, low, high, group) and take_cylinder(obj, name, start, end, radius, group) move the faces inside a volume out of an object into a new named object. You can take from "body"
+  or from a part you already took (take the turret, then take the gun barrel out of the turret). Get an object by name with bpy.data.objects["body"].
+- After each take, look at the new part alone (look with parts=[its name] draws only that part) and at what is left (parts=["body"]). If the cut took too much or too little, undo and take again with a better volume.
+  A good cut follows the real joint between the parts.
+- When the last pieces are out, rename what is left of "body" to what it really is (obj.name = "hull"; obj["part"] = "hull"; obj["group"] = "hull").
+Rules:
+- Never move, scale or rotate a part: together the parts must still look exactly like the model you were given. Never delete geometry. Never rebuild a part from new shapes.
+- Aim for 4 to 10 parts that a person would name. Name each as a person says it. Left and right get their own names ("left track", "right track").
+- If the front does not face -y, or a long vehicle does not lie along x, say so in finish under unsure; do not turn the model.
+Call finish when every part a learner would want to take off is its own object and you have looked at each one alone.
+"""
+ASSETS: dict = {}  # model files the steps may load, by file name; set when a model is supplied
+
+
 def api() -> str:
     tree = ast.parse((HERE / "kit.py").read_text())
-    lines = [f"{n.name}({ast.unparse(n.args)}): {ast.get_docstring(n) or ''}" for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in SHAPES]
+    lines = [f"{n.name}({ast.unparse(n.args)}): {ast.get_docstring(n) or ''}" for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in (SPLIT_SHAPES if ASSETS else SHAPES)]
     names = ", ".join(re.findall(r'^\s+"(\w+)": _material\(', (HERE / "kit.py").read_text(), re.M))
     return "Already imported in every step: bpy, math, and these shapes. They take mm and return the Blender object:\n" + "\n".join(lines) + f"\nNamed materials: {names}."
 
@@ -103,7 +125,7 @@ def sandbox(steps, views, export=False, measure=False) -> dict:
     for attempt in range(AGAIN + 1):
         found: dict = {}
         try:
-            for name, piece in modal.Function.from_name("spatial-genui-3d-v2-blender", "live_step").remote_gen(kit, steps, list(views), export, measuring, None):
+            for name, piece in modal.Function.from_name("spatial-genui-3d-v2-blender", "live_step").remote_gen(kit, steps, list(views), export, measuring, None, ASSETS or None):
                 found[name] = found.get(name, b"") + piece
             return found
         except (modal.exception.InternalError, modal.exception.ServiceError, modal.exception.ConnectionError, modal.exception.RemoteError) as error:
@@ -186,7 +208,7 @@ class Live:
     def look(self, args):
         wanted = [v for v in args["views"] if v in VIEWS][:3] or ["three_quarter"]
         parts = args.get("parts") or []
-        found = sandbox(self.steps, [{"view": v, "parts": parts} for v in wanted] if parts else wanted)
+        found = sandbox(self.steps, [{"view": v, "parts": parts, "alone": bool(ASSETS)} for v in wanted] if parts else wanted)
         names = {r["name"] for r in json.loads(found["scene.json"])["parts"]}
         if any(p not in names for p in parts):
             return {"error": "Unknown object names. Use list_parts for exact names.", "unknown": [p for p in parts if p not in names]}, []
@@ -202,6 +224,10 @@ class Live:
     def finish(self, args):
         if not self.steps:
             return {"error": "nothing is built yet"}, []
+        if ASSETS:
+            held = json.loads(sandbox(self.steps, ())["scene.json"])["parts"]
+            if len(held) < 3:
+                return {"error": f"The model is still {len(held)} object(s). Take its real parts out before finishing."}, []
         self.say("[check] judging the model from every side")
         found = sandbox(self.steps, [{"view": v, "size": [1600, 1200]} if v == "three_quarter" else v for v in VIEWS], measure=True)
         scene = json.loads(found["scene.json"])
@@ -222,7 +248,7 @@ class Live:
         self.say(f"[check] {result['right']} of {result['total']} right, look {result['looks']}/5" + (f", floating: {', '.join(loose[:5])}" if loose else ""))
         if self.folder:
             (self.folder / "checks.json").write_text(json.dumps(self.checks, indent=1))
-        if result["passed"] or self.refused >= REFUSALS:
+        if result["passed"] or self.refused >= REFUSALS or ASSETS:  # a supplied model's look is not the splitter's to fix
             self.complete(args)
             return {"ok": True}, []
         self.refused += 1
@@ -249,7 +275,10 @@ class Live:
         self.features, tokens = checker.read_brief(meta.ask, self.brief, self.reference)
         self.spent += tokens
         self.say(f"[check] noted {len(self.features['items'])} things the model must show")
-        text = f"Build this: {self.brief}\nAn independent checker will look for these, among others (check them against what you know of the real object):\n" + json.dumps([i["what"] for i in self.features["items"]])
+        if ASSETS:
+            text = f"The model is: {self.brief}\nSplit it into real named parts."
+        else:
+            text = f"Build this: {self.brief}\nAn independent checker will look for these, among others (check them against what you know of the real object):\n" + json.dumps([i["what"] for i in self.features["items"]])
         content = [{"type": "input_text", "text": text}]
         if self.reference:
             content += [{"type": "input_text", "text": "Reference picture:"}, picture(self.reference, 1200)]
@@ -261,7 +290,7 @@ class Live:
             if self.spent >= TOKENS - CHECK_RESERVE:
                 self.say(f"stopping: {self.spent} tokens")
                 break
-            response = meta.respond({"instructions": SYSTEM + "\n" + api(), "tools": TOOLS, "max_output_tokens": 32768, "reasoning": {"effort": "medium"}, "input": conversation,
+            response = meta.respond({"instructions": (SPLIT if ASSETS else SYSTEM) + "\n" + api(), "tools": TOOLS, "max_output_tokens": 32768, "reasoning": {"effort": "medium"}, "input": conversation,
                                      "prompt_cache_key": f"build-{abs(hash(self.brief)) % 10**8}"})
             self.calls += 1
             usage = response.get("usage") or {}
@@ -319,11 +348,18 @@ def main():
     parser.add_argument("--brief", required=True)
     parser.add_argument("--reference")
     parser.add_argument("--out")
+    parser.add_argument("--model", help="a finished model file (.glb) to split into named parts, instead of building from nothing")
+    parser.add_argument("--longest", type=float, default=320, help="with --model: its longest side in mm")
+    parser.add_argument("--turn", type=float, default=0, help="with --model: degrees to turn it about the vertical axis on loading")
     parser.add_argument("--resume", action="store_true", help="carry on from the steps saved in the output folder")
     args = parser.parse_args()
     folder = Path(args.out) if args.out else HERE.parents[2] / "data" / "blender-work" / args.name
     started = time.time()
     saved = json.loads((folder / "steps.json").read_text()) if args.resume and (folder / "steps.json").exists() else {}
+    if args.model:
+        ASSETS[Path(args.model).name] = Path(args.model).read_bytes()
+        if not saved.get("steps"):
+            saved = {"steps": [f'load_model("body", {Path(args.model).name!r}, {args.longest}, "body", turn={args.turn})'], "intents": ["load the supplied model"]}
     live = Live(args.brief, Path(args.reference).read_bytes() if args.reference else None, steps=saved.get("steps"), intents=saved.get("intents"), folder=folder)
     live.spent, live.calls = saved.get("tokens", 0), saved.get("calls", 0)
     live.run()

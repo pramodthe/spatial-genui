@@ -10,6 +10,7 @@ import { loadModel } from './models.js';
 import { EXAMPLE_MODULE } from './prompt.js';
 import { admit, admitVoice, recordSpend, spendToday, visitorOf } from './guard.js';
 import { transcribe } from './voice.js';
+import { getCourse, listCourses, openLesson, startCourse, summary } from './courses.js';
 
 const MAX_BODY_BYTES = 200_000;
 const KIT_FILE = fileURLToPath(new URL('./kit/kit.js', import.meta.url));
@@ -88,6 +89,24 @@ const server = createServer(async (req, res) => {
       const audio = await readBytes(req, MAX_AUDIO_BYTES);
       const result = await transcribe(audio);
       return send(res, result.ok ? 200 : 502, result);
+    }
+    // Saved courses (courses.ts): planned at once, lessons written in the background and kept on disk.
+    if (req.method === 'POST' && req.url === '/api/courses') {
+      const body = await readJson(req);
+      const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
+      if (!prompt || prompt.length > 500) return send(res, 400, { error: 'Send { "prompt": "…" } (1–500 characters).' });
+      const refusal = await admit(visitorOf(req), prompt);
+      if (refusal) return send(res, refusal.status, { ok: false, error: refusal.error, reason: refusal.reason });
+      return send(res, 200, summary(startCourse(prompt)));
+    }
+    if (req.method === 'GET' && req.url === '/api/courses') return send(res, 200, { courses: listCourses() });
+    const courseMatch = req.method === 'GET' && req.url?.match(/^\/api\/courses\/([a-f0-9]{8})(?:\/lessons\/(\d))?$/);
+    if (courseMatch) {
+      const course = getCourse(courseMatch[1]);
+      if (!course) return send(res, 404, { error: 'Unknown course' });
+      if (courseMatch[2] === undefined) return send(res, 200, summary(course));
+      const lesson = openLesson(course, Number(courseMatch[2]));
+      return lesson ? send(res, 200, lesson) : send(res, 404, { error: 'Unknown lesson' });
     }
     // On-demand assets: progress of a background model job started by a lesson request.
     const jobMatch = req.method === 'GET' && req.url?.match(/^\/api\/assets\/jobs(?:\/([a-z0-9-]+))?$/);

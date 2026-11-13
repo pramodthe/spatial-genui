@@ -1,6 +1,6 @@
 import { aimPoint, capture, inspectMounted, debugRay, debugRoot, mountGenerated, unmountGenerated, type MountReport } from './host.js';
 import { EXAMPLE_LESSONS, type SavedLesson } from './lessons.js';
-import { inspectPicker, setPickerHidden } from './picker.js';
+import { inspectPicker, pickerCourses, setPickerHidden } from './picker.js';
 
 /**
  * Desktop/emulator prompt box, and the lesson state both it and the in-headset picker (picker.ts) drive.
@@ -164,6 +164,7 @@ export function createOverlay() {
     generate,
     generateParallel: (prompt: string) => generateStream(prompt),
     startLesson,
+    openWritten,
     repair,
     rebuild,
     mount,
@@ -171,6 +172,7 @@ export function createOverlay() {
     state,
     inspect: inspectMounted,
     inspectPicker,
+    courses: pickerCourses,
     debugRay,
     debugRoot,
     capture,
@@ -367,6 +369,18 @@ export async function startLesson(prompt: string) {
   } catch {
     return generate(prompt);
   }
+}
+
+/** Open a lesson that is already written (a saved course's lesson): no model call. */
+export async function openWritten(code: string, prompt: string) {
+  if (state.busy) return state;
+  state.prompt = prompt;
+  state.autoRepaired = false;
+  repairPending = false;
+  stopWatchingAssets();
+  await mount(code);
+  if (state.lastMount?.ok) setStatus('Lesson from a saved course.');
+  return state;
 }
 
 async function mount(code: string) {

@@ -12,6 +12,7 @@ import {
   type World,
 } from '@iwsdk/core';
 import { EXAMPLE_LESSONS } from './lessons';
+import { cancelListening, isListening, startListening, stopAndTranscribe, voiceAvailable } from './voice';
 import type { LessonStatus } from './overlay';
 
 /**
@@ -25,6 +26,10 @@ import type { LessonStatus } from './overlay';
 type PickerHandlers = {
   start: (prompt: string) => void;
   fix: () => void;
+  /** Write a fresh version of the current lesson live. */
+  fresh: () => void;
+  /** A request the learner spoke (written live). */
+  ask: (prompt: string) => void;
   onStatus: (listener: (status: LessonStatus) => void) => () => void;
 };
 
@@ -104,6 +109,7 @@ class LessonPickerSystem extends createSystem({
       }),
       handlers!.onStatus((status) => this.onStatus(status)),
       () => clearInterval(this.ticker),
+      () => cancelListening(),
       () => (picker = null),
     );
     // While a lesson is being written, count the seconds (once a second, not every frame).
@@ -166,6 +172,45 @@ class LessonPickerSystem extends createSystem({
       document.getElementById(`lesson-${i}`)?.addEventListener('click', () => handlers?.start(lesson.prompt));
     });
     document.getElementById('fix')?.addEventListener('click', () => handlers?.fix());
+    document.getElementById('fresh')?.addEventListener('click', () => handlers?.fresh());
+    document.getElementById('voice')?.addEventListener('click', () => void this.toggleVoice());
+    if (!voiceAvailable()) this.setVoice('Voice input is not available in this browser.', '#3a3d44');
+  }
+
+  /** Pinch once to start talking, again to finish; the request is then written live. */
+  private async toggleVoice() {
+    if (!voiceAvailable() || this.voiceBusy) return;
+    if (!isListening()) {
+      try {
+        await startListening(() => void this.toggleVoice());
+        this.setVoice("Listening... pinch here when you're done", '#7a2333');
+      } catch {
+        this.setVoice('Microphone blocked: allow it for this site, then try again.', '#3a3d44');
+      }
+      return;
+    }
+    this.voiceBusy = true;
+    this.setVoice('Understanding...', '#3d3215');
+    try {
+      const text = await stopAndTranscribe();
+      if (!text) {
+        this.setVoice("I didn't catch that. Pinch here and try again.", '#1f3354');
+      } else {
+        this.setVoice(`You asked: "${ascii(text)}"`, '#1f3354');
+        handlers?.ask(text);
+      }
+    } catch (err) {
+      this.setVoice(`Voice failed: ${ascii((err as Error).message)}`, '#3a3d44');
+    } finally {
+      this.voiceBusy = false;
+    }
+  }
+
+  private voiceBusy = false;
+
+  private setVoice(text: string, background: string) {
+    this.document?.getElementById('voice-label')?.setProperties({ text });
+    this.document?.getElementById('voice')?.setProperties({ backgroundColor: background });
   }
 
   private applySize() {
@@ -209,6 +254,7 @@ class LessonPickerSystem extends createSystem({
     document.getElementById('status-dot')?.setProperties({ backgroundColor: PHASES[phase].dot });
     document.getElementById('status')?.setProperties({ backgroundColor: PHASES[phase].background });
     document.getElementById('fix')?.setProperties({ display: phase === 'broken' ? 'flex' : 'none' });
+    document.getElementById('fresh')?.setProperties({ display: phase === 'ready' ? 'flex' : 'none' });
     // The chosen card stays marked while it is being written and once it is showing.
     EXAMPLE_LESSONS.forEach((lesson, i) => {
       const chosen = lesson.prompt === prompt && phase !== 'idle' && phase !== 'failed';

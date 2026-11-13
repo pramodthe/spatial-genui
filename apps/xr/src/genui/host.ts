@@ -13,6 +13,7 @@ import {
   Pressed,
   RayInteractable,
   Vector3,
+  XRPlane as XRPlaneComponent,
   type Entity,
   type Object3D,
   type UIKitDocument,
@@ -64,6 +65,8 @@ type Mounted = {
   root: Object3D | null;
   /** What the lesson layout decided and why, for tests (root's frame). */
   layout?: Record<string, unknown>;
+  /** The detected surface the lesson stands on (its label, or 'surface'), or null when it floats at seated height. */
+  onSurface: string | null;
 };
 
 export type MountReport = { ok: true; warnings: string[]; credits: string[] } | { ok: false; error: string };
@@ -125,6 +128,8 @@ export type MountedInspection = {
   handlerCalls: number;
   /** False until the host's one-time lesson layout has moved the panels (library lessons only). */
   layoutSettled: boolean;
+  /** The detected surface the lesson stands on, or null when it floats at seated height. */
+  onSurface: string | null;
   layout?: Record<string, unknown>;
   /** Panel elements with a generated click handler, with their world-space centers. */
   panelButtons: { id: string; center: [number, number, number]; size: [number, number, number] }[];
@@ -195,6 +200,7 @@ export function inspectMounted(): MountedInspection | null {
     panels: mounted.panels.size,
     panelsLoaded: [...mounted.panels.values()].filter((p) => p.document).length,
     layoutSettled: mounted.rigs.length === 0 || mounted.declutterIn === null,
+    onSurface: mounted.onSurface,
     layout: mounted.layout,
     handlerCalls: mounted.handlerCalls,
     panelButtons: [...mounted.panels.values()].flatMap((p) =>
@@ -258,6 +264,7 @@ export async function mountGenerated(code: string): Promise<MountReport> {
     rigs: [],
     declutterIn: 3,
     root: null,
+    onSurface: null,
   };
 
   const api = {
@@ -310,7 +317,7 @@ export async function mountGenerated(code: string): Promise<MountReport> {
   mounted.root = root;
   const anchor = new Group();
   anchor.name = 'GenUI Anchor';
-  placeInSeatedReach(anchor);
+  mounted.onSurface = placeInSeatedReach(anchor);
   anchor.add(root);
   fitToComfortSize(root, new Set(panels.map((p) => p.holder)), warnings);
   anchor.updateMatrixWorld(true);
@@ -359,8 +366,10 @@ export async function mountGenerated(code: string): Promise<MountReport> {
 class GenUISystem extends createSystem({
   pressed: { required: [Pressed] },
   panelDocuments: { required: [PanelUI, PanelDocument] },
+  planes: { required: [XRPlaneComponent] },
 }) {
   init(): void {
+    planeEntities = () => this.queries.planes.entities;
     this.queries.pressed.subscribe('qualify', (entity) => {
       current?.pressHandlers.get(entity)?.();
     });
@@ -461,18 +470,75 @@ function track(mounted: Mounted, entity: Entity, object: Object3D): Entity {
   return entity;
 }
 
-function placeInSeatedReach(anchor: Group) {
+/**
+ * Put the lesson on the learner's desk: a detected horizontal surface below the eyes, in front and within
+ * reach (SPEC.md Phase 4). Without one (no plane detection, or nothing suitable), it floats at seated desk
+ * height in front. Returns the surface's label, or null when floating.
+ */
+function placeInSeatedReach(anchor: Group): string | null {
   const camera = world!.camera;
   camera.getWorldPosition(tmpHead);
   camera.getWorldDirection(tmpForward);
   tmpForward.y = 0;
   if (tmpForward.lengthSq() < 1e-6) tmpForward.set(0, 0, -1);
   tmpForward.normalize();
-  anchor.position.copy(tmpHead).addScaledVector(tmpForward, REACH_DISTANCE_M);
-  anchor.position.y = tmpHead.y - BELOW_EYES_M;
+  const desk = findDesk(tmpHead, tmpForward);
+  if (desk) {
+    anchor.position.copy(desk.point);
+  } else {
+    anchor.position.copy(tmpHead).addScaledVector(tmpForward, REACH_DISTANCE_M);
+    anchor.position.y = tmpHead.y - BELOW_EYES_M;
+  }
   // root's +Z must face the viewer, so yaw toward the head.
   anchor.rotation.y = Math.atan2(tmpHead.x - anchor.position.x, tmpHead.z - anchor.position.z);
+  return desk?.label ?? null;
 }
+
+// A desk or table: 15-90 cm below the eyes (not the floor, not a shelf), big enough for a lesson, ahead.
+const DESK_DROP_M = [0.15, 0.9] as const;
+const DESK_REACH_M = [0.3, 0.9] as const;
+const DESK_MARGIN_M = 0.12;
+const DESK_AHEAD_COS = Math.cos((50 * Math.PI) / 180);
+
+/** The point on a detected surface nearest to "REACH_DISTANCE_M straight ahead", or null. */
+function findDesk(head: Vector3, forward: Vector3): { point: Vector3; label: string } | null {
+  let best: { point: Vector3; label: string } | null = null;
+  let bestCost = Infinity;
+  for (const entity of planeEntities?.() ?? []) {
+    const plane = entity.getValue(XRPlaneComponent, '_plane') as { orientation?: string; semanticLabel?: string } | undefined;
+    const mesh = entity.object3D as IWSDK.Mesh | undefined;
+    if (!plane || !mesh?.isMesh || plane.orientation !== 'horizontal') continue;
+    mesh.updateWorldMatrix(true, false);
+    const height = mesh.getWorldPosition(new Vector3()).y;
+    const drop = head.y - height;
+    if (drop < DESK_DROP_M[0] || drop > DESK_DROP_M[1]) continue;
+    // IWSDK builds each plane as a thin box around its origin, sized to the plane's outline.
+    mesh.geometry.computeBoundingBox();
+    const box = mesh.geometry.boundingBox!;
+    const halfX = (box.max.x - box.min.x) / 2 - DESK_MARGIN_M;
+    const halfZ = (box.max.z - box.min.z) / 2 - DESK_MARGIN_M;
+    if (halfX < 0.1 || halfZ < 0.08) continue; // too small to hold a lesson
+    const aim = head.clone().addScaledVector(forward, REACH_DISTANCE_M);
+    aim.y = height;
+    const local = mesh.worldToLocal(aim);
+    local.set(Math.min(halfX, Math.max(-halfX, local.x)), 0, Math.min(halfZ, Math.max(-halfZ, local.z)));
+    const point = mesh.localToWorld(local);
+    const toPoint = new Vector3(point.x - head.x, 0, point.z - head.z);
+    const reach = toPoint.length();
+    if (reach < DESK_REACH_M[0] || reach > DESK_REACH_M[1] || toPoint.normalize().dot(forward) < DESK_AHEAD_COS) continue;
+    const label = plane.semanticLabel || 'surface';
+    // Closest to the comfortable reach; a surface the headset calls a table or desk wins a close call.
+    const cost = Math.abs(reach - REACH_DISTANCE_M) + (/table|desk/i.test(label) ? 0 : 0.15);
+    if (cost < bestCost) {
+      best = { point, label };
+      bestCost = cost;
+    }
+  }
+  return best;
+}
+
+/** Detected planes (set by the system; empty without plane detection). */
+let planeEntities: (() => Iterable<Entity>) | null = null;
 
 /** Grabbables with a neighbour closer than MIN_GRAB_GAP_M (bounding-sphere gap, precise bounds). */
 function findCrowdedGrabbables(objects: Object3D[]): Set<Object3D> {
@@ -617,8 +683,10 @@ function layoutLessonPanels(mounted: Mounted, again?: { main: Object3D }) {
   const move = { dy: 0, dz: 0, misfit: 0 };
   if (start && start.z > frontZ) {
     let best = { cost: Infinity, dy: 0, dz: 0 };
+    // A lesson standing on a desk can't move down (into the desk), only back.
+    const maxDown = mounted.onSurface ? 0 : 0.4001;
     search: for (let dz = 0; dz <= 0.4001; dz += 0.1) {
-      for (let dy = 0; dy <= 0.4001; dy += 0.05) {
+      for (let dy = 0; dy <= maxDown; dy += 0.05) {
         const cost = misfit(new Vector3(start.x, start.y + dy * metre, start.z + dz * metre));
         if (cost < best.cost - 1e-9) best = { cost, dy, dz };
         if (cost === 0) break search;

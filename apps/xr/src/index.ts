@@ -8,7 +8,7 @@
 import { World } from '@iwsdk/core';
 import projectOptions from 'virtual:iwsdk-project';
 import { initGenUIHost } from './genui/host.js';
-import { createOverlay, generate, onLessonStatus, repair, reportRuntimeError } from './genui/overlay.js';
+import { createOverlay, generate, onLessonStatus, repair, reportRuntimeError, startLesson, lessonPrompt } from './genui/overlay.js';
 import { initLessonPicker } from './genui/picker.js';
 import { PanelSystem } from './panel.js';
 import { RobotSystem } from './robot.js';
@@ -21,6 +21,15 @@ World.create(
   world.registerSystem(PanelSystem);
   initGenUIHost(world, { onRuntimeError: reportRuntimeError });
   // In XR the prompt box is not visible; the picker is how a lesson starts there (hands only).
-  initLessonPicker(world, { start: (prompt) => void generate(prompt), fix: () => void repair(), onStatus: onLessonStatus });
+  initLessonPicker(world, {
+    start: (prompt) => void startLesson(prompt),
+    fix: () => void repair(),
+    fresh: () => {
+      const prompt = lessonPrompt();
+      if (prompt) void generate(prompt);
+    },
+    ask: (prompt) => void generate(prompt),
+    onStatus: onLessonStatus,
+  });
   createOverlay();
 });

@@ -73,6 +73,32 @@
     font-size: 2.1;
   }
 
+  .voice {
+    flex-direction: row;
+    align-items: center;
+    padding-top: 1.8;
+    padding-bottom: 1.8;
+    padding-left: 2.2;
+    padding-right: 2.2;
+    border-radius: 2;
+    border-width: 0.15;
+    border-color: #4a4e57;
+    background-color: #1f3354;
+    cursor: pointer;
+  }
+
+  .voice:hover {
+    background-color: #2f6fdb;
+  }
+
+  .voice-label {
+    flex-grow: 1;
+    flex-shrink: 1;
+    color: #fafaf7;
+    font-size: 2.6;
+    font-weight: 700;
+  }
+
   .status {
     flex-direction: row;
     align-items: center;
@@ -143,11 +169,17 @@
       <span id="lesson-3-sub" class="card-sub">...</span>
     </div>
   </div>
+  <div id="voice" class="voice">
+    <span id="voice-label" class="voice-label">Ask your own: pinch here, then say it</span>
+  </div>
   <div id="status" class="status">
     <div id="status-dot" class="dot"></div>
     <span id="status-text" class="status-text">Pick a lesson to start.</span>
     <div id="fix" class="action" style="display: none">
       <span class="action-label">Fix it</span>
+    </div>
+    <div id="fresh" class="action" style="display: none">
+      <span class="action-label">Make a new one</span>
     </div>
   </div>
 </div>

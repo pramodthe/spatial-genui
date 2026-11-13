@@ -219,7 +219,6 @@ export async function generate(prompt: string, extra: { previousCode?: string; c
     await mount(data.code);
     const stages = data.attempts?.map((a) => a.stage).join(' → ');
     if (state.lastMount?.ok) {
-      setPhase('ready');
       setStatus(
         `Done in ${((data.totalMs ?? 0) / 1000).toFixed(1)} s with ${data.model} (attempts: ${stages}).` +
           (state.lastMount.warnings.length ? `\n${state.lastMount.warnings.join('\n')}` : '') +
@@ -244,6 +243,8 @@ async function mount(code: string) {
   state.mountedAt = performance.now();
   state.lastMount = await mountGenerated(code);
   if (!state.lastMount.ok) reportRuntimeError(state.lastMount.error);
+  // Any lesson in the scene docks the picker, however it was mounted (generate, tests, saved lessons).
+  else setPhase('ready');
   return state.lastMount;
 }
 

@@ -4,10 +4,11 @@
 //
 // Usage: npm run bench -- [--prompts ../../bench/prompts/test-12.json] [--models ../../bench/models.json]
 //                         [--only id,id] [--prompt-ids id,id] [--runs 1] [--limit 12] [--concurrency 4] [--out ../../bench/results/<name>]
+//                         [--format code|a2ui|template]   (RQ1: open code, A2UI JSON, or a filled template)
 import { existsSync } from 'node:fs';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
-import { generate } from './agent.js';
+import { generate, systemPromptFor, type GenUIFormat } from './agent.js';
 import { config } from './config.js';
 import type { LlmTarget } from './llm.js';
 import { parseCli } from './args.js';
@@ -48,15 +49,21 @@ export type BenchRow = {
   apiError?: string;
   code?: string;
   route?: Route;
+  /** RQ1: what the agent wrote. Rows without it are version A (code). */
+  format?: GenUIFormat;
+  /** The agent's JSON for formats a2ui and template (code is then the compiled module). */
+  source?: string;
 };
 
 const cli = parseCli(process.argv.slice(2), {
-  values: ['prompts', 'models', 'only', 'prompt-ids', 'runs', 'limit', 'concurrency', 'out'],
+  values: ['prompts', 'models', 'only', 'prompt-ids', 'runs', 'limit', 'concurrency', 'out', 'format'],
   booleans: ['library'],
-  usage: 'npm run bench -- [--prompts f] [--models f] [--only id,id] [--prompt-ids id,id] [--runs n] [--limit n] [--concurrency n] [--out dir] [--library]',
+  usage: 'npm run bench -- [--prompts f] [--models f] [--only id,id] [--prompt-ids id,id] [--runs n] [--limit n] [--concurrency n] [--out dir] [--library] [--format code|a2ui|template]',
 });
 const args = cli.flags;
 const useLibrary = cli.booleans.has('library');
+const format = (args.format ?? 'code') as GenUIFormat;
+if (!['code', 'a2ui', 'template'].includes(format)) throw new Error(`--format must be code, a2ui or template (got ${format})`);
 const repoRoot = resolve(import.meta.dirname, '../../..');
 const promptsFile = resolve(args.prompts ?? join(repoRoot, 'bench/prompts/test-12.json'));
 const modelsFile = resolve(args.models ?? join(repoRoot, 'bench/models.json'));
@@ -95,9 +102,10 @@ await writeFile(
     models: [...new Set([...(previousMeta.models ?? []), ...runnable.map((m) => m.id)])],
     modelSettings: { ...previousMeta.modelSettings, ...Object.fromEntries(runnable.map((m) => [m.id, { model: m.model, baseURL: m.baseURL, extraBody: m.extraBody }])) },
     skipped, maxRepairs: config.maxRepairs, maxCompletionTokens: config.maxCompletionTokens,
-    library: useLibrary,
+    library: useLibrary && format === 'code',
+    format,
     // With the library on, the router adds only the chosen models' section (recorded per row as route).
-    systemPrompt: useLibrary ? SYSTEM_PROMPT + librarySection() : SYSTEM_PROMPT,
+    systemPrompt: format !== 'code' ? systemPromptFor(format) : useLibrary ? SYSTEM_PROMPT + librarySection() : SYSTEM_PROMPT,
   }, null, 2),
 );
 
@@ -127,7 +135,7 @@ async function runOne(m: ModelEntry, p: PromptCase, rep: number): Promise<BenchR
   const base = { model: m.id, family: m.family, promptId: p.id, tier: p.tier, domain: p.domain, rep };
   try {
     // The 3D asset library is off unless asked for, so runs stay comparable with the published ones.
-    const r = await generate(p.prompt, { target: m, log: false, library: useLibrary });
+    const r = await generate(p.prompt, { target: m, log: false, library: useLibrary, format });
     const promptTokens = r.attempts.reduce((s, a) => s + a.promptTokens, 0);
     const completionTokens = r.attempts.reduce((s, a) => s + a.completionTokens, 0);
     return {
@@ -149,6 +157,8 @@ async function runOne(m: ModelEntry, p: PromptCase, rep: number): Promise<BenchR
       error: r.ok ? undefined : r.error?.slice(0, 500),
       code: r.code,
       route: r.route,
+      format,
+      source: r.source,
     };
   } catch (err) {
     return {
@@ -160,7 +170,11 @@ async function runOne(m: ModelEntry, p: PromptCase, rep: number): Promise<BenchR
 
 /** Coarse failure taxonomy for the paper (one label per failed attempt). */
 function classifyFailure(stage: string, error: string, finishReason: string | null): string {
-  if (stage === 'no-code') return finishReason === 'length' ? 'truncated' : 'no-code-block';
+  if (stage === 'no-code') return finishReason === 'length' ? 'truncated' : format === 'code' ? 'no-code-block' : 'invalid-json';
+  if (stage === 'validate' && format !== 'code') {
+    // The JSON parsed but the renderer's checks failed (unknown component, missing property, bad reference).
+    return /plain ASCII/.test(error) ? 'unsupported-glyph' : 'schema';
+  }
   if (stage === 'validate') {
     if (/^Syntax error/.test(error)) return 'syntax';
     if (/default export|export default/.test(error)) return 'contract';

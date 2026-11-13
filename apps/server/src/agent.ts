@@ -8,6 +8,20 @@ import { assetStubs, librarySection, libraryCatalog } from './library.js';
 import { routeAssets, type Route } from './router.js';
 import { SYSTEM_PROMPT, repairMessage } from './prompt.js';
 import { extractCode, validateModule } from './validate.js';
+import { checkSurface, compileSurface, extractJson, surfaceFrom, type Surface } from './a2ui/catalog.js';
+import { A2UI_SYSTEM_PROMPT, TEMPLATE_SYSTEM_PROMPT, jsonRepairMessage } from './a2ui/prompts.js';
+import { expandTemplate } from './a2ui/templates.js';
+
+/**
+ * What the agent writes (RQ1's three GenUI types): 'code' = a full module (open, version A),
+ * 'a2ui' = A2UI v1.0 JSON on the spatial catalog (declarative, C), 'template' = one hand-built lesson
+ * component filled with data (controlled, D). C and D compile to a module, so everything after is shared.
+ */
+export type GenUIFormat = 'code' | 'a2ui' | 'template';
+
+export function systemPromptFor(format: GenUIFormat): string {
+  return format === 'a2ui' ? A2UI_SYSTEM_PROMPT : format === 'template' ? TEMPLATE_SYSTEM_PROMPT : SYSTEM_PROMPT;
+}
 
 export type Attempt = {
   ms: number;
@@ -24,6 +38,9 @@ export type GenerationResult = {
   prompt: string;
   model: string;
   provider: string;
+  format: GenUIFormat;
+  /** What the agent wrote for formats a2ui and template (the JSON); `code` is then the compiled module. */
+  source?: string;
   code?: string;
   stats?: SceneStats;
   warnings?: string[];
@@ -43,11 +60,13 @@ export type GenerationResult = {
  */
 export async function generate(
   prompt: string,
-  options: { previousCode?: string; clientError?: string; target?: LlmTarget; log?: boolean; library?: boolean; onDemand?: boolean } = {},
+  options: { previousCode?: string; clientError?: string; target?: LlmTarget; log?: boolean; library?: boolean; onDemand?: boolean; format?: GenUIFormat } = {},
 ): Promise<GenerationResult> {
   const target = options.target ?? defaultTarget;
+  const format = options.format ?? 'code';
   // The asset library is on for the app; benchmarks turn it off so their prompt stays as published.
-  const useLibrary = options.library ?? true;
+  // The A2UI catalog and the templates have no library models, so they always run without it.
+  const useLibrary = (options.library ?? true) && format === 'code';
   const started = performance.now();
   // Route first: only the models this request needs go into the prompt (molecules get built here).
   const route = useLibrary && !options.previousCode ? await routeAssets(prompt, target, { wantObjects: options.onDemand }) : undefined;
@@ -65,10 +84,11 @@ export async function generate(
   }
   const knownAssets = useLibrary ? new Set(libraryCatalog().keys()) : new Set<string>();
   const messages: ChatMessage[] = [
-    { role: 'system', content: useLibrary ? SYSTEM_PROMPT + librarySection(route?.assets ?? []) : SYSTEM_PROMPT },
+    { role: 'system', content: useLibrary ? SYSTEM_PROMPT + librarySection(route?.assets ?? []) : systemPromptFor(format) },
     { role: 'user', content: prompt },
   ];
-  if (options.previousCode && options.clientError) {
+  const repair = format === 'code' ? repairMessage : jsonRepairMessage;
+  if (options.previousCode && options.clientError && format === 'code') {
     messages.push(
       { role: 'assistant', content: '```js\n' + options.previousCode + '\n```' },
       { role: 'user', content: repairMessage(`In the headset runtime: ${options.clientError}`) },
@@ -82,6 +102,7 @@ export async function generate(
     prompt,
     model: target.id,
     provider: new URL(target.baseURL).host,
+    format,
     attempts,
     totalMs: 0,
     route,
@@ -100,13 +121,32 @@ export async function generate(
     attempts.push(attempt);
     messages.push({ role: 'assistant', content: reply.text });
 
-    const code = extractCode(reply.text);
+    let code: string | null;
+    if (format === 'code') {
+      code = extractCode(reply.text);
+    } else {
+      // Declarative and controlled: parse and check the JSON, then compile it with the shared renderer.
+      const parsed = extractJson(reply.text);
+      if (parsed == null) {
+        code = null;
+      } else {
+        result.source = JSON.stringify(parsed);
+        const compiled = compileJson(format, parsed);
+        if (!compiled.surface) {
+          attempt.stage = 'validate';
+          attempt.error = compiled.problems.join('\n');
+          messages.push({ role: 'user', content: repair(attempt.error) });
+          continue;
+        }
+        code = compileSurface(compiled.surface);
+      }
+    }
     if (!code) {
       attempt.stage = 'no-code';
       attempt.error = reply.finishReason === 'length'
-        ? 'The reply was cut off before the code block finished. Write a shorter module.'
-        : 'No ```js code block found in the reply.';
-      messages.push({ role: 'user', content: repairMessage(attempt.error) });
+        ? `The reply was cut off before the ${format === 'code' ? 'code block' : 'JSON'} finished. Write a shorter ${format === 'code' ? 'module' : 'reply'}.`
+        : format === 'code' ? 'No ```js code block found in the reply.' : 'No valid JSON found in the reply (one ```json block).';
+      messages.push({ role: 'user', content: repair(attempt.error) });
       continue;
     }
     result.code = code;
@@ -115,7 +155,7 @@ export async function generate(
     if (!validation.ok) {
       attempt.stage = 'validate';
       attempt.error = validation.error;
-      messages.push({ role: 'user', content: repairMessage(validation.error) });
+      messages.push({ role: 'user', content: repair(validation.error) });
       continue;
     }
 
@@ -123,7 +163,7 @@ export async function generate(
     if (!run.ok) {
       attempt.stage = 'dry-run';
       attempt.error = run.error;
-      messages.push({ role: 'user', content: repairMessage(run.error) });
+      messages.push({ role: 'user', content: repair(run.error) });
       continue;
     }
 
@@ -137,6 +177,21 @@ export async function generate(
   result.totalMs = Math.round(performance.now() - started);
   if (options.log !== false) await logRun(result);
   return result;
+}
+
+/** A2UI messages or a filled template, as a checked surface (or the problems to send back). */
+function compileJson(format: GenUIFormat, parsed: unknown): { surface?: Surface; problems: string[] } {
+  if (format === 'a2ui') {
+    const { surface, error } = surfaceFrom(parsed);
+    if (!surface) return { problems: [error ?? 'Not a valid A2UI surface.'] };
+    const problems = checkSurface(surface);
+    return problems.length ? { problems } : { surface, problems };
+  }
+  const expanded = expandTemplate(parsed);
+  if (!expanded.surface) return expanded;
+  // Templates are ours, but their text comes from the agent: the same checks still apply (font, ids).
+  const problems = checkSurface(expanded.surface);
+  return problems.length ? { problems } : expanded;
 }
 
 // Every run is kept as JSONL: the raw material for the Phase 2 benchmark and the paper.

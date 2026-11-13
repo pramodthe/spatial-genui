@@ -785,6 +785,10 @@ export function createKit(THREE, options = {}) {
     return group;
   }
 
+  // Dressing is never a pointing target: a hand ray passes through it. (A sprite also throws when the
+  // host's pointer ray tests it without a camera.)
+  const noHit = () => {};
+
   // --- Effects --------------------------------------------------------------------------------------------
 
   /** A soft round dot, white with falling alpha: sprites, particles, shadows. */
@@ -824,8 +828,13 @@ export function createKit(THREE, options = {}) {
       blending: THREE.AdditiveBlending, depthWrite: false,
     })));
     sprite.scale.set(size, size, 1);
-    sprite.name = 'glow';
-    return sprite;
+    sprite.raycast = noHit;
+    // Wrapped in a group, so code that pulses it with scale.setScalar(1.05) scales the glow instead of
+    // replacing its size (a sprite's size is its scale).
+    const holder = new THREE.Group();
+    holder.name = 'glow';
+    holder.add(sprite);
+    return holder;
   }
 
   /**
@@ -862,6 +871,7 @@ export function createKit(THREE, options = {}) {
       transparent: true, opacity: o.opacity ?? 0.9, depthWrite: false,
     })));
     points.name = 'particles';
+    points.raycast = noHit;
     return points;
   }
 
@@ -918,6 +928,7 @@ export function createKit(THREE, options = {}) {
     const mesh = new THREE.Mesh(g, own(new THREE.MeshBasicMaterial({ map: shade(), color: 0x000000, transparent: true, opacity, depthWrite: false })));
     mesh.position.y = 0.0006;
     mesh.renderOrder = -1;
+    mesh.raycast = noHit;
     mesh.name = 'contact shadow';
     return mesh;
   }

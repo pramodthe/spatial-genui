@@ -120,6 +120,8 @@ Users judge the look first. Spend most of your effort on the main model.
   landscape, a board) sits on the desk with kit.shadow under its pieces.
 - A good model uses 10,000-60,000 triangles. Keep small repeated parts cheap with kit.instances,
   kit.along and kit.merge.
+- Keep the whole module under about 350 lines: the user is waiting while you write. Loops, small helper
+  functions and the kit give detail without length; do not list hundreds of parts one by one.
 
 # UIKitML rules (HTML/CSS-shaped, but not a browser)
 - Exactly one root element. Tags: div, span, button. Text must be inside a span.

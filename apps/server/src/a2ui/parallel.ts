@@ -47,7 +47,7 @@ export type ParallelResult = {
 const KINDS = new Set(['object', 'panel', 'quiz', 'tour']);
 const ID = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-const PLANNER_PROMPT = `You plan a mixed-reality lesson so that several builders can make its parts at the same time.
+export const PLANNER_PROMPT = `You plan a mixed-reality lesson so that several builders can make its parts at the same time.
 A seated user asked for something; the lesson sits on their desk (origin about 0.5 m in front of them,
 +Y up, +Z toward the user, everything within 0.8 m wide x 0.5 m tall x 0.5 m deep, above y = 0).
 
@@ -71,7 +71,7 @@ Reply with exactly one \`\`\`json code block, and nothing else:
   with its part's id and an underscore. List every one other parts need; nothing else can be referred to.
 - dataModel: shared values parts read and write (bound text such as "info"). Give each a starting value.`;
 
-const BUILDER_SYSTEM = `${FRAMING}
+export const BUILDER_SYSTEM = `${FRAMING}
 
 You build ONE part of a lesson that a planner split into parts; other builders make the other parts at
 the same time, from the same plan. Your part becomes part of one A2UI v1.0 surface

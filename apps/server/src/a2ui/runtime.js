@@ -92,7 +92,8 @@ function renderSpatialA2UI(api, surface) {
         writePath(args.resultPath || '/result', checkSort(args));
         return undefined;
       case 'run':
-        for (const step of args.calls || []) call(step);
+        // Steps may come wrapped as actions ({"functionCall": {...}}); both forms work.
+        for (const step of args.calls || []) call(step && step.functionCall ? step.functionCall : step);
         return undefined;
       case 'formatString':
         return String(args.value || '').replace(/\$\{([^}]+)\}/g, (_, p) => {

@@ -51,7 +51,44 @@ export function extractJson(reply: string): unknown | null {
   try {
     return JSON.parse(text);
   } catch {
+    return repairJson(text);
+  }
+}
+
+/**
+ * Deeply nested actions sometimes come back with one closing bracket in the wrong place (`}}}]` for `}}]}`).
+ * Try small edits at the parse error (drop a nearby closer, add a missing one) and keep an edit only if
+ * parsing gets further; a few rounds at most. Whatever this returns still goes through every check.
+ */
+function repairJson(text: string): unknown | null {
+  let s = text.replace(/,(\s*[}\]])/g, '$1'); // trailing commas
+  for (let round = 0; round < 4; round++) {
+    const at = parseError(s);
+    if (at === null) return JSON.parse(s);
+    let best: { text: string; at: number } | null = null;
+    const consider = (candidate: string) => {
+      const next = parseError(candidate);
+      const reached = next === null ? Infinity : next;
+      if (reached > at && (!best || reached > best.at)) best = { text: candidate, at: reached };
+    };
+    for (let i = at; i >= Math.max(0, at - 200); i--) if (s[i] === '}' || s[i] === ']') consider(s.slice(0, i) + s.slice(i + 1));
+    // V8 reports some errors a character or two after the spot that needs the missing closer.
+    for (let i = at; i >= Math.max(0, at - 3); i--) for (const closer of ['}', ']']) consider(s.slice(0, i) + closer + s.slice(i));
+    if (!best) return null;
+    s = (best as { text: string }).text;
+  }
+  return parseError(s) === null ? JSON.parse(s) : null;
+}
+
+/** Where JSON.parse fails (character offset), or null if it parses. */
+function parseError(text: string): number | null {
+  try {
+    JSON.parse(text);
     return null;
+  } catch (err) {
+    const message = String((err as Error).message);
+    const at = message.match(/position (\d+)/)?.[1];
+    return at ? Number(at) : /end of JSON|Unexpected end/i.test(message) ? text.length : 0;
   }
 }
 
@@ -189,7 +226,9 @@ function actionsIn(c: A2UIComponent): Record<string, any>[] {
 function checkAction(owner: string, action: Record<string, any>, byId: Map<string, A2UIComponent>): string[] {
   if (!action.functionCall && !action.event) return [`"${owner}": an action needs "functionCall" (or "event").`];
   const problems: string[] = [];
-  const visit = (fn: Record<string, any>) => {
+  const visit = (call: Record<string, any>) => {
+    // Steps of a `run` may come wrapped as actions ({"functionCall": {...}}); both forms work.
+    const fn = call?.functionCall ?? call;
     const name = fn?.['@call'];
     if (typeof name !== 'string' || !(name in FUNCTIONS)) {
       // Say what was written next to the expected shape: the usual mistake is the shape, not the name.

@@ -127,6 +127,14 @@ def summary(scene) -> str:
     return "\n".join(lines)
 
 
+def floating(scene) -> list:
+    """Names of parts that touch nothing else (the measurement reports them singly or as islands of parts)."""
+    names = []
+    for item in (scene.get("measured") or {}).get("loose", []):
+        names += [str(n) for n in item] if isinstance(item, (list, tuple)) else [str(item)]
+    return list(dict.fromkeys(names))
+
+
 class Live:
     """One model working on one scene. `steps` is the scene, so a revision starts from an earlier one's steps."""
     def __init__(self, brief: str, reference: bytes | None = None, steps=None, intents=None, say=print, folder: Path | None = None):
@@ -172,9 +180,8 @@ class Live:
 
     def list_parts(self, _):
         scene = json.loads(sandbox(self.steps, (), measure=True)["scene.json"])
-        measured = scene.get("measured") or {}
         return {"parts": [{k: row[k] for k in ("name", "group", "material", "from", "to")} for row in scene["parts"]][:160],
-                "floating": measured.get("loose", [])[:20], "note": "floating lists parts that touch nothing else"}, []
+                "floating": floating(scene)[:20], "note": "floating lists parts that touch nothing else"}, []
 
     def look(self, args):
         wanted = [v for v in args["views"] if v in VIEWS][:3] or ["three_quarter"]
@@ -199,7 +206,7 @@ class Live:
         found = sandbox(self.steps, [{"view": v, "size": [1600, 1200]} if v == "three_quarter" else v for v in VIEWS], measure=True)
         scene = json.loads(found["scene.json"])
         result, tokens = checker.check(meta.ask, self.brief, self.features, {v: found[f"{v}.jpg"] for v in VIEWS if f"{v}.jpg" in found})
-        loose = (scene.get("measured") or {}).get("loose", [])
+        loose = floating(scene)
         result["floating"] = loose[:20]
         if loose:
             result["passed"] = False
@@ -312,10 +319,14 @@ def main():
     parser.add_argument("--brief", required=True)
     parser.add_argument("--reference")
     parser.add_argument("--out")
+    parser.add_argument("--resume", action="store_true", help="carry on from the steps saved in the output folder")
     args = parser.parse_args()
     folder = Path(args.out) if args.out else HERE.parents[2] / "data" / "blender-work" / args.name
     started = time.time()
-    live = Live(args.brief, Path(args.reference).read_bytes() if args.reference else None, folder=folder).run()
+    saved = json.loads((folder / "steps.json").read_text()) if args.resume and (folder / "steps.json").exists() else {}
+    live = Live(args.brief, Path(args.reference).read_bytes() if args.reference else None, steps=saved.get("steps"), intents=saved.get("intents"), folder=folder)
+    live.spent, live.calls = saved.get("tokens", 0), saved.get("calls", 0)
+    live.run()
     if not live.steps:
         print(json.dumps({"ok": False, "error": "nothing was built"}))
         sys.exit(1)

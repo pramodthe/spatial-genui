@@ -1070,12 +1070,14 @@ export function createKit(THREE, options = {}) {
    *   const quiz = kit.matchQuiz({
    *     root, traits, isGrabbed,
    *     items: [{ text: 'Left ventricle', at: [0.03, 0.12, 0.02] }, ...],   // at: where it belongs, in root space
-   *     tray: [0, 0.03, 0.16],                                              // centre of the row where cards wait
+   *     tray: [0, 0.03, 0.16],                                              // centre of the front row of waiting cards
    *     onChange({ right, total, misses, done, last }) { ... },             // last: { text, correct } or null
    *   });
    *   return { root, update(time, delta) { quiz.update(time, delta); } };
    * Options: radius (how near a drop must land, default 0.05), markers (false hides the target dots),
    * shuffle (false keeps the cards in the given order). quiz.reset() starts over.
+   * Build the model before calling this: the cards are kept just in front of what root already holds, in
+   * up to two rows that step back and up toward the model.
    */
   function matchQuiz(o = {}) {
     const { root, traits, isGrabbed } = o;
@@ -1086,8 +1088,21 @@ export function createKit(THREE, options = {}) {
     const radius = o.radius ?? 0.05;
     const tray = new THREE.Vector3(...vec3(o.tray ?? [0, 0.03, 0.16], 'matchQuiz tray'));
     const total = o.items.length;
-    // Cards wait in rows of four, far enough apart that each is its own grab target.
-    const perRow = Math.min(4, total);
+    // Cards wait in one row of up to four, or two rows, far enough apart that each is its own grab target
+    // for a pinch (the host turns closer neighbours into ray-only grabs).
+    const perRow = total <= 4 ? total : Math.ceil(total / 2);
+    const rows = Math.ceil(total / perRow);
+    const pitch = (o.cardWidth ?? CARD.width) + 0.045;
+    const rowBack = 0.12;
+    const rowUp = Math.sqrt(Math.max(0, pitch * pitch - rowBack * rowBack)) + 0.004;
+    // A tray set far out in front of the model puts the cards in the learner's face and the model out of
+    // reach: keep the back row just clear of what is already in root.
+    root.updateMatrixWorld(true);
+    const content = new THREE.Box3().setFromObject(root);
+    if (!content.isEmpty()) {
+      content.applyMatrix4(root.matrixWorld.clone().invert());
+      tray.z = Math.min(tray.z, Math.max(0, content.max.z) + 0.06 + (rows - 1) * rowBack);
+    }
     const order = o.items.map((_, i) => i);
     if (o.shuffle !== false && !dry) {
       for (let i = order.length - 1; i > 0; i--) {
@@ -1100,11 +1115,9 @@ export function createKit(THREE, options = {}) {
     const entries = o.items.map((item, i) => {
       const at = new THREE.Vector3(...vec3(item.at, 'matchQuiz item.at'));
       const slot = order.indexOf(i);
-      const home = new THREE.Vector3(
-        tray.x + ((slot % perRow) - (perRow - 1) / 2) * (CARD.width + 0.045),
-        tray.y + Math.floor(slot / perRow) * (CARD.height + 0.03),
-        tray.z,
-      );
+      const row = Math.floor(slot / perRow);
+      const inRow = Math.min(perRow, total - row * perRow);
+      const home = new THREE.Vector3(tray.x + ((slot % perRow) - (inRow - 1) / 2) * pitch, tray.y + row * rowUp, tray.z - row * rowBack);
       const mesh = card(item.text, { width: o.cardWidth });
       mesh.position.copy(home);
       root.add(mesh);

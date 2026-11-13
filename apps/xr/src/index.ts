@@ -7,6 +7,7 @@
 
 import { World } from '@iwsdk/core';
 import projectOptions from 'virtual:iwsdk-project';
+import { initMoveHandles } from './genui/handle.js';
 import { initGenUIHost } from './genui/host.js';
 import { createOverlay, generate, onLessonStatus, repair, reportRuntimeError, startLesson, lessonPrompt, openWritten } from './genui/overlay.js';
 import { initLessonPicker } from './genui/picker.js';
@@ -19,6 +20,7 @@ World.create(
 ).then((world) => {
   world.registerSystem(RobotSystem);
   world.registerSystem(PanelSystem);
+  initMoveHandles(world);
   initGenUIHost(world, { onRuntimeError: reportRuntimeError });
   // In XR the prompt box is not visible; the picker is how a lesson starts there (hands only).
   initLessonPicker(world, {

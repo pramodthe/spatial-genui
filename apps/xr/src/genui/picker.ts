@@ -16,6 +16,7 @@ import { cancelListening, isListening, startListening, stopAndTranscribe, voiceA
 import type { LessonStatus } from './overlay';
 import { courseProgress, createCourse, fetchCourseLesson, listCourses, polishCourseLesson, type CourseSummary } from './courses';
 import { capture } from './host';
+import { createMoveHandle, type MoveHandle } from './handle';
 
 /**
  * In-headset lesson picker. The desktop prompt box is a DOM overlay, which an immersive session doesn't
@@ -40,11 +41,13 @@ type PickerHandlers = {
   onStatus: (listener: (status: LessonStatus) => void) => () => void;
 };
 
-const CENTRE = { width: 0.5, distance: 0.6, belowEyes: 0.12, yaw: 0 };
+const CENTRE = { width: 0.5, distance: 0.7, belowEyes: 0.2, yaw: 0 };
 // To the left, outside the 35 degrees either side of straight ahead where the host lays out lesson panels.
 const DOCKED = { width: 0.32, distance: 0.5, belowEyes: 0.3, yaw: (60 * Math.PI) / 180 };
 // Frames to wait after entering XR before placing: the first frames can still have the pre-session camera pose.
 const SETTLE_FRAMES = 20;
+// The move handle stands this far outside the panel's right edge.
+const HANDLE_GAP_M = 0.035;
 const SHELF_ROWS = 3;
 const COURSE_STEPS = 5;
 // How often the shelf asks the server while a course is being planned or written.
@@ -101,6 +104,9 @@ class LessonPickerSystem extends createSystem({
   private inXR = false;
   private interactive = true;
   private docked = false;
+  private handle!: MoveHandle;
+  /** The learner dragged the picker somewhere: it stays there for the rest of the session. */
+  private moved = false;
   private placeIn = -1;
   private ticker = 0;
   private courses: CourseSummary[] = [];
@@ -121,6 +127,11 @@ class LessonPickerSystem extends createSystem({
     this.entity.addComponent(PanelUI, { config: `${import.meta.env.BASE_URL}ui/lesson-picker.uikitml` });
     this.entity.addComponent(RayInteractable, {});
     this.entity.addComponent(PokeInteractable, {});
+    this.handle = createMoveHandle(this.world, this.holder, {
+      offset: [CENTRE.width / 2 + HANDLE_GAP_M, 0, 0],
+      upright: true,
+      onMoved: () => (this.moved = true),
+    });
 
     this.queries.documents.subscribe('qualify', (entity) => {
       if (entity !== this.entity) return;
@@ -133,6 +144,7 @@ class LessonPickerSystem extends createSystem({
       this.world.visibilityState.subscribe((visibility) => {
         this.inXR = visibility !== VisibilityState.NonImmersive;
         if (this.inXR) this.placeIn = SETTLE_FRAMES;
+        if (this.inXR) this.moved = false;
         if (this.inXR) void this.refreshCourses();
         this.refreshVisibility();
       }),
@@ -140,6 +152,7 @@ class LessonPickerSystem extends createSystem({
       () => clearInterval(this.ticker),
       () => clearTimeout(this.coursePoll),
       () => cancelListening(),
+      () => this.handle.dispose(),
       () => (picker = null),
     );
     // While a lesson is being written, count the seconds (once a second, not every frame).
@@ -155,6 +168,7 @@ class LessonPickerSystem extends createSystem({
   refreshVisibility() {
     const show = this.inXR && !hiddenByHost;
     this.holder.visible = show;
+    this.handle.setShown(show);
     // A hidden panel must not catch a hand ray meant for something else.
     if (show !== this.interactive) {
       this.interactive = show;
@@ -348,6 +362,7 @@ class LessonPickerSystem extends createSystem({
 
   private applySize() {
     const width = this.docked ? DOCKED.width : CENTRE.width;
+    this.handle.offset.x = width / 2 + HANDLE_GAP_M;
     // Height is generous so the width is what sets the scale (as the host does for lesson panels).
     this.document?.setTargetDimensions(width, width * 4);
     const course = this.courses.find((c) => c.id === this.shown);
@@ -357,6 +372,7 @@ class LessonPickerSystem extends createSystem({
 
   /** Stand the picker in front of (or, docked, to the left of) where the learner is looking, facing them. */
   private place() {
+    if (this.moved) return;
     const spot = this.docked ? DOCKED : CENTRE;
     const camera = this.world.camera;
     camera.getWorldPosition(this.head);

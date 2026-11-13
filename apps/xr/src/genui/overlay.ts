@@ -1,6 +1,7 @@
 import { aimPoint, capture, inspectMounted, debugRay, debugRoot, mountGenerated, unmountGenerated, type MountReport } from './host.js';
 import { EXAMPLE_LESSONS, type SavedLesson } from './lessons.js';
 import { inspectPicker, pickerCourses, setPickerHidden } from './picker.js';
+import { inspectMoveHandles, setMoveHandlesHidden } from './handle.js';
 
 /**
  * Desktop/emulator prompt box, and the lesson state both it and the in-headset picker (picker.ts) drive.
@@ -172,6 +173,7 @@ export function createOverlay() {
     state,
     inspect: inspectMounted,
     inspectPicker,
+    inspectMoveHandles,
     courses: pickerCourses,
     debugRay,
     debugRoot,
@@ -181,6 +183,7 @@ export function createOverlay() {
     setOverlayHidden: (hidden: boolean) => {
       root.style.display = hidden ? 'none' : 'flex';
       setPickerHidden(hidden);
+      setMoveHandlesHidden(hidden);
     },
   };
 }

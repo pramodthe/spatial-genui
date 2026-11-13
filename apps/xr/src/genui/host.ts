@@ -20,6 +20,7 @@ import {
   type World,
 } from '@iwsdk/core';
 import { captureLesson, expandByMesh, type CaptureOptions } from './capture';
+import { createMoveHandle, MOVE_HANDLE_RADIUS_M, type MoveHandle } from './handle';
 import { assetHandle, assetIdsIn, creditsFor, preloadAssets } from './library';
 import type { TeachingRig } from './rig';
 
@@ -70,6 +71,9 @@ type Mounted = {
   onSurface: string | null;
   /** This lesson's paintbox (textures, materials, shapes); disposed with the lesson. */
   kit: Kit | null;
+  /** The bar the learner drags to move the whole lesson, and where the lesson layout found the root. */
+  handle: MoveHandle | null;
+  handleRest: { offset: Vector3; root: Vector3 } | null;
 };
 
 /** The paintbox for generated lessons, served by the agent server (apps/server/src/kit/kit.js). */
@@ -110,12 +114,20 @@ function toPanelText(text: string): string {
 const REACH_DISTANCE_M = 0.55;
 const BELOW_EYES_M = 0.35;
 const MAX_CONTENT_SIZE_M = 0.8;
+// Nothing in a lesson starts nearer the eyes than this (measured along the floor): a lesson with cards or
+// parts laid out in front of its model is set further back to make room.
+const MIN_FRONT_GAP_M = 0.3;
+const MAX_SET_BACK_M = 0.45;
+// A spot the learner chose by dragging a lesson is used for the next one while they stay near it.
+const KEEP_SPOT_WITHIN_M = 1.5;
 // A near-hand pinch grabs everything within a few centimetres of the pinch point.
 const MIN_GRAB_GAP_M = 0.04;
 
 let world: World | null = null;
 let current: Mounted | null = null;
 let onRuntimeError: ((message: string) => void) | null = null;
+/** Where the learner last put a lesson down with its move handle. */
+let chosenSpot: { position: Vector3; yaw: number } | null = null;
 const tmpHead = new Vector3();
 const tmpForward = new Vector3();
 
@@ -130,6 +142,7 @@ export function initGenUIHost(w: World, handlers: { onRuntimeError: (message: st
 export function unmountGenerated() {
   if (!current) return;
   current.kit?.dispose();
+  current.handle?.dispose();
   for (const panel of current.panels.values()) URL.revokeObjectURL(panel.url);
   // Children before parents so each entity releases its own resources.
   for (const entity of [...current.entities].reverse()) entity.dispose();
@@ -293,6 +306,8 @@ export async function mountGenerated(code: string): Promise<MountReport> {
     root: null,
     onSurface: null,
     kit: (await loadKit())?.createKit(IWSDK) ?? null,
+    handle: null,
+    handleRest: null,
   };
 
   const api = {
@@ -354,12 +369,24 @@ export async function mountGenerated(code: string): Promise<MountReport> {
   }
   const anchor = new Group();
   anchor.name = 'GenUI Anchor';
-  mounted.onSurface = placeInSeatedReach(anchor);
   anchor.add(root);
-  fitToComfortSize(root, new Set(panels.map((p) => p.holder)), warnings);
+  // Measured before the anchor is placed, so the box is in the lesson's own frame (+Z toward the learner).
+  const panelHolders = new Set(panels.map((p) => p.holder));
+  fitToComfortSize(root, panelHolders, warnings);
+  const extent = contentBox(root, panelHolders);
+  for (const panel of panels) extent.expandByPoint(panel.holder.getWorldPosition(new Vector3()));
+  const front = extent.isEmpty() ? 0 : Math.max(0, extent.max.z);
+  mounted.onSurface = placeInSeatedReach(anchor, front);
   anchor.updateMatrixWorld(true);
 
   const anchorEntity = track(mounted, world.createTransformEntity(anchor), anchor);
+  // The handle lies on the desk in front of everything, nearest the learner.
+  mounted.handle = createMoveHandle(world, anchor, {
+    offset: [0, Math.max(-0.1, Math.min(0, extent.isEmpty() ? 0 : extent.min.y)) + MOVE_HANDLE_RADIUS_M, front + 0.07],
+    onMoved: () => (chosenSpot = { position: anchor.position.clone(), yaw: anchor.rotation.y }),
+  });
+  mounted.handle.setShown(true);
+  mounted.handleRest = { offset: mounted.handle.offset.clone(), root: root.position.clone() };
   const rootEntity = track(mounted, world.createTransformEntity(root, { parent: anchorEntity }), root);
 
   const crowded = findCrowdedGrabbables(traitRequests.filter((r) => r.grab).map((r) => r.object));
@@ -512,11 +539,18 @@ function track(mounted: Mounted, entity: Entity, object: Object3D): Entity {
 /**
  * Put the lesson on the learner's desk: a detected horizontal surface below the eyes, in front and within
  * reach (SPEC.md Phase 4). Without one (no plane detection, or nothing suitable), it floats at seated desk
- * height in front. Returns the surface's label, or null when floating.
+ * height in front. `front` is how far the lesson reaches toward the learner from its centre: it is set back
+ * far enough that nothing starts in their face. A spot the learner dragged the last lesson to wins over
+ * both. Returns the surface's label, or null when floating.
  */
-function placeInSeatedReach(anchor: Group): string | null {
+function placeInSeatedReach(anchor: Group, front: number): string | null {
   const camera = world!.camera;
   camera.getWorldPosition(tmpHead);
+  if (chosenSpot && chosenSpot.position.distanceTo(tmpHead) < KEEP_SPOT_WITHIN_M) {
+    anchor.position.copy(chosenSpot.position);
+    anchor.rotation.y = chosenSpot.yaw;
+    return null;
+  }
   camera.getWorldDirection(tmpForward);
   tmpForward.y = 0;
   if (tmpForward.lengthSq() < 1e-6) tmpForward.set(0, 0, -1);
@@ -528,6 +562,9 @@ function placeInSeatedReach(anchor: Group): string | null {
     anchor.position.copy(tmpHead).addScaledVector(tmpForward, REACH_DISTANCE_M);
     anchor.position.y = tmpHead.y - BELOW_EYES_M;
   }
+  const away = tmpForward.set(anchor.position.x - tmpHead.x, 0, anchor.position.z - tmpHead.z);
+  const gap = away.length() - front;
+  if (gap < MIN_FRONT_GAP_M && away.lengthSq() > 1e-6) anchor.position.addScaledVector(away.normalize(), Math.min(MIN_FRONT_GAP_M - gap, MAX_SET_BACK_M));
   // root's +Z must face the viewer, so yaw toward the head.
   anchor.rotation.y = Math.atan2(tmpHead.x - anchor.position.x, tmpHead.z - anchor.position.z);
   return desk?.label ?? null;
@@ -606,6 +643,18 @@ function findCrowdedGrabbables(objects: Object3D[]): Set<Object3D> {
  * server checked. (Scaling root still scales panels, so this only triggers for genuinely huge models.)
  */
 function fitToComfortSize(root: Object3D, panelHolders: Set<Object3D>, warnings: string[]) {
+  const box = contentBox(root, panelHolders);
+  if (box.isEmpty()) return;
+  const size = box.getSize(new Vector3());
+  const largest = Math.max(size.x, size.y, size.z);
+  if (largest > MAX_CONTENT_SIZE_M) {
+    root.scale.multiplyScalar(MAX_CONTENT_SIZE_M / largest);
+    warnings.push(`Scaled content down from ${largest.toFixed(2)} m to fit the seated reach zone.`);
+  }
+}
+
+/** The box around a lesson's meshes (no panels, labels or leader lines), in world space. */
+function contentBox(root: Object3D, panelHolders: Set<Object3D>): Box3 {
   root.updateMatrixWorld(true);
   const box = new Box3();
   const visit = (object: Object3D) => {
@@ -614,13 +663,7 @@ function fitToComfortSize(root: Object3D, panelHolders: Set<Object3D>, warnings:
     for (const child of object.children) visit(child);
   };
   visit(root);
-  if (box.isEmpty()) return;
-  const size = box.getSize(new Vector3());
-  const largest = Math.max(size.x, size.y, size.z);
-  if (largest > MAX_CONTENT_SIZE_M) {
-    root.scale.multiplyScalar(MAX_CONTENT_SIZE_M / largest);
-    warnings.push(`Scaled content down from ${largest.toFixed(2)} m to fit the seated reach zone.`);
-  }
+  return box;
 }
 
 function guard(mounted: Mounted, fn: () => void): () => void {
@@ -736,6 +779,8 @@ function layoutLessonPanels(mounted: Mounted, again?: { main: Object3D }) {
       const target = root.localToWorld(new Vector3(0, -best.dy * metre, -best.dz * metre));
       root.position.copy(root.parent ? root.parent.worldToLocal(target) : target);
       root.updateMatrixWorld(true);
+      // The move handle stays in front of the lesson's base.
+      if (mounted.handle && mounted.handleRest) mounted.handle.offset.copy(mounted.handleRest.offset).add(root.position).sub(mounted.handleRest.root);
     }
   }
   const eye = eyeNow();

@@ -7,7 +7,11 @@
 #   docker run -p 8080:8080 -e LLM_API_KEY=... -e META_API_KEY=... spatial-genui
 FROM node:22-slim
 
+# COURSE_MODELS=0: the image has no Python worker, so courses are written without building their own 3D
+# model (models already in data/library are still used). APP_DB: put the database on a mounted disk to keep
+# saved courses across restarts (default: data/app.db inside the container).
 ENV NODE_ENV=production \
+    COURSE_MODELS=0 \
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
     GENUI_PORT=8080 \
     STATIC_DIR=/app/apps/xr/dist

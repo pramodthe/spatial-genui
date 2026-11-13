@@ -27,6 +27,11 @@ export function runPython(script: string, args: string[], timeoutMs = 20 * 60_00
     let stdout = '';
     child.stdout.on('data', (d) => (stdout += d));
     const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
+    // No Python worker here (e.g. the deployed image): the stage fails, the server carries on.
+    child.on('error', (err) => {
+      clearTimeout(timer);
+      done({ code: null, stdout: JSON.stringify({ ok: false, error: `could not start the worker: ${err.message}` }) });
+    });
     child.on('close', (code) => {
       clearTimeout(timer);
       done({ code, stdout });
@@ -378,6 +383,10 @@ export async function splitInBlender(opts: { glbPath: string; dir: string; name:
       let out = '';
       child.stdout.on('data', (d) => (out += d));
       const timer = setTimeout(() => child.kill('SIGKILL'), 40 * 60_000);
+      child.on('error', (err) => {
+        clearTimeout(timer);
+        done(JSON.stringify({ ok: false, error: `could not start the worker: ${err.message}` }));
+      });
       child.on('close', () => {
         clearTimeout(timer);
         done(out);

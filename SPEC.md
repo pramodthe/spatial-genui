@@ -613,9 +613,24 @@ lessons and lets slow, careful generation happen in the background.
   Blender agent with Muse Spark about 36 min, blocky; TRELLIS body split by the Blender agent: 5 named
   parts for 552 s and about $0.01 more, with rough cuts.
 
+Added on Nov 14, after a headset session:
+
+- **Moving things by hand** (`apps/xr/src/genui/handle.ts`): each lesson and the picker has a bar to point
+  at, pinch and drag. Lessons open at one spot per session instead of wherever the learner is looking, set
+  back so nothing starts nearer than 30 cm; the picker docks beside the lesson. Dragging the bars was
+  checked by hand on a Quest 3S; the one-spot placement only in the emulator.
+- **A course's own 3D model** (`courses.ts`, `three-d/acquire.ts` with `parts: 'blender'`): a course about
+  one physical object first gets a reference picture, a TRELLIS.2 body, and named parts cut by the Blender
+  agent; its lessons are then written with that model. One run (a compound microscope, 8 parts): 2,382 s
+  for the model, of which about 36 minutes were the split (55 calls, 174,966 tokens, under a 60-turn cap
+  since lowered to 40 and not yet re-measured); lesson 1 then took 28 s. The model is the outside only.
+- **Database** (`apps/server/src/db.ts`): courses, lessons and an index of course models in one SQLite
+  file (`data/app.db`). A second course about the same object reuses the saved model (checked once).
+- **The model library is in git** (`data/library/`, 24 models, 55 MB, credits in `CREDITS.md`).
+
 Open: a measured comparison over more objects (needed before any claim in the paper), a looks score on the
-benchmark (`bench:judge --looks` exists, not yet run), capping cut faces of split parts, and the latency
-of live lessons (3-6 minutes).
+benchmark (`bench:judge --looks` exists, not yet run), capping cut faces of split parts, the latency
+of live lessons (3-6 minutes) and of a course's model (about 40 minutes in the one run).
 
 ## 7. Schedule (parallel lanes)
 

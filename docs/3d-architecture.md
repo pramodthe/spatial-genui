@@ -252,24 +252,14 @@ Each milestone ends with something visible in the headset or emulator and a meas
 4. **First domains.** Anatomy first (best data, strongest demo), then astronomy and chemistry?
 5. **Backend.** Move the Modal backend to the `setout` design (Functions called from the device, replayed steps) as part of M1.
 
-## 11. Experiment isolation
+## 11. Where v2 lives
 
-v2 is built as an experiment that can be removed without a trace:
+v2 was built as an experiment on its own branch and worktree, and adopted on Nov 14: it was merged into
+`main`, and the worktree and its branch were removed.
 
-- **Code:** branch `exp/3d-v2` in the worktree `.claude/worktrees/3d-v2`, started from the committed Phase 3 baseline (`phase-3-3d`). The main checkout is not touched.
-- **Modal:** everything v2 deploys uses its own names: apps `spatial-genui-3d-v2` (TRELLIS.2), `spatial-genui-3d-v2-retrieval` (DINOv3) and `spatial-genui-3d-v2-parts` (P3-SAM), volume `genui-assets-v2`. The Phase 3 backend (`spatial-genui-3d`) keeps running unchanged. GPU functions scale to zero, so nothing is billed while idle.
-- **Large data** (BodyParts3D, the Objaverse index and downloads in `data/objaverse/`, generated assets in `data/library/`) lives in `data/` (git-ignored) or the Modal volume, never in git.
-
-To remove v2 entirely:
-
-```bash
-git worktree remove --force .claude/worktrees/3d-v2   # also deletes its git-ignored data/ (Objaverse index, built assets)
-git branch -D exp/3d-v2
-cd apps/worker3d && uv run modal app stop spatial-genui-3d-v2 && uv run modal app stop spatial-genui-3d-v2-retrieval \
-  && uv run modal app stop spatial-genui-3d-v2-parts && uv run modal volume delete genui-assets-v2
-```
-
-To adopt it: merge `exp/3d-v2` into the main line after its milestone checks pass.
+- **Modal:** everything v2 deploys uses its own names: apps `spatial-genui-3d-v2` (TRELLIS.2), `spatial-genui-3d-v2-retrieval` (DINOv3), `spatial-genui-3d-v2-parts` (P3-SAM) and `spatial-genui-3d-v2-blender` (the Blender agent's sandbox), volume `genui-assets-v2`. The Phase 3 backend (`spatial-genui-3d`) keeps running unchanged. GPU functions scale to zero, so nothing is billed while idle.
+- **The model library** (`data/library/`: the GLB files and their catalogue) is in git, so a fresh clone or a hosted copy has the models without building them again. `data/library/CREDITS.md` lists each model's source and licence.
+- **Everything else under `data/`** is git-ignored and exists only on the machine that made it: downloads (BodyParts3D, the Objaverse index and models), work files of each pipeline stage, and the app's database (`data/app.db`: saved courses, lessons and the index of models made for courses).
 
 ## 12. Progress
 

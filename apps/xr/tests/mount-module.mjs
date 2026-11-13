@@ -1,6 +1,7 @@
 // Mount module files (e.g. lessons compiled from A2UI or a template) one after another and record what
 // the browser host reports: mount result, runtime errors after the panels load, and what is pressable.
-// Usage: GENUI_MODULES="/path/a.js,/path/b.js" [GENUI_KEEP=1 keeps the last scene] npx @iwsdk/cli browser run tests/mount-module.mjs --timeout 100000
+// Usage: GENUI_MODULES="/path/a.js,/path/b.js" [GENUI_KEEP=1 keeps the last scene] [GENUI_HIDE=1 hides the prompt box
+//        and picker, for screenshots] [GENUI_WAIT_MS=2500] npx @iwsdk/cli browser run tests/mount-module.mjs --timeout 100000
 
 import { readFile } from 'node:fs/promises';
 
@@ -13,9 +14,10 @@ export default async function run({ frame, page }) {
   const results = [];
   for (const file of files) {
     const code = await readFile(file, 'utf8');
-    const outcome = await target.evaluate(async (code) => {
+    const outcome = await target.evaluate(async ([code, hide, waitMs]) => {
+      if (hide) window.genui.setOverlayHidden(true);
       const report = await window.genui.mount(code);
-      await new Promise((res) => setTimeout(res, 2500)); // panels load, update() runs for a while
+      await new Promise((res) => setTimeout(res, waitMs)); // panels load, textures paint, update() runs for a while
       const inspection = window.genui.inspect();
       return {
         report,
@@ -25,7 +27,7 @@ export default async function run({ frame, page }) {
         pressables: inspection?.pressables.map((p) => p.name),
         grabbables: inspection?.grabbables.map((g) => g.name),
       };
-    }, code);
+    }, [code, Boolean(process.env.GENUI_HIDE), Number(process.env.GENUI_WAIT_MS || 2500)]);
     results.push({ file: file.split('/').pop(), mounted: outcome.report.ok, ...outcome });
   }
   if (!process.env.GENUI_KEEP) await target.evaluate(() => window.genui.clear());

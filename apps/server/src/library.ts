@@ -92,7 +92,7 @@ gears.move('drive_gear', time / 4);    // a turning part keeps turning as t grow
   return `
 
 ## Accurate 3D models from the library
-Use these models instead of building them from shapes: they come from real scan or measurement data, so they are scientifically accurate, and every part is a separate, named mesh. If a model's notes say it is not to scale, say so in the lesson.
+Use these models for the objects they show instead of building those from shapes: they come from real scan or measurement data, so they are scientifically accurate, and every part is a separate, named mesh. If a model's notes say it is not to scale, say so in the lesson. Everything else in the lesson (panels, extra shapes, effects) is yours to build with the kit.
 ${list.join('\n')}${several}
 
 How to use one (the id must be written as a string; the host loads the model before build() runs):

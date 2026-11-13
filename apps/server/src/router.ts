@@ -33,8 +33,13 @@ Choose only what the lesson needs (usually 1, at most 4). Use the catalogue when
 const ROUTER_OBJECTS = `
 Also add "objects": a list with at most one real-world physical object the lesson is about that should be shown as a realistic 3D model and is not in the catalogue (e.g. a microscope, a violin, a steam locomotive): {"name": "<its everyday name, 1-3 words>", "describe": "<one line: what it is and what it looks like, as you would brief an artist>", "parts": ["<3-7 parts the lesson would label>"]}. It must be the thing the lesson teaches (its parts, how it works), not a prop used to teach something else (a pizza for fractions, coins for counting, a ball for gravity): the lesson builds props itself so they can be cut, counted or thrown. Leave the list empty when a catalogue entry fits, for molecules and other things the catalogue builds from data, for abstract ideas, and for scenes with many objects.`;
 
+// Library models the router no longer offers: plain, untextured shapes built from data tables. The agent
+// builds better-looking ones itself with the paintbox (kit), from the same well-known facts.
+const NOT_ROUTED = new Set(['solar-system', 'planets-to-scale', 'saturn-nasa']);
+const routable = () => [...libraryCatalog().values()].filter((e) => !NOT_ROUTED.has(e.id));
+
 function catalogueText(): string {
-  return [...libraryCatalog().values()]
+  return routable()
     .map((e) => `- ${e.id}: ${e.title}${e.keywords?.length ? ` [${e.keywords.slice(0, 10).join(', ')}]` : ''}`)
     .join('\n');
 }
@@ -84,7 +89,7 @@ function spawnBuild(name: string): Promise<{ ok: boolean; id?: string; error?: s
 /** Fallback when the model call fails: catalogue entries whose keywords appear in the request. */
 function keywordRoute(prompt: string): string[] {
   const text = prompt.toLowerCase();
-  return [...libraryCatalog().values()]
+  return routable()
     .map((e) => ({ id: e.id, hits: (e.keywords ?? []).filter((k) => k.length > 2 && text.includes(k)).length }))
     .filter((e) => e.hits > 0)
     .sort((a, b) => b.hits - a.hits)
@@ -117,7 +122,7 @@ export async function routeAssets(prompt: string, target: LlmTarget, options: { 
           parts: (Array.isArray(o.parts) ? o.parts : []).map(String).filter((p) => /^[\w '-]{2,40}$/.test(p)).slice(0, 8),
         }));
     }
-    assets = (Array.isArray(parsed.assets) ? parsed.assets : []).map(String).filter((id) => known.has(id));
+    assets = (Array.isArray(parsed.assets) ? parsed.assets : []).map(String).filter((id) => known.has(id) && !NOT_ROUTED.has(id));
     molecules = (Array.isArray(parsed.molecules) ? parsed.molecules : []).map(String).filter((m) => /^[\w ,'()+-]{2,60}$/.test(m)).slice(0, 4);
   } catch {
     method = 'keywords';

@@ -1,6 +1,7 @@
 import vm from 'node:vm';
 import * as THREE from 'three';
 import { parse as parseUIKitML } from '@drawcall/uikitml';
+import { createKit } from './kit/kit.js';
 
 export type SceneStats = {
   meshes: number;
@@ -39,8 +40,11 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
   const traitTargets: { object: unknown; grab: boolean; press: boolean }[] = [];
   const panels: { markup: string; options: any; holder: THREE.Group }[] = [];
 
+  // The same paintbox the headset uses (kit/kit.js); dry mode builds real shapes but paints no pixels.
+  const kit = createKit(THREE, { dry: true });
   const api = {
     THREE,
+    kit,
     traits(object: unknown, options: any = {}) {
       traitTargets.push({ object, grab: Boolean(options.grab), press: typeof options.onPress === 'function' });
       return object;

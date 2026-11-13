@@ -1,4 +1,4 @@
-import { aimPoint, inspectMounted, debugRay, mountGenerated, unmountGenerated, type MountReport } from './host.js';
+import { aimPoint, capture, inspectMounted, debugRay, debugRoot, mountGenerated, unmountGenerated, type MountReport } from './host.js';
 import { EXAMPLE_LESSONS, type SavedLesson } from './lessons.js';
 import { inspectPicker, setPickerHidden } from './picker.js';
 
@@ -172,6 +172,8 @@ export function createOverlay() {
     inspect: inspectMounted,
     inspectPicker,
     debugRay,
+    debugRoot,
+    capture,
     aimPoint,
     // Hides all chrome, the in-headset picker too (the benchmark's screenshots show the lesson only).
     setOverlayHidden: (hidden: boolean) => {

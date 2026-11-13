@@ -1,5 +1,6 @@
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { extname, join, normalize, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { generate, type GenerationResult } from './agent.js';
 import { config } from './config.js';
@@ -11,11 +12,18 @@ import { admit, admitVoice, recordSpend, spendToday, visitorOf } from './guard.j
 import { transcribe } from './voice.js';
 
 const MAX_BODY_BYTES = 200_000;
+const KIT_FILE = fileURLToPath(new URL('./kit/kit.js', import.meta.url));
 
 const server = createServer(async (req, res) => {
   try {
     if (req.method === 'GET' && req.url === '/api/health') {
       return send(res, 200, { ok: true, model: config.model, provider: new URL(config.baseURL).host, hasKey: Boolean(config.apiKey), spend: spendToday() });
+    }
+    if (req.method === 'GET' && req.url?.split('?')[0] === '/api/kit.js') {
+      // The paintbox for generated lessons: one source for the dry run (dryrun.ts) and the headset.
+      res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-cache' });
+      createReadStream(KIT_FILE).pipe(res);
+      return;
     }
     if (req.method === 'GET' && req.url === '/api/library/catalog') {
       // What the browser host needs to build asset handles: parts, anchors, credit (no file paths).

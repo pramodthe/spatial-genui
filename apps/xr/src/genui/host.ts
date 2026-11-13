@@ -19,6 +19,7 @@ import {
   type UIKitDocument,
   type World,
 } from '@iwsdk/core';
+import { captureLesson, type CaptureOptions } from './capture';
 import { assetHandle, assetIdsIn, creditsFor, preloadAssets } from './library';
 import type { TeachingRig } from './rig';
 
@@ -67,7 +68,21 @@ type Mounted = {
   layout?: Record<string, unknown>;
   /** The detected surface the lesson stands on (its label, or 'surface'), or null when it floats at seated height. */
   onSurface: string | null;
+  /** This lesson's paintbox (textures, materials, shapes); disposed with the lesson. */
+  kit: Kit | null;
 };
+
+/** The paintbox for generated lessons, served by the agent server (apps/server/src/kit/kit.js). */
+type Kit = { finalize(root: Object3D): void; pump(budgetMs?: number): number; dispose(): void };
+let kitModule: Promise<{ createKit(three: unknown): Kit } | null> | null = null;
+function loadKit() {
+  kitModule ??= import(/* @vite-ignore */ `${location.origin}/api/kit.js`).catch((err) => {
+    console.warn('[GenUI] paintbox failed to load', err);
+    kitModule = null; // try again with the next lesson
+    return null;
+  });
+  return kitModule;
+}
 
 export type MountReport = { ok: true; warnings: string[]; credits: string[] } | { ok: false; error: string };
 
@@ -114,6 +129,7 @@ export function initGenUIHost(w: World, handlers: { onRuntimeError: (message: st
 
 export function unmountGenerated() {
   if (!current) return;
+  current.kit?.dispose();
   for (const panel of current.panels.values()) URL.revokeObjectURL(panel.url);
   // Children before parents so each entity releases its own resources.
   for (const entity of [...current.entities].reverse()) entity.dispose();
@@ -134,6 +150,17 @@ export type MountedInspection = {
   /** Panel elements with a generated click handler, with their world-space centers. */
   panelButtons: { id: string; center: [number, number, number]; size: [number, number, number] }[];
 };
+
+/** A picture of the mounted lesson from a virtual camera (JPEG data URL), or null when there is none. */
+export function capture(options: CaptureOptions = {}): string | null {
+  if (!world || !current?.root) return null;
+  return captureLesson(world, current.root, new Set([...current.panels.values()].map((p) => p.holder)), options);
+}
+
+/** Test-only: the mounted lesson's root, for scripts that inspect what was built. */
+export function debugRoot(): Object3D | null {
+  return current?.root ?? null;
+}
 
 /** Test-only: what a ray from `from` toward `to` passes through, nearest first (debugging blocked presses). */
 export function debugRay(from: [number, number, number], to: [number, number, number]) {
@@ -265,10 +292,12 @@ export async function mountGenerated(code: string): Promise<MountReport> {
     declutterIn: 3,
     root: null,
     onSurface: null,
+    kit: (await loadKit())?.createKit(IWSDK) ?? null,
   };
 
   const api = {
     THREE: IWSDK,
+    kit: mounted.kit,
     traits(object: Object3D, options: { grab?: boolean; onPress?: () => void } = {}) {
       traitRequests.push({ object, grab: Boolean(options.grab), onPress: options.onPress });
       return object;
@@ -305,16 +334,24 @@ export async function mountGenerated(code: string): Promise<MountReport> {
     result = (build as (a: typeof api) => typeof result)(api) ?? {};
   } catch (err) {
     for (const panel of panels) URL.revokeObjectURL(panel.url);
+    mounted.kit?.dispose();
     return { ok: false, error: `build() threw: ${describe(err)}` };
   }
   const root = result.root as Object3D | undefined;
   if (!root || !(root as Object3D).isObject3D) {
     for (const panel of panels) URL.revokeObjectURL(panel.url);
+    mounted.kit?.dispose();
     return { ok: false, error: 'build() must return { root } with a THREE.Object3D root.' };
   }
 
   const warnings: string[] = [];
   mounted.root = root;
+  // Kit materials get their real-world texture scale now that every shape exists.
+  try {
+    mounted.kit?.finalize(root);
+  } catch (err) {
+    warnings.push(`Texture mapping skipped: ${describe(err)}`);
+  }
   const anchor = new Group();
   anchor.name = 'GenUI Anchor';
   mounted.onSurface = placeInSeatedReach(anchor);
@@ -391,6 +428,8 @@ class GenUISystem extends createSystem({
   update(delta: number): void {
     const mounted = current;
     if (!mounted) return;
+    // Textures are painted a few milliseconds per frame, so a lesson never stalls the headset.
+    mounted.kit?.pump(5);
     if (mounted.declutterIn !== null && mounted.rigs.length > 0 && [...mounted.panels.values()].every((p) => p.document)) {
       // UIKit lays panels out over a few frames; measure once their sizes are real.
       if (mounted.declutterIn-- <= 0) {

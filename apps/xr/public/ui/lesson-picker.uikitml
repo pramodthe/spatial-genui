@@ -1,0 +1,153 @@
+<!--
+  In-headset lesson picker (src/genui/picker.ts). The 2D prompt box disappears in XR, so this is how a
+  learner starts a lesson with hands only: point and pinch, or touch a card. Plain divs with explicit
+  colours, so it reads the same in both colour schemes. picker.ts sizes it with setTargetDimensions,
+  fills in the card text and the status, and docks it to the side while a lesson is showing.
+-->
+<style>
+  .picker {
+    flex-direction: column;
+    width: 60;
+    gap: 1.6;
+    padding-top: 3;
+    padding-bottom: 3;
+    padding-left: 3;
+    padding-right: 3;
+    border-radius: 3;
+    border-width: 0.15;
+    border-color: #3a3d44;
+    background-color: #17191d;
+  }
+
+  .eyebrow {
+    color: #f5d90a;
+    font-size: 1.8;
+    font-weight: 700;
+  }
+
+  .heading {
+    color: #fafaf7;
+    font-size: 4;
+    font-weight: 700;
+  }
+
+  .hint {
+    color: #c9ccd2;
+    font-size: 2.2;
+  }
+
+  .row {
+    flex-direction: row;
+    gap: 1.6;
+  }
+
+  .card {
+    flex-direction: column;
+    flex-grow: 1;
+    flex-basis: 0;
+    gap: 0.6;
+    padding-top: 2;
+    padding-bottom: 2;
+    padding-left: 2.2;
+    padding-right: 2.2;
+    border-radius: 2;
+    border-width: 0.15;
+    border-color: #4a4e57;
+    background-color: #262930;
+    cursor: pointer;
+  }
+
+  .card:hover {
+    background-color: #2f6fdb;
+    border-color: #8db4f5;
+  }
+
+  .card-title {
+    color: #fafaf7;
+    font-size: 3.2;
+    font-weight: 700;
+  }
+
+  .card-sub {
+    color: #d6d9de;
+    font-size: 2.1;
+  }
+
+  .status {
+    flex-direction: row;
+    align-items: center;
+    gap: 1.4;
+    padding-top: 1.6;
+    padding-bottom: 1.6;
+    padding-left: 2.2;
+    padding-right: 2.2;
+    border-radius: 2;
+    background-color: #262930;
+  }
+
+  .dot {
+    width: 2;
+    height: 2;
+    border-radius: 1;
+    background-color: #8a8f99;
+  }
+
+  .status-text {
+    flex-grow: 1;
+    flex-shrink: 1;
+    color: #eef0f3;
+    font-size: 2.4;
+  }
+
+  .action {
+    padding-top: 1.4;
+    padding-bottom: 1.4;
+    padding-left: 2.4;
+    padding-right: 2.4;
+    border-radius: 1.6;
+    background-color: #2f6fdb;
+    cursor: pointer;
+  }
+
+  .action:hover {
+    background-color: #4a86ef;
+  }
+
+  .action-label {
+    color: #ffffff;
+    font-size: 2.4;
+    font-weight: 700;
+  }
+</style>
+<div class="picker">
+  <span id="eyebrow" class="eyebrow">MIXED REALITY LESSONS</span>
+  <span id="heading" class="heading">What do you want to learn?</span>
+  <span id="hint" class="hint">Point at a card, then pinch.</span>
+  <div class="row">
+    <div id="lesson-0" class="card">
+      <span id="lesson-0-title" class="card-title">Lesson</span>
+      <span id="lesson-0-sub" class="card-sub">...</span>
+    </div>
+    <div id="lesson-1" class="card">
+      <span id="lesson-1-title" class="card-title">Lesson</span>
+      <span id="lesson-1-sub" class="card-sub">...</span>
+    </div>
+  </div>
+  <div class="row">
+    <div id="lesson-2" class="card">
+      <span id="lesson-2-title" class="card-title">Lesson</span>
+      <span id="lesson-2-sub" class="card-sub">...</span>
+    </div>
+    <div id="lesson-3" class="card">
+      <span id="lesson-3-title" class="card-title">Lesson</span>
+      <span id="lesson-3-sub" class="card-sub">...</span>
+    </div>
+  </div>
+  <div id="status" class="status">
+    <div id="status-dot" class="dot"></div>
+    <span id="status-text" class="status-text">Pick a lesson to start.</span>
+    <div id="fix" class="action" style="display: none">
+      <span class="action-label">Fix it</span>
+    </div>
+  </div>
+</div>

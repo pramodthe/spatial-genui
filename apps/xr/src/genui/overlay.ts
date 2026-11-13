@@ -1,9 +1,25 @@
 import { aimPoint, inspectMounted, debugRay, mountGenerated, unmountGenerated, type MountReport } from './host.js';
+import { EXAMPLE_LESSONS } from './lessons.js';
+import { inspectPicker, setPickerHidden } from './picker.js';
 
 /**
- * Desktop/emulator prompt box for Phase 1 testing. In-headset input (topic chips,
- * voice) comes in Phase 4; DOM overlays are not visible inside an immersive session.
+ * Desktop/emulator prompt box, and the lesson state both it and the in-headset picker (picker.ts) drive.
+ * DOM overlays are not visible inside an immersive session; the picker follows the lesson through
+ * onLessonStatus.
  */
+
+/** Where the current lesson is, for the in-headset picker. */
+export type LessonStatus = {
+  phase: 'idle' | 'building' | 'fixing' | 'ready' | 'failed' | 'broken';
+  prompt: string | null;
+  message: string;
+  /** performance.now() when this phase began. */
+  since: number;
+};
+
+// A runtime error this soon after mounting comes from loading the lesson (a panel element it never
+// created, a broken first frame), not from the learner using it: repair once without asking.
+const AUTO_REPAIR_WINDOW_MS = 8000;
 
 type GenerateResponse = {
   ok: boolean;
@@ -28,6 +44,10 @@ type GenUIState = {
   busy: boolean;
   /** Background model jobs for the current lesson, as last polled. */
   assetJobs: AssetJob[];
+  /** performance.now() when the current lesson mounted. */
+  mountedAt: number;
+  /** The current lesson has had its one automatic repair. */
+  autoRepaired: boolean;
 };
 
 const state: GenUIState = {
@@ -38,7 +58,24 @@ const state: GenUIState = {
   runtimeErrors: [],
   busy: false,
   assetJobs: [],
+  mountedAt: 0,
+  autoRepaired: false,
 };
+
+let lessonStatus: LessonStatus = { phase: 'idle', prompt: null, message: '', since: performance.now() };
+const statusListeners = new Set<(status: LessonStatus) => void>();
+
+/** Follow the lesson's phase; the listener gets the current one at once. Returns an unsubscribe. */
+export function onLessonStatus(listener: (status: LessonStatus) => void): () => void {
+  statusListeners.add(listener);
+  listener(lessonStatus);
+  return () => statusListeners.delete(listener);
+}
+
+function setPhase(phase: LessonStatus['phase'], message = '') {
+  lessonStatus = { phase, prompt: state.prompt, message, since: performance.now() };
+  for (const listener of statusListeners) listener(lessonStatus);
+}
 
 let statusEl: HTMLDivElement;
 let assetsEl: HTMLDivElement;
@@ -59,10 +96,7 @@ export function createOverlay() {
     <textarea rows="2" placeholder="e.g. Teach me the solar system with a short quiz"
       style="resize:vertical;font:inherit;color:inherit;background:#0f1114;border:1px solid #3a3d44;border-radius:8px;padding:8px"></textarea>
     <div data-role="examples" style="display:flex;gap:6px;flex-wrap:wrap">
-      <button data-prompt="Show me how blood flows through the heart, step by step.">Heart</button>
-      <button data-prompt="Teach me the parts of a microscope and what each part does.">Microscope</button>
-      <button data-prompt="Teach me how two gears change speed and turning force.">Gears</button>
-      <button data-prompt="Teach me the parts of a flower and what each part does.">Flower</button>
+      ${EXAMPLE_LESSONS.map((lesson) => `<button data-prompt="${lesson.prompt}">${lesson.title}</button>`).join('')}
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button data-action="generate">Generate</button>
@@ -125,9 +159,14 @@ export function createOverlay() {
     clear,
     state,
     inspect: inspectMounted,
+    inspectPicker,
     debugRay,
     aimPoint,
-    setOverlayHidden: (hidden: boolean) => (root.style.display = hidden ? 'none' : 'flex'),
+    // Hides all chrome, the in-headset picker too (the benchmark's screenshots show the lesson only).
+    setOverlayHidden: (hidden: boolean) => {
+      root.style.display = hidden ? 'none' : 'flex';
+      setPickerHidden(hidden);
+    },
   };
 }
 
@@ -135,17 +174,35 @@ export function reportRuntimeError(message: string) {
   state.runtimeErrors.push(message);
   console.error('[GenUI]', message);
   setStatus(`Runtime error: ${message}`);
-  if (state.code) repairButton.hidden = false;
+  if (!state.code) return;
+  repairButton.hidden = false;
+  // In a headset nobody can reach the repair button: a lesson that breaks while loading is repaired
+  // once on its own. A later break (from using it) waits for the learner to ask ("Fix it").
+  const loading = state.lastMount?.ok === false || performance.now() - state.mountedAt < AUTO_REPAIR_WINDOW_MS;
+  if (loading && !state.autoRepaired) {
+    state.autoRepaired = true;
+    repairPending = true;
+    setPhase('fixing', message);
+    setTimeout(() => void repair(), 50); // after the generate() that mounted it has finished, and the errors that came with it
+  } else if (!repairPending) {
+    setPhase('broken', message);
+  }
 }
 
-async function generate(prompt: string, extra: { previousCode?: string; clientError?: string } = {}) {
+/** An automatic repair is scheduled but hasn't started: later errors from the same load join it. */
+let repairPending = false;
+
+export async function generate(prompt: string, extra: { previousCode?: string; clientError?: string } = {}) {
   prompt = prompt.trim();
   if (!prompt || state.busy) return state;
   state.busy = true;
+  repairPending = false;
+  if (!extra.previousCode) state.autoRepaired = false; // a new lesson gets its own automatic repair
   state.prompt = prompt;
   repairButton.hidden = true;
   stopWatchingAssets();
   setStatus('Generating…');
+  setPhase(extra.previousCode ? 'fixing' : 'building');
   try {
     const res = await fetch('/api/generate', {
       method: 'POST',
@@ -156,11 +213,13 @@ async function generate(prompt: string, extra: { previousCode?: string; clientEr
     state.lastResponse = data;
     if (!res.ok || !data.ok || !data.code) {
       setStatus(`Generation failed: ${data.error ?? res.statusText}`);
+      setPhase('failed', data.error ?? res.statusText);
       return state;
     }
     await mount(data.code);
     const stages = data.attempts?.map((a) => a.stage).join(' → ');
     if (state.lastMount?.ok) {
+      setPhase('ready');
       setStatus(
         `Done in ${((data.totalMs ?? 0) / 1000).toFixed(1)} s with ${data.model} (attempts: ${stages}).` +
           (state.lastMount.warnings.length ? `\n${state.lastMount.warnings.join('\n')}` : '') +
@@ -171,6 +230,7 @@ async function generate(prompt: string, extra: { previousCode?: string; clientEr
     if (data.pendingAssets?.length) watchAssets(data.pendingAssets);
   } catch (err) {
     setStatus(`Request failed: ${(err as Error).message}`);
+    setPhase('failed', (err as Error).message);
   } finally {
     state.busy = false;
   }
@@ -181,6 +241,7 @@ async function mount(code: string) {
   state.code = code;
   state.runtimeErrors = [];
   codeEl.textContent = code;
+  state.mountedAt = performance.now();
   state.lastMount = await mountGenerated(code);
   if (!state.lastMount.ok) reportRuntimeError(state.lastMount.error);
   return state.lastMount;
@@ -225,7 +286,7 @@ async function rebuild() {
   return state.prompt ? generate(state.prompt) : state;
 }
 
-async function repair() {
+export async function repair() {
   if (!state.prompt || !state.code || state.runtimeErrors.length === 0) return state;
   return generate(state.prompt, { previousCode: state.code, clientError: state.runtimeErrors.join('\n') });
 }
@@ -237,6 +298,7 @@ function clear() {
   repairButton.hidden = true;
   stopWatchingAssets();
   setStatus('');
+  setPhase('idle');
 }
 
 function setStatus(text: string) {

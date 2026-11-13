@@ -1,23 +1,26 @@
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
-import { writeFile } from 'node:fs/promises';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { generate } from './agent.js';
 import { extractJson } from './a2ui/catalog.js';
+import { countCourses, loadCourses, saveCourse, saveModel, savedModels } from './db.js';
 import { recordSpend } from './guard.js';
+import { libraryCatalog } from './library.js';
 import { complete, defaultTarget, type LlmTarget } from './llm.js';
 import { loadModel } from './models.js';
 
 /**
  * Saved courses. A learner asks for a subject; a fast model plans a short course, and the lessons are then
- * written in the background and kept on disk, so the learner can leave and come back to a ready course.
+ * written in the background and kept in the database (db.ts), so the learner can leave and come back to a
+ * ready course.
  * Lessons are written just in time: the first at once, each next one when the one before it is opened
  * (COURSE_BUILD_ALL=1 writes the whole course straight away). One lesson is written at a time.
  *
  * A course about one physical object first gets its own 3D model (three-d/acquire.ts: a reference
  * picture, TRELLIS.2, then an agent in Blender cuts it into named parts; around fifteen minutes). Its
- * lessons are written once the model is in, and use it. COURSE_MODELS=0 turns this off.
+ * lessons are written once the model is in, and use it. A model is made once: the next course about the
+ * same object reuses it. COURSE_MODELS=0 turns this off.
  */
 
 export type LessonState = 'pending' | 'generating' | 'ready' | 'failed';
@@ -74,7 +77,8 @@ export type Course = {
   lessons: CourseLesson[];
 };
 
-const COURSES_DIR = process.env.COURSES_DIR || fileURLToPath(new URL('../../../data/courses/', import.meta.url));
+// Where courses were kept as JSON files before the database; read once, to bring them in.
+const LEGACY_DIR = process.env.COURSES_DIR || fileURLToPath(new URL('../../../data/courses/', import.meta.url));
 const BUILD_ALL = process.env.COURSE_BUILD_ALL === '1';
 const MODELS = process.env.COURSE_MODELS !== '0';
 const MAX_COURSES = 200;
@@ -87,6 +91,7 @@ Plan 3 to 4 lessons for the learner's request:
 - The LAST lesson is a hands-on check of the lessons before it: the learner picks up name cards and drops each one on the part of the model it names (4 to 6 cards). Give it "kind": "quiz"; every other lesson has "kind": "explore". Its prompt names the model to show and the parts to match.
 - "prompt" is the full request for the agent that builds that lesson. It knows nothing else, so name the subject, what the 3D model must show, and what the learner does with it (2 to 3 sentences).
 - "model": when the course is about ONE real physical object (a jet engine, a microscope, a guitar, a heart), describe it, and a realistic 3D model of its outside is built with separate parts. "name" is its everyday name (1 to 3 words), "describe" is one sentence on what it looks like from outside, "parts" are 4 to 7 outside parts a learner could take off and name. The first lesson and the quiz then use this model. Use null when the course is about a process, an idea or several things (the water cycle, photosynthesis, the solar system).
+- If the request comes with a list of models already made and one of them is this course's object, use it instead of describing a new one: "model": {"use": "<its id>"}. Then plan the lessons around the parts it has.
 
 Reply with only this JSON:
 {"title": "2 to 5 words", "subtitle": "one short line", "model": {"name": "...", "describe": "...", "parts": ["..."]}, "lessons": [{"title": "2 to 4 words", "objective": "After this you can ...", "kind": "explore", "prompt": "..."}]}`;
@@ -99,20 +104,29 @@ let loaded = false;
 function load() {
   if (loaded) return;
   loaded = true;
-  mkdirSync(COURSES_DIR, { recursive: true });
-  for (const file of readdirSync(COURSES_DIR)) {
+  if (countCourses() === 0) importLegacy();
+  for (const course of loadCourses()) {
+    // Work a restart interrupted goes back in the queue (lessons) or is given up (a plan that never arrived).
+    for (const lesson of course.lessons) {
+      if (lesson.status === 'generating') lesson.status = 'pending';
+      if (lesson.polish === 'running') delete lesson.polish;
+    }
+    if (course.status === 'planning') Object.assign(course, { status: 'failed', error: 'The server restarted while planning.' });
+    courses.set(course.id, course);
+    // A model build carries on from the files it left (each stage keeps its result).
+    if (course.model?.status === 'building') void buildModel(course);
+  }
+}
+
+/** Bring in the courses saved as JSON files before there was a database (the files are left where they are). */
+function importLegacy() {
+  if (!existsSync(LEGACY_DIR)) return;
+  for (const file of readdirSync(LEGACY_DIR)) {
     if (!file.endsWith('.json')) continue;
     try {
-      const course = JSON.parse(readFileSync(join(COURSES_DIR, file), 'utf8')) as Course;
-      // Work a restart interrupted goes back in the queue (lessons) or is given up (a plan that never arrived).
-      for (const lesson of course.lessons) {
-        if (lesson.status === 'generating') lesson.status = 'pending';
-        if (lesson.polish === 'running') delete lesson.polish;
-      }
-      if (course.status === 'planning') Object.assign(course, { status: 'failed', error: 'The server restarted while planning.' });
-      courses.set(course.id, course);
-      // A model build carries on from the files it left (each stage keeps its result).
-      if (course.model?.status === 'building') void buildModel(course);
+      const course = JSON.parse(readFileSync(join(LEGACY_DIR, file), 'utf8')) as Course;
+      saveCourse(course);
+      remember(course.model);
     } catch (err) {
       console.warn(`Skipping unreadable course file ${file}: ${(err as Error).message}`);
     }
@@ -120,7 +134,18 @@ function load() {
 }
 
 function save(course: Course) {
-  return writeFile(join(COURSES_DIR, `${course.id}.json`), JSON.stringify(course, null, 1));
+  saveCourse(course);
+}
+
+/** Index a finished course model, so the next course about the same object uses it. */
+function remember(model: CourseModel | undefined) {
+  if (model?.status === 'ready' && model.assetId) saveModel({ id: model.assetId, name: model.name, describe: model.describe, parts: model.built ?? model.parts, seconds: model.seconds });
+}
+
+/** Models made for earlier courses that are still in the library. */
+function modelsMade() {
+  const library = libraryCatalog();
+  return savedModels().filter((m) => library.has(m.id));
 }
 
 /** A course without its lessons' code, for lists and status polling. */
@@ -163,7 +188,9 @@ export function startCourse(request: string): Course {
 async function plan(course: Course) {
   try {
     const target = await plannerTarget();
-    const reply = await complete([{ role: 'system', content: PLANNER_PROMPT }, { role: 'user', content: course.request }], target);
+    const made = MODELS ? modelsMade() : [];
+    const have = made.length ? `\n\nModels already made:\n${made.map((m) => `- ${m.id}: ${m.name} (parts: ${m.parts.join(', ')})`).join('\n')}` : '';
+    const reply = await complete([{ role: 'system', content: PLANNER_PROMPT }, { role: 'user', content: course.request + have }], target);
     await recordSpend([{ model: target.id, promptTokens: reply.promptTokens, completionTokens: reply.completionTokens }]);
     const outline = extractJson(reply.text) as { title?: unknown; subtitle?: unknown; model?: unknown; lessons?: unknown } | null;
     const lessons = (Array.isArray(outline?.lessons) ? outline.lessons : [])
@@ -181,8 +208,10 @@ async function plan(course: Course) {
       status: 'pending',
     }));
     course.status = 'building';
-    const wanted = MODELS ? wantedModel(outline?.model) : null;
-    if (wanted) course.model = { ...wanted, status: 'building', stage: 'Waiting to start' };
+    const reused = made.find((m) => m.id === (outline?.model as { use?: unknown } | null)?.use);
+    const wanted = MODELS && !reused ? wantedModel(outline?.model) : null;
+    if (reused) course.model = { name: reused.name, describe: reused.describe, parts: reused.parts, status: 'ready', assetId: reused.id, built: reused.parts };
+    else if (wanted) course.model = { ...wanted, status: 'building', stage: 'Waiting to start' };
     await save(course);
     if (wanted) void buildModel(course);
     else queueFirst(course);
@@ -226,6 +255,7 @@ async function buildModel(course: Course) {
   else Object.assign(model, { status: 'failed', error: (job.error ?? 'no model').slice(0, 300) });
   model.seconds = Math.round((Date.now() - started) / 1000);
   await save(course);
+  remember(model);
   queueFirst(course);
 }
 

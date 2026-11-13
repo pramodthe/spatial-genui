@@ -1,5 +1,5 @@
 import { aimPoint, inspectMounted, debugRay, mountGenerated, unmountGenerated, type MountReport } from './host.js';
-import { EXAMPLE_LESSONS } from './lessons.js';
+import { EXAMPLE_LESSONS, type SavedLesson } from './lessons.js';
 import { inspectPicker, setPickerHidden } from './picker.js';
 
 /**
@@ -68,6 +68,11 @@ const state: GenUIState = {
 let lessonStatus: LessonStatus = { phase: 'idle', prompt: null, message: '', since: performance.now() };
 const statusListeners = new Set<(status: LessonStatus) => void>();
 
+/** The current lesson's request (for "Make a new one"). */
+export function lessonPrompt(): string | null {
+  return state.prompt;
+}
+
 /** Follow the lesson's phase; the listener gets the current one at once. Returns an unsubscribe. */
 export function onLessonStatus(listener: (status: LessonStatus) => void): () => void {
   statusListeners.add(listener);
@@ -131,7 +136,7 @@ export function createOverlay() {
     const example = (event.target as HTMLElement).dataset.prompt;
     if (example) {
       input.value = example;
-      void generate(example);
+      void startLesson(example);
     }
     const action = (event.target as HTMLElement).dataset.action;
     if (action === 'generate') void generate(input.value);
@@ -158,6 +163,7 @@ export function createOverlay() {
   (window as unknown as { genui: unknown }).genui = {
     generate,
     generateParallel: (prompt: string) => generateStream(prompt),
+    startLesson,
     repair,
     rebuild,
     mount,
@@ -333,6 +339,32 @@ async function mountPartial(code: string) {
   state.runtimeErrors = [];
   codeEl.textContent = code;
   state.lastMount = await mountGenerated(code);
+}
+
+/**
+ * A picker card: the example's ready-made lesson if there is one (instant, no model call), otherwise a live
+ * generation. Other requests always generate live.
+ */
+export async function startLesson(prompt: string) {
+  const example = EXAMPLE_LESSONS.find((lesson) => lesson.prompt === prompt);
+  if (!example?.saved || state.busy) return generate(prompt);
+  try {
+    const res = await fetch(`${import.meta.env.BASE_URL}lessons/${example.saved}.json`);
+    if (!res.ok) return generate(prompt);
+    const saved = (await res.json()) as SavedLesson;
+    state.prompt = prompt;
+    state.autoRepaired = false;
+    repairPending = false;
+    stopWatchingAssets();
+    await mount(saved.code);
+    if (state.lastMount?.ok) {
+      setStatus(`Ready-made lesson (written by ${saved.model}, ${saved.generatedAt.slice(0, 10)}).` +
+        (state.lastMount.credits.length ? `\n${state.lastMount.credits.join('\n')}` : ''));
+    }
+    return state;
+  } catch {
+    return generate(prompt);
+  }
 }
 
 async function mount(code: string) {

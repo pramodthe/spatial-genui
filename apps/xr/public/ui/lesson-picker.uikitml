@@ -149,5 +149,8 @@
     <div id="fix" class="action" style="display: none">
       <span class="action-label">Fix it</span>
     </div>
+    <div id="fresh" class="action" style="display: none">
+      <span class="action-label">Make a new one</span>
+    </div>
   </div>
 </div>

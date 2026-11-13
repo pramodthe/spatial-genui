@@ -25,6 +25,8 @@ import type { LessonStatus } from './overlay';
 type PickerHandlers = {
   start: (prompt: string) => void;
   fix: () => void;
+  /** Write a fresh version of the current lesson live. */
+  fresh: () => void;
   onStatus: (listener: (status: LessonStatus) => void) => () => void;
 };
 
@@ -166,6 +168,7 @@ class LessonPickerSystem extends createSystem({
       document.getElementById(`lesson-${i}`)?.addEventListener('click', () => handlers?.start(lesson.prompt));
     });
     document.getElementById('fix')?.addEventListener('click', () => handlers?.fix());
+    document.getElementById('fresh')?.addEventListener('click', () => handlers?.fresh());
   }
 
   private applySize() {
@@ -209,6 +212,7 @@ class LessonPickerSystem extends createSystem({
     document.getElementById('status-dot')?.setProperties({ backgroundColor: PHASES[phase].dot });
     document.getElementById('status')?.setProperties({ backgroundColor: PHASES[phase].background });
     document.getElementById('fix')?.setProperties({ display: phase === 'broken' ? 'flex' : 'none' });
+    document.getElementById('fresh')?.setProperties({ display: phase === 'ready' ? 'flex' : 'none' });
     // The chosen card stays marked while it is being written and once it is showing.
     EXAMPLE_LESSONS.forEach((lesson, i) => {
       const chosen = lesson.prompt === prompt && phase !== 'idle' && phase !== 'failed';

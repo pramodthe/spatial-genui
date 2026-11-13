@@ -436,6 +436,17 @@ Triangles, meshes, time and cost are for the pipeline alone (medians; cost is th
 
 **Exit gate:** every interaction type works on hand-written content and at least one generated source in the emulator by Saturday, then on the headset in session 1.
 
+**Status (Nov 13):**
+
+- **Headset session 0 (Quest 3S, USB, `iwsdk-native-xr-test`):** a real `immersive-ar` session with plane and mesh detection, anchors and hand tracking. A microscope lesson mounted about 0.5 m ahead at table height; a trigger press on "explode" moved its six parts 8.8 cm apart and "reset" put them back exactly (positions read from the scene). The USB link kept resetting, which drops the ADB route and reloads the page; a watcher that re-adds the route works around it.
+- **Hands-only start:** the prompt box is a DOM overlay, invisible in XR, so a **lesson picker** panel (`apps/xr/src/genui/picker.ts`) stands front and centre in XR: four example lesson cards (point and pinch), progress (writing / fixing / ready / failed), and it docks to the learner's left once a lesson is ready.
+- **Ready-made lessons:** the four cards open a saved lesson at once (`apps/xr/public/lessons/`, each the better of two candidates judged by Opus 5.5: heart 4.0, microscope 4.5, gears 4.0, flower 4.0), so the first moment needs no model call. "Make a new one" writes a fresh version live.
+- **Voice:** Quest Browser has no SpeechRecognition (checked on the device) but can record. The page sends 16 kHz mono WAV to `/api/transcribe`, which uses Meta's Muse Voice Transcribe (`POST /v1/asr/transcribe`); a spoken request comes back word for word in about 2-3 s. "Ask your own" on the picker: pinch, speak, pinch. Not yet tried in the headset.
+- **Placement on the desk:** a detected horizontal plane 15-90 cm below the eyes, within reach and ahead, holds the lesson (a table or desk label wins a close call); otherwise it floats at seated height. In the emulator's room, seated at the desk, the lesson stands on the "table" plane at its exact height and the framing step no longer lowers it into the surface.
+- **Repair without a button:** a lesson that crashes while loading (e.g. a panel element the agent never created) is repaired once on its own; a later break shows "Fix it" on the picker.
+- **Hand input found so far:** point-and-pinch (hand ray) and controller rays click panel buttons; a fingertip poke registers as hover but does not click UIKit panels in the emulator (lesson panels included). To check on the device.
+- **Still to do:** the interaction matrix and fps on the headset, voice in XR, poke on the device.
+
 ### Phase 5: multi-agent parallelization
 
 **Goal:** make generation fast enough for the "one bus stop" test (`llm.txt:77`).
@@ -500,6 +511,13 @@ Triangles, meshes, time and cost are for the pipeline alone (medians; cost is th
 - Video under 3 minutes, starting with the "ask → it appears → grab it" moment.
 - Devpost description of about 500 words, tagline of 140 characters or fewer, and screenshots.
 - Build link tested while logged out.
+
+**Status (Nov 13):**
+
+- **Guards** (`apps/server/src/guard.ts`): per-visitor rate limit (`RATE_LIMIT_PER_10_MIN`, default 6), a daily budget (`DAILY_BUDGET_USD`, default 15; estimated from tokens and catalogue prices, kept per day in `runs/`), and a content screen with a fast model for the competition rules (no identifiable real people, no brands or logos, nothing unfit for 13+). It allows the heart, Newton's laws and a colour button; it refuses a celebrity statue, a brand logo and explosives, each with a friendly alternative. A failed screen lets the request through rather than blocking learning.
+- **One origin:** with `STATIC_DIR` set, the agent server also serves the built XR app (path traversal refused), so the deployment is one container; `Dockerfile` added (not yet built here).
+- **Reliability:** ready-made lessons (Phase 4) cover an outage or a spent budget. An Anthropic outage on Nov 13 (Haiku and Opus returning "503 credential validation failed" for about 20 minutes) showed why: benchmarks resumed, the cards kept working, and the app's parallel path now plans with the main model when the planner's provider fails.
+- **Hosting** is chosen once the app is complete: a private test deploy around Sun/Mon to find the hosting problems early, the final one at the freeze.
 
 ---
 

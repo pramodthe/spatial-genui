@@ -68,6 +68,10 @@ Choose the view that shows the structure: flat mechanisms and things known from 
 State only structure that the request gives or that every such object has (gears that drive each other mesh in one plane; a base is underneath). Don't invent details the request leaves open (how many supports, what they are made of), and don't list them in mustShow: a picture must not fail for something nobody asked for.`;
 
 const REFERENCE_STYLE = ' A single physical object shown whole, on a plain light grey background, soft even studio lighting, realistic colors, clear shapes. No text, no labels, no arrows, no other objects.';
+// A check problem that says the picture's depth can be read two ways (parts in front of / behind each
+// other, stacked along an axle, overlapping along the line of sight).
+const DEPTH_DOUBT = /depth|read (it )?two ways|could (instead )?(lie|be|sit)|in front of|behind|along the (axle|axis|line of sight)|coaxial|overlap/i;
+const STRAIGHT_ON = 'Show it straight from the front with the camera level (no slant, no perspective tilt), with every part side by side in one view so that no part hides behind or overlaps another along the line of sight.';
 
 const REFERENCE_CHECK_SYSTEM = `You check a reference picture before a 3D model is built from it; a wrong picture gives a wrong model. You get what the object is and the facts the picture must show. Look closely and be strict about structure (what connects to what, what lies in one plane, what is inside what).
 The 3D generator sees only this one picture and must guess every depth. So also ask: could the arrangement be read two ways? Parts that overlap in the picture, or flat parts seen at a slant, hide whether they lie in one plane, one behind the other, or at an angle to each other. If a fact about arrangement holds only on the likeliest reading, it does not hold: name it as a problem and say what view would settle it. Reply with only a JSON object:
@@ -120,7 +124,19 @@ export async function checkedReference(opts: { name: string; describe: string; p
     attempts.push({ file, ...verdict });
     if (verdict.score >= 4) break;
   }
-  const best = attempts.reduce((a, b) => (b.score > a.score ? b : a));
+  let best = attempts.reduce((a, b) => (b.score > a.score ? b : a));
+  // A slanted view whose depth can be read two ways is how the gear train went wrong (the generator read
+  // the gears as stacked on one axle). When the best picture is still doubtful for that reason, draw it
+  // once more straight-on, so no part's place depends on depth.
+  if (best.score < 4 && best.problems.some((p) => DEPTH_DOUBT.test(p))) {
+    const n = attempts.length + 1;
+    opts.onTry?.(n);
+    const picture = await museImage(`${brief} ${STRAIGHT_ON}${REFERENCE_STYLE}`);
+    const file = join(opts.dir, `reference-${n}.jpg`);
+    await writeFile(file, picture.jpeg);
+    attempts.push({ file, ...(await checkReference(asked, mustShow, picture.jpeg)) });
+    best = attempts.reduce((a, b) => (b.score > a.score ? b : a));
+  }
   return { path: best.file, score: best.score, brief, mustShow, attempts };
 }
 

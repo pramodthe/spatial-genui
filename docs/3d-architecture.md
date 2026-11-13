@@ -501,10 +501,22 @@ reference picture: Ember briefs it, Muse Image draws it, Ember checks it (redraw
     - Checking facts only: pictures scoring 4-5 led to models averaging 4.00 (judge), pictures scoring 1-3 to 3.29. It flagged 5 of the 7 models the judge scored 3 or lower. Typical flaws: no ladder on the lunar lander, no vent in the volcano, no leaf on the flower.
     - It passed the old gear-train picture, though. That picture is not wrong in 2D; its depth can be read two ways (gears overlapping, seen at a slant), and the generator read it the wrong way.
     - The checker now also asks whether an arrangement could be read two ways. With that it flags all 7 weak models, and 3 of the 5 good ones (e.g. the guitar's slanted sound hole). A false alarm costs a redraw or two, not correctness, since the best picture of three is still used.
+  - **The 7 weak models, rebuilt from checked pictures** (`assets:acquire --no-search`, n = 7; same TRELLIS.2 and requests, only the picture changed):
+    - Head to head (`bench3d:compare`, Opus 5.5 sees old and new four-view renders in both orders; a model wins only by winning both): the new model wins 6 of 7, every win in both orders. Accuracy 2.71 → 4.00 (mean of both orders).
+    - Biggest gains: the temple (2 → 5: a whole roofed temple instead of an open box), the volcano (2 → 4: a vent from the chamber to the crater), the plant cell (3 → 5).
+    - The gear train lost (3 → 2): the gears came out on one shaft. None of the 3 pictures reached 4, and the kept one (3/5) carried exactly this warning: in a slanted view the small gear could lie along the axle. A 3 that names a depth ambiguity should not pass; the earlier face-on gear picture built a correct model.
+    - Parts barely moved (`bench3d:judge-parts`, same judge): overall 3.00 → 3.14, good parts (4-5) per model 2.57 → 2.71. Saturn, the volcano and the engine gained; the flower lost its stamen and pistil parts and the richer plant cell its mitochondria and ER. With better models, part cutting and naming is now the weaker stage.
+    - Time: 3 to 15 minutes per model (the plant cell and Saturn took longest), two at a time.
 - **Not done yet:**
   - The "model ready" notice exists on the desktop page only, not inside the headset.
   - The page flow hasn't been run in the emulator.
   - The Blender repair stage is not part of this path.
+
+**On a Quest 3S (Nov 13).** The app was run in the headset's own browser in an immersive AR session, driven over USB (`iwsdk-native-xr-test`, ADB reverse on loopback). The page can now start a lesson from its address (`/?prompt=…`) or from four one-tap examples, so nothing has to be typed in the headset.
+- The microscope lesson (retrieved model, six named parts) mounted about 0.5 m in front at table height, with its tour and quiz panels beside it.
+- A trigger press on the tour panel's "explode" moved all six parts 8.8 cm outward; "reset" returned them exactly (part positions read from the scene before and after).
+- Mixed reality features the session got: plane and mesh detection, anchors, hand tracking.
+- Problem seen: the USB link reset several times, which drops the ADB route; the dev server then reloads the page and the lesson is rebuilt. A watcher that re-adds the route kept the test going.
 
 **Blender repair pilot (Nov 13).** `bench3d:repair`: an agent in the sandboxed headless Blender (Phase 3's MCP server) fixes a segmented model's parts and structure; Muse Ember reviews each round from renders and the best round wins. Motion is out of scope for now. Tried on the old gear train, whose gears stand at right angles:
 

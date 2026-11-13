@@ -24,7 +24,8 @@ export type AcquireResult =
   | { ok: true; assetId: string; source: 'objaverse' | 'trellis'; parts: string[]; ms: number }
   | { ok: false; error: string; stage: AcquireStage; ms: number };
 
-const WORK = join(repoRoot, 'data/acquire-work');
+// ACQUIRE_WORK_DIR (with LIBRARY_DIR) points an experiment at its own folders, leaving the library alone.
+const WORK = process.env.ACQUIRE_WORK_DIR || join(repoRoot, 'data/acquire-work');
 /** A model is generated only from a reference picture Ember scored at least this (of 5). */
 const MIN_REFERENCE_SCORE = 3;
 export const slugOf = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'object';

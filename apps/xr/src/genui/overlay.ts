@@ -58,6 +58,12 @@ export function createOverlay() {
     <div style="font-weight:700">Generative UI</div>
     <textarea rows="2" placeholder="e.g. Teach me the solar system with a short quiz"
       style="resize:vertical;font:inherit;color:inherit;background:#0f1114;border:1px solid #3a3d44;border-radius:8px;padding:8px"></textarea>
+    <div data-role="examples" style="display:flex;gap:6px;flex-wrap:wrap">
+      <button data-prompt="Show me how blood flows through the heart, step by step.">Heart</button>
+      <button data-prompt="Teach me the parts of a microscope and what each part does.">Microscope</button>
+      <button data-prompt="Teach me how two gears change speed and turning force.">Gears</button>
+      <button data-prompt="Teach me the parts of a flower and what each part does.">Flower</button>
+    </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button data-action="generate">Generate</button>
       <button data-action="repair" hidden>Repair runtime error</button>
@@ -72,6 +78,8 @@ export function createOverlay() {
     button.style.cssText =
       'font:inherit;color:#fff;background:#2f6fdb;border:0;border-radius:8px;padding:6px 12px;cursor:pointer';
   }
+  // Example lessons (one tap, for trying the app in a headset without typing): quieter than the actions.
+  for (const button of root.querySelectorAll<HTMLButtonElement>('[data-prompt]')) button.style.background = '#3a3d44';
   document.body.appendChild(root);
 
   const input = root.querySelector('textarea')!;
@@ -82,6 +90,11 @@ export function createOverlay() {
   repairButton = root.querySelector('[data-action="repair"]')!;
 
   root.addEventListener('click', (event) => {
+    const example = (event.target as HTMLElement).dataset.prompt;
+    if (example) {
+      input.value = example;
+      void generate(example);
+    }
     const action = (event.target as HTMLElement).dataset.action;
     if (action === 'generate') void generate(input.value);
     if (action === 'repair') void repair();
@@ -95,6 +108,13 @@ export function createOverlay() {
       void generate(input.value);
     }
   });
+
+  // A lesson can be started from the address: /?prompt=Teach%20me%20... (e.g. when launching the page on a headset).
+  const linked = new URLSearchParams(location.search).get('prompt');
+  if (linked) {
+    input.value = linked;
+    void generate(linked);
+  }
 
   // Scriptable entry point for automated tests (CLI/Playwright) and the benchmark harness.
   (window as unknown as { genui: unknown }).genui = {

@@ -1,0 +1,10 @@
+[
+  { "id": "heart-flow", "tier": "T5", "domain": "anatomy", "prompt": "Show me how blood flows through the heart, step by step.", "expectAssets": ["heart-bp3d"] },
+  { "id": "solar-order", "tier": "T5", "domain": "astronomy", "prompt": "Teach me the order of the planets in the solar system, with a short quiz.", "expectAssets": ["solar-system"] },
+  { "id": "saturn-rings", "tier": "T5", "domain": "astronomy", "prompt": "Show me Saturn's rings and explain what the Cassini Division is.", "expectAssets": ["saturn-nasa"] },
+  { "id": "planet-sizes", "tier": "T5", "domain": "astronomy", "prompt": "How big are the planets compared to each other? Help me compare Earth with Jupiter.", "expectAssets": ["planets-to-scale"] },
+  { "id": "caffeine", "tier": "T5", "domain": "chemistry", "prompt": "Teach me what a caffeine molecule is made of: its atoms and bonds.", "expectAssets": ["molecule-caffeine"] },
+  { "id": "ethanol", "tier": "T5", "domain": "chemistry", "prompt": "Teach me the structure of ethanol and point out the hydroxyl group.", "expectAssets": ["molecule-ethanol"] },
+  { "id": "photosynthesis", "tier": "T5", "domain": "chemistry", "prompt": "Teach me photosynthesis: which molecules go in and which come out.", "expectAssets": ["molecule-carbon-dioxide", "molecule-water", "molecule-d-glucose", "molecule-oxygen"] },
+  { "id": "bicycle-gears", "tier": "T5", "domain": "everyday", "prompt": "Teach me how the gears on a bicycle work.", "expectAssets": [] }
+]

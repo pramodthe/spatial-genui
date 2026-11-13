@@ -24,7 +24,9 @@ import {
  *
  * Labels follow SceneCraft's idea: the lesson names the parts, code places them. Labels sit in two
  * columns beside the model (left or right by which side the part is on), stacked without overlap,
- * each with a leader line to a point on the part's outside that follows the part as it moves.
+ * each with a leader line to a point on the part's outside that follows the part as it moves. On a
+ * wide or flat model (a row of planets, a solar system) they stand above their parts like pins
+ * instead: side columns would be far from the parts they name.
  */
 
 type UiHandle = { object3D: Object3D; set(id: string, props: { text?: string }): void };
@@ -37,6 +39,7 @@ const LABEL_WIDTH_M = 0.16; // panel width; 28px text in a 320px-wide panel read
 const LABEL_HEIGHT_M = 0.034; // one line of text plus padding
 const LABEL_GAP_M = 0.008;
 const SIDE_MARGIN_M = 0.03;
+const PIN_RISE_M = 0.03; // a pin label's lower edge above the model's top
 const EXPLODE_REACH = 0.35; // at explode(1) parts move this fraction of the model's largest size
 const XRAY_OPACITY = 0.14;
 
@@ -48,6 +51,7 @@ const labelMarkup = (text: string) => `
   </style>
   <div class="l"><span class="t" id="text">${text.replace(/[<>&]/g, ' ')}</span></div>`;
 
+/** side: -1 left column, 1 right column, 0 a pin above the part. */
 type Label = { part: RigPart; ui: UiHandle; line: Line; anchorLocal: Vector3; anchor: Vector3; y: number; side: number };
 
 export class TeachingRig {
@@ -67,6 +71,7 @@ export class TeachingRig {
   private readonly box = new Box3();
   private readonly corners = Array.from({ length: 8 }, () => new Vector3());
   private readonly column: Label[] = [];
+  private readonly order: Label[] = [];
 
   constructor(
     private readonly model: Object3D,
@@ -165,7 +170,7 @@ export class TeachingRig {
     };
   }
 
-  /** Two columns beside the model, stacked top to bottom in the order of the parts' heights. */
+  /** Two columns beside the model, stacked top to bottom in the order of the parts' heights (or pins). */
   private layoutLabels() {
     const parent = this.model.parent;
     if (!parent || this.labels.length === 0) return;
@@ -181,6 +186,11 @@ export class TeachingRig {
     for (const corner of c) this.box.expandByPoint(parent.worldToLocal(corner));
     const centerX = (this.box.min.x + this.box.max.x) / 2;
     const frontZ = this.box.max.z;
+    const { x: width, y: height, z: depth } = this.box.getSize(this.v3);
+    if (height < 0.5 * Math.max(width, depth)) {
+      this.layoutPins();
+      return;
+    }
 
     for (const label of this.labels) {
       label.anchor.copy(label.anchorLocal);
@@ -213,7 +223,47 @@ export class TeachingRig {
     this.updateLines();
   }
 
-  /** Leader lines from each label's inner edge to its anchor on the part. */
+  /**
+   * Wide or flat models: each label stands above its part at the part's own x and depth, raised a
+   * row at a time where it would cover another label at about the same depth.
+   */
+  private layoutPins() {
+    const parent = this.model.parent!;
+    const step = LABEL_HEIGHT_M + LABEL_GAP_M;
+    const placed = this.column;
+    placed.length = 0;
+    for (const label of this.labels) {
+      label.anchor.copy(label.anchorLocal);
+      parent.worldToLocal(label.part.object3D.localToWorld(label.anchor));
+      label.side = 0;
+    }
+    // Back to front, so nearer labels rise above farther ones they would otherwise cover on screen.
+    // Reused arrays: explode() runs this every frame while animating.
+    const order = this.order;
+    order.length = 0;
+    order.push(...this.labels);
+    order.sort((a, b) => a.anchor.z - b.anchor.z);
+    for (const label of order) {
+      let y = this.box.max.y + PIN_RISE_M + LABEL_HEIGHT_M / 2;
+      // Raise past each label it would cover (a tolerance, since other.y + step - other.y can round
+      // to just under step); at most one rise per label already placed.
+      for (let rises = 0, clash = true; clash && rises <= placed.length; rises++) {
+        clash = false;
+        for (const other of placed) {
+          if (Math.abs(other.anchor.x - label.anchor.x) < LABEL_WIDTH_M + LABEL_GAP_M && Math.abs(other.anchor.z - label.anchor.z) < 0.15 && Math.abs(other.y - y) < step - 1e-6) {
+            y = other.y + step;
+            clash = true;
+          }
+        }
+      }
+      label.y = y;
+      placed.push(label);
+      label.ui.object3D.position.set(label.anchor.x, y, label.anchor.z);
+    }
+    this.updateLines();
+  }
+
+  /** Leader lines from each label's inner edge (a pin's lower edge) to its anchor on the part. */
   private updateLines() {
     const parent = this.model.parent;
     if (!parent) return;
@@ -224,6 +274,7 @@ export class TeachingRig {
       const frame = holder.parent ?? parent;
       this.v1.copy(holder.position);
       this.v1.x -= label.side * (LABEL_WIDTH_M / 2);
+      if (label.side === 0) this.v1.y -= LABEL_HEIGHT_M / 2;
       this.v2.copy(label.anchorLocal);
       label.part.object3D.localToWorld(this.v2);
       frame.worldToLocal(this.v2);

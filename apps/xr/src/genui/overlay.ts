@@ -1,4 +1,4 @@
-import { inspectMounted, debugRay, mountGenerated, unmountGenerated, type MountReport } from './host.js';
+import { aimPoint, inspectMounted, debugRay, mountGenerated, unmountGenerated, type MountReport } from './host.js';
 
 /**
  * Desktop/emulator prompt box for Phase 1 testing. In-headset input (topic chips,
@@ -90,6 +90,7 @@ export function createOverlay() {
     state,
     inspect: inspectMounted,
     debugRay,
+    aimPoint,
     setOverlayHidden: (hidden: boolean) => (root.style.display = hidden ? 'none' : 'flex'),
   };
 }

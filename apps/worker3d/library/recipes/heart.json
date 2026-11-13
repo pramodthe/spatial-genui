@@ -269,5 +269,17 @@
       ],
       "note": "Ventricular walls are RECONSTRUCTED, not scanned: BodyParts3D has only the ventricle cavities, so each cavity was grown by a typical wall thickness (left 8 mm, right 3 mm, within normal adult ranges and chosen so the coronary arteries lie on the surface) and the walls fused into a septum. The ventricles' outer shape is an approximation."
     }
+  ],
+  "kind": "anatomy",
+  "keywords": [
+    "heart",
+    "cardiac",
+    "circulation",
+    "blood flow",
+    "cardiovascular",
+    "valves",
+    "ventricle",
+    "atrium",
+    "aorta"
   ]
 }

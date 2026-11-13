@@ -12,6 +12,7 @@ import { config } from './config.js';
 import type { LlmTarget } from './llm.js';
 import { parseCli } from './args.js';
 import { librarySection } from './library.js';
+import type { Route } from './router.js';
 import { SYSTEM_PROMPT } from './prompt.js';
 
 type ModelEntry = LlmTarget & {
@@ -46,6 +47,7 @@ export type BenchRow = {
   /** The provider failed (after SDK retries), not the model's output; excluded from quality metrics. */
   apiError?: string;
   code?: string;
+  route?: Route;
 };
 
 const cli = parseCli(process.argv.slice(2), {
@@ -94,6 +96,7 @@ await writeFile(
     modelSettings: { ...previousMeta.modelSettings, ...Object.fromEntries(runnable.map((m) => [m.id, { model: m.model, baseURL: m.baseURL, extraBody: m.extraBody }])) },
     skipped, maxRepairs: config.maxRepairs, maxCompletionTokens: config.maxCompletionTokens,
     library: useLibrary,
+    // With the library on, the router adds only the chosen models' section (recorded per row as route).
     systemPrompt: useLibrary ? SYSTEM_PROMPT + librarySection() : SYSTEM_PROMPT,
   }, null, 2),
 );
@@ -145,6 +148,7 @@ async function runOne(m: ModelEntry, p: PromptCase, rep: number): Promise<BenchR
       stats: r.stats,
       error: r.ok ? undefined : r.error?.slice(0, 500),
       code: r.code,
+      route: r.route,
     };
   } catch (err) {
     return {

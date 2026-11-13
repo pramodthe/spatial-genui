@@ -257,15 +257,16 @@ Each milestone ends with something visible in the headset or emulator and a meas
 v2 is built as an experiment that can be removed without a trace:
 
 - **Code:** branch `exp/3d-v2` in the worktree `.claude/worktrees/3d-v2`, started from the committed Phase 3 baseline (`phase-3-3d`). The main checkout is not touched.
-- **Modal:** everything v2 deploys uses its own names: app `spatial-genui-3d-v2`, volume `genui-assets-v2`. The Phase 3 backend (`spatial-genui-3d`) keeps running unchanged.
-- **Large data** (BodyParts3D, Z-Anatomy, downloaded models, generated assets) lives in `data/` (git-ignored) or the Modal volume, never in git.
+- **Modal:** everything v2 deploys uses its own names: apps `spatial-genui-3d-v2` (TRELLIS.2) and `spatial-genui-3d-v2-retrieval` (DINOv3), volume `genui-assets-v2`. The Phase 3 backend (`spatial-genui-3d`) keeps running unchanged. GPU functions scale to zero, so nothing is billed while idle.
+- **Large data** (BodyParts3D, the Objaverse index and downloads in `data/objaverse/`, generated assets in `data/library/`) lives in `data/` (git-ignored) or the Modal volume, never in git.
 
 To remove v2 entirely:
 
 ```bash
-git worktree remove .claude/worktrees/3d-v2   # add --force if it has uncommitted files
+git worktree remove --force .claude/worktrees/3d-v2   # also deletes its git-ignored data/ (Objaverse index, built assets)
 git branch -D exp/3d-v2
-cd apps/worker3d && uv run modal app stop spatial-genui-3d-v2 && uv run modal volume delete genui-assets-v2
+cd apps/worker3d && uv run modal app stop spatial-genui-3d-v2 && uv run modal app stop spatial-genui-3d-v2-retrieval \
+  && uv run modal volume delete genui-assets-v2
 ```
 
 To adopt it: merge `exp/3d-v2` into the main line after its milestone checks pass.
@@ -299,6 +300,55 @@ Rebuild the assets: download BodyParts3D into `data/bodyparts3d/` (see the build
 **Lesson layout (Nov 13).** For library lessons the host now places the lesson's own panels too (`layoutLessonPanels` in `host.ts`): the main panel centred above the model and its label columns, in front of the model's front face; other panels stacked beyond the label columns. It runs once all panels have their real sizes and reports `layoutSettled` for tests. Two real input bugs found while chasing failed presses: leader lines caught hand rays (three.js counts a ray within 1 unit of a line as a hit, even when hidden), and hidden labels stayed hittable. Both fixed (lines ignore rays, hidden labels collapse).
 - Result on the same 6 lessons: fidelity 4.0, correctness 3.8, clarity 3.2, hands-on 4.2; panel buttons 15/18. Clarity did not move: the judge sees only the first step and now mostly asks for a larger model and for the quiz to be visible.
 - Open: in one skull lesson all panel presses fail even with labels removed, the per-frame explode removed and the layout pass disabled, so the cause is in that lesson's own panel. `tests/debug-buttons.mjs` (with `genui.debugRay`) reproduces it.
+
+**M3 router, data-driven builders and retrieval (Nov 13).** This covers M3 and the data half of M4.
+- **Router** (`apps/server/src/router.ts`): before a lesson is written, one quick Muse Ember call (low reasoning, about 1 s) reads a compact catalogue and picks the models the request needs (at most 4), and names any chemical compounds it needs that the library lacks. Only the chosen models go into the agent's prompt, so the prompt stays small as the library grows. If the call fails, keyword matching takes over.
+- **Data-driven builders** (tier B, `apps/worker3d/library/`):
+  - From NASA Planetary Fact Sheet numbers: Saturn with its rings and Titan, the eight planets at true relative size, and a compressed solar system. Each model's provenance notes say what is and isn't to scale, and the agent is told to repeat them in the lesson.
+  - From PubChem 3D conformers: ball-and-stick molecules with one named part per atom. They are built on demand when a lesson needs a compound the library lacks; ethanol and oxygen were built this way during the evaluation, in a few seconds each.
+- **Evaluation:**
+  - **Setup:** 8 lesson requests: anatomy (heart); astronomy (planet order, Saturn's rings, planet sizes); chemistry (caffeine; ethanol and photosynthesis, which need molecules not yet built); and a bicycle control with no library model. 2 runs each; Opus 5.5 judges the emulator screenshot.
+  - **Router accuracy:** with Ember it chose exactly the expected models in 16/16 lessons, and every lesson used them. With Sonnet it did so in 14/16; the other two added the planets-to-scale model to the planet-order lesson, which is defensible.
+
+  | Lesson agent | Fidelity | Correctness | Clarity | Hands-on | Panel buttons by hand | First try | Median time | Cost / lesson |
+  |---|---|---|---|---|---|---|---|---|
+  | Muse Ember, built from shapes | 4.06 | 4.50 | 3.56 | 4.00 | 42/46 | 16/16 | 44 s | $0.013 |
+  | Muse Ember, library + router (M2 layout) | 3.62 | 4.38 | 2.56 | 3.81 | 47/48 | 14/16 | 38 s | $0.012 |
+  | Muse Ember, library + router (new layout, same code) | 3.88 | 4.50 | 3.12 | 3.94 | 48/48 | 14/16 | 38 s | $0.012 |
+  | Claude Sonnet 5.5, library + router (new layout) | 3.81 | 4.44 | 3.25 | 4.00 | 45/48 | 15/16 | 39 s | $0.088 |
+
+  - **What the numbers show:**
+    - The router and models are right; library lessons match shape-built lessons on correctness, and their buttons are more reliable.
+    - The library gains little visible fidelity here: a planet is a sphere and a molecule is balls and sticks, which Ember draws well. Accurate sizes, ring radii and bond angles don't show in a single screenshot. The large fidelity gain is in anatomy (M2: 3.0 → 4.0).
+    - Sonnet 5.5 ties Ember within the judge's noise at 7× the cost, so Ember stays the lesson model.
+- **Layout for wide and flat models:** at first the library lost clarity (2.56) because M2's layout assumed a tall, compact model. Panels covered a solar system lying flat, labels in side columns were far from the planets they named, and quiz panels fell off the edge of the view. Fixed in the host:
+  - Wide or flat models get pin labels above each part (`rig.ts`).
+  - The main panel's height comes from the viewer's line of sight, so it hides no part of the model.
+  - Framing lowers the whole lesson, and moves a deep model back, by the least that keeps the panel's top within 20° above the eye and the model's near edge within 55° below (`host.ts`; `tests/layout-info.mjs` prints each decision).
+  - Side panels that would fall out of view go beside the main panel.
+  - Clarity rose to 3.12. The rest of the gap to shapes is small planet labels and a quiz panel clipped at the edge in one solar-system lesson; it is the same for both lesson models, so it is a host problem.
+- **Retrieval** (tier C):
+  - **Pipeline:**
+    - `objaverse_index.py` builds a SQLite full-text index of Objaverse 1.0: 708,311 CC0 and CC BY models (share-alike, non-commercial and no-derivatives licences excluded), 493 MB, searches in under 0.4 s.
+    - `objaverse_retrieve.py` takes the best 40 text matches and ranks them by DINOv3 ViT-L/16 similarity between each model's thumbnail and the object's reference picture. DINOv3 runs on Modal app `spatial-genui-3d-v2-retrieval`, which takes any of four GPU types and scales to zero; the call takes seconds once warm.
+    - `bench3d:retrieve` renders the 6 best from four angles, and Ember picks one or rejects them all.
+  - **Results:** on the 12 Phase 3 objects it picked a model for 7. On those 7 the judge scores it 4.14 against 4.00 for TRELLIS.2 (recognisable 4.71, accuracy 4.14, craft 4.00), with the bicycle better than any generated model.
+  - Retrieved models keep their authors' structure (the office chair has 45 named nodes, the volcano 6), take about 50 s with no image-to-3D GPU time, and are CC BY, so each needs its author credited.
+  - The 5 rejections were strict but fair: Saturn without Titan, animal or low-poly cells, the wrong gear mechanism, a piston without its engine, flowers without the parts a lesson labels. In the router's order these fall through to the NASA-built Saturn, to TRELLIS, or to code.
+- **Found and fixed on the way:**
+  - Two-atom molecules failed to orient.
+  - A 3-model cap dropped oxygen from photosynthesis.
+  - The browser kept a stale catalogue, and another process's catalogue went stale after a molecule was built.
+  - Ember looped over model ids; the validator needs them written out, and a prompt line for multi-model lessons took first tries from 0/2 to 3/3.
+  - Smooth shading made Saturn's flat rings look like tubes.
+  - The pin-label loop could spin forever on a floating-point tie and froze the browser.
+  - The grab probe aimed at an object's centre, which isn't on a ring or a hollow model; it now aims at a reachable surface point.
+  - DINOv3 needs `torchvision` and full precision.
+  - Phrase searches matched no model titles.
+  - Running retrieval alongside a benchmark starved the 15 s code sandbox. Don't run heavy jobs during a benchmark.
+- **Open:**
+  - Grab probes still miss small or internal parts (a valve inside the heart, a 1.2 cm Earth).
+  - Retrieved models are not yet ingested into the library with a teaching rig: that needs part grouping for generic node names, and decimation that keeps textures.
 
 ## 10. Sources
 

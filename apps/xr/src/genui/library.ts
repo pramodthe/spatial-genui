@@ -64,7 +64,11 @@ export function assetIdsIn(code: string): string[] {
 
 /** Load (once) every asset a module needs. Rejects with a readable message if one is unavailable. */
 export async function preloadAssets(ids: string[]): Promise<Map<string, CatalogEntry>> {
-  const entries = await loadCatalog();
+  let entries = await loadCatalog();
+  if (ids.some((id) => !entries.has(id))) {
+    catalog = null; // the server may have built it since (e.g. a molecule for this lesson)
+    entries = await loadCatalog();
+  }
   await Promise.all(ids.map(async (id) => {
     const entry = entries.get(id);
     if (!entry) throw new Error(`There is no library asset '${id}'. Available: ${[...entries.keys()].join(', ')}.`);

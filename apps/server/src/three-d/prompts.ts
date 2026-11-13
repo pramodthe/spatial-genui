@@ -3,7 +3,7 @@
 
 export type AssetRequest = { id: string; category: string; prompt: string; parts: string[] };
 /** p4-tripo is imported from outside (Tripo's website), not run by the harness. */
-export type Pipeline = 'p1-threejs' | 'p2-cadquery' | 'p3-blender' | 'p4-tripo';
+export type Pipeline = 'p1-threejs' | 'p2-cadquery' | 'p3-blender' | 'p4-tripo' | 'p5-retrieval';
 
 /** The pipelines the harness can run itself. */
 export const PIPELINES: Pipeline[] = ['p1-threejs', 'p2-cadquery', 'p3-blender'];

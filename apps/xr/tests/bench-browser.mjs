@@ -144,10 +144,15 @@ export default async function run({ frame, page }) {
       const gIndex = Math.max(0, grabbables.findIndex((g) => g.mode === 'touch'));
       const g = grabbables[gIndex];
       if (g) {
+        // Aim where a learner would: a point on the object that the hand can reach (the centre of a
+        // ring or a hollow model is not on the object). Falls back to the centre.
+        const c = g.center;
+        const point = window.genui.aimPoint?.(gIndex, [c[0] + 0.12, c[1] - 0.08, c[2] + 0.3]) ?? c;
         if (g.mode === 'touch') {
-          await r.dispatch('run_sequence', { device: hand, steps: [{ anchor: 'grasp', position: at(g.center) }, { pinch: 1, duration: 0.3 }] });
+          await r.dispatch('run_sequence', { device: hand, steps: [{ anchor: 'grasp', position: at(point) }, { pinch: 1, duration: 0.3 }] });
         } else {
-          await aimFromNear(g.center);
+          await r.dispatch('set_transform', { device: hand, position: { x: c[0] + 0.12, y: c[1] - 0.08, z: c[2] + 0.3 } });
+          await r.dispatch('look_at', { device: hand, target: at(point) });
           await r.dispatch('run_sequence', { device: hand, steps: [{ pinch: 1, duration: 0.3 }] });
         }
         await sleep(150);

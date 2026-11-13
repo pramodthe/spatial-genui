@@ -62,6 +62,8 @@ type Mounted = {
   declutterIn: number | null;
   /** The module's root, once mounted. */
   root: Object3D | null;
+  /** What the lesson layout decided and why, for tests (root's frame). */
+  layout?: Record<string, unknown>;
 };
 
 export type MountReport = { ok: true; warnings: string[]; credits: string[] } | { ok: false; error: string };
@@ -123,6 +125,7 @@ export type MountedInspection = {
   handlerCalls: number;
   /** False until the host's one-time lesson layout has moved the panels (library lessons only). */
   layoutSettled: boolean;
+  layout?: Record<string, unknown>;
   /** Panel elements with a generated click handler, with their world-space centers. */
   panelButtons: { id: string; center: [number, number, number]; size: [number, number, number] }[];
 };
@@ -142,6 +145,39 @@ export function debugRay(from: [number, number, number], to: [number, number, nu
   });
 }
 
+/**
+ * For tests: a point on grabbable `index` that a ray from `from` reaches before anything else, the way
+ * a learner aims at a part they can see. Tries the centre first, then points on the object's surface
+ * nearest the centre (the centre of a ring or a hollow organ is not on the object). Null if none.
+ */
+export function aimPoint(index: number, from: [number, number, number]): [number, number, number] | null {
+  const object = current && [...current.grabModes.keys()][index];
+  if (!world || !object) return null;
+  const center = new Box3().setFromObject(object).getCenter(new Vector3());
+  const candidates = [center];
+  const vertex = new Vector3();
+  object.traverse((o) => {
+    const geometry = (o as { isMesh?: boolean; geometry?: IWSDK.BufferGeometry }).isMesh ? (o as IWSDK.Mesh).geometry : null;
+    const position = geometry?.getAttribute('position');
+    if (!position) return;
+    const step = Math.max(1, Math.floor(position.count / 200));
+    for (let i = 0; i < position.count; i += step) candidates.push(vertex.fromBufferAttribute(position, i).applyMatrix4(o.matrixWorld).clone());
+  });
+  candidates.sort((a, b) => a.distanceTo(center) - b.distanceTo(center));
+  const origin = new Vector3(...from);
+  const ray = new IWSDK.Raycaster();
+  const owns = (o: Object3D | null) => {
+    for (; o; o = o.parent) if (o === object) return true;
+    return false;
+  };
+  for (const point of candidates.slice(0, 400)) {
+    ray.set(origin, point.clone().sub(origin).normalize());
+    const first = ray.intersectObject(world.scene, true).find((hit) => hit.object.visible);
+    if (first && owns(first.object)) return first.point.toArray() as [number, number, number];
+  }
+  return null;
+}
+
 /** What the host wired up for the current generation, for tests and the benchmark. */
 export function inspectMounted(): MountedInspection | null {
   const mounted = current;
@@ -159,6 +195,7 @@ export function inspectMounted(): MountedInspection | null {
     panels: mounted.panels.size,
     panelsLoaded: [...mounted.panels.values()].filter((p) => p.document).length,
     layoutSettled: mounted.rigs.length === 0 || mounted.declutterIn === null,
+    layout: mounted.layout,
     handlerCalls: mounted.handlerCalls,
     panelButtons: [...mounted.panels.values()].flatMap((p) =>
       // uikit draws in batches, so the element mesh's own .visible says nothing; ask uikit whether
@@ -495,12 +532,14 @@ function guard(mounted: Mounted, fn: () => void): () => void {
 /**
  * Lesson layout for library models (SceneCraft's split: the agent says what panels exist, code says
  * where). Runs once, after every panel has laid out and has its real size, in root's frame:
- * - the model and its label columns stay where the rig put them;
+ * - the model and its labels stay where the rig put them;
  * - the lesson's main panel (the one the agent placed highest, or the only one) goes centred above
- *   them, its bottom edge clear of the model and labels;
- * - any other panels stack beyond the label column on the side the agent put them.
- * Panels sit in front of the model's front face. Nothing overlaps by construction, and no hand ray
- * to a button has to cross the model.
+ *   them, in front of the model's front face and high enough that it hides nothing from the eye;
+ * - the whole lesson moves down (and back, if it is deep) as far as needed to fit that stack in a
+ *   comfortable view;
+ * - any other panels stack beyond the label columns on the side the agent put them, or beside the
+ *   main panel when that would be too far to the side to see.
+ * Nothing overlaps by construction, and no hand ray to a button has to cross the model.
  */
 function layoutLessonPanels(mounted: Mounted) {
   const root = mounted.root;
@@ -528,34 +567,99 @@ function layoutLessonPanels(mounted: Mounted) {
   if (panels.length === 0) return;
   const gap = 0.025;
   const modelCenterX = (model.min.x + model.max.x) / 2;
-  // Panels also come forward of the model's front face: a hand ray from chest height up to a
-  // button behind that plane would pass through the model (and a grabbable model catches it).
+  // Panels stand forward of the model's front face: a hand ray from chest height up to a button
+  // behind that plane would pass through the model (and a grabbable model catches it).
   const frontZ = model.max.z + gap;
-  const moveTo = (panel: { holder: Object3D; box: Box3 }, minX: number, minY: number) => {
+  const moveTo = (panel: { holder: Object3D; box: Box3 }, minX: number, minY: number, z: number) => {
     panel.holder.position.x += minX - panel.box.min.x;
     panel.holder.position.y += minY - panel.box.min.y;
-    if (panel.box.min.z < frontZ) panel.holder.position.z += frontZ - panel.box.min.z;
+    panel.holder.position.z += z - panel.box.min.z;
+  };
+  const { min, max } = occupied;
+  const corners = [min.x, max.x].flatMap((x) => [min.y, max.y].flatMap((y) => [min.z, max.z].map((z) => new Vector3(x, y, z))));
+  /** Lowest bottom edge for a panel standing at depth z that hides no part of the model or labels from the eye. */
+  const clearBottom = (eye: Vector3 | null, z: number) => {
+    let bottom = occupied.max.y + gap;
+    const d = eye ? eye.z - z : 0;
+    if (!eye || d <= 0) return bottom;
+    for (const c of corners) {
+      const dc = eye.z - c.z;
+      if (dc > d) bottom = Math.max(bottom, eye.y + ((c.y - eye.y) * d) / dc + gap);
+    }
+    return bottom;
   };
 
   // The main panel: the highest one the agent placed (lessons put their main panel on top).
   panels.sort((a, b) => b.box.max.y - a.box.max.y);
   const [main, ...others] = panels;
   const mainWidth = main.box.max.x - main.box.min.x;
-  moveTo(main, modelCenterX - mainWidth / 2, occupied.max.y + gap);
+  const mainHeight = main.box.max.y - main.box.min.y;
 
-  // The rest beside the label columns, on the side the agent chose, stacked downwards from the top.
+  // Framing. The lesson is a stack: the model, its labels, and the main panel above. Where the host
+  // first puts it (just below a seated user's eye) there is no room for the stack: the panel would
+  // rise out of sight. Lower the whole lesson, and move it back only when it is too deep to fit, by
+  // the least that keeps the panel's top within 20 degrees above the eye and the model's near bottom
+  // edge within 55 degrees below it. Root's frame may be scaled (and is turned to face the user);
+  // angles survive both, distances are converted.
+  const UP = Math.tan((20 * Math.PI) / 180);
+  const DOWN = Math.tan((55 * Math.PI) / 180);
+  const SIDE = Math.tan((35 * Math.PI) / 180); // side panels within 35 degrees of straight ahead
+  const metre = 1 / (root.getWorldScale(new Vector3()).x || 1);
+  const eyeNow = () => (world ? root.worldToLocal(world.camera.getWorldPosition(new Vector3())) : null);
+  const misfit = (eye: Vector3) => {
+    const tooHigh = clearBottom(eye, frontZ) + mainHeight - eye.y - UP * (eye.z - frontZ);
+    const tooLow = eye.y - model.min.y - DOWN * (eye.z - model.max.z);
+    return Math.max(0, tooHigh) + Math.max(0, tooLow);
+  };
+  const start = eyeNow();
+  const move = { dy: 0, dz: 0, misfit: 0 };
+  if (start && start.z > frontZ) {
+    let best = { cost: Infinity, dy: 0, dz: 0 };
+    search: for (let dz = 0; dz <= 0.4001; dz += 0.1) {
+      for (let dy = 0; dy <= 0.4001; dy += 0.05) {
+        const cost = misfit(new Vector3(start.x, start.y + dy * metre, start.z + dz * metre));
+        if (cost < best.cost - 1e-9) best = { cost, dy, dz };
+        if (cost === 0) break search;
+      }
+    }
+    Object.assign(move, { dy: best.dy, dz: best.dz, misfit: best.cost });
+    if (best.dy || best.dz) {
+      const target = root.localToWorld(new Vector3(0, -best.dy * metre, -best.dz * metre));
+      root.position.copy(root.parent ? root.parent.worldToLocal(target) : target);
+      root.updateMatrixWorld(true);
+    }
+  }
+  const eye = eyeNow();
+  const mainBottom = clearBottom(eye, frontZ);
+  moveTo(main, modelCenterX - mainWidth / 2, mainBottom, frontZ);
+  const r3 = (v: Vector3 | null) => v && [v.x, v.y, v.z].map((n) => Math.round(n * 1000) / 1000);
+  mounted.layout = { eye: r3(eye), move, model: [r3(model.min), r3(model.max)], mainBottom, mainHeight };
+
+  // The rest beside the label columns, on the side the agent chose, stacked downwards from the top;
+  // beside the main panel instead when the label columns would put them out of sight.
   let rightTop = occupied.max.y;
   let leftTop = occupied.max.y;
+  let besideRightTop = mainBottom + mainHeight;
+  let besideLeftTop = mainBottom + mainHeight;
   for (const panel of others) {
     const width = panel.box.max.x - panel.box.min.x;
     const height = panel.box.max.y - panel.box.min.y;
     const right = (panel.box.min.x + panel.box.max.x) / 2 >= modelCenterX;
-    if (right) {
-      moveTo(panel, occupied.max.x + gap, rightTop - height);
-      rightTop -= height + gap;
+    const outerX = right ? occupied.max.x + gap + width : occupied.min.x - gap - width;
+    if (!eye || Math.abs(outerX - eye.x) <= SIDE * (eye.z - frontZ)) {
+      if (right) {
+        moveTo(panel, occupied.max.x + gap, rightTop - height, frontZ);
+        rightTop -= height + gap;
+      } else {
+        moveTo(panel, occupied.min.x - gap - width, leftTop - height, frontZ);
+        leftTop -= height + gap;
+      }
+    } else if (right) {
+      moveTo(panel, modelCenterX + mainWidth / 2 + gap, besideRightTop - height, frontZ);
+      besideRightTop -= height + gap;
     } else {
-      moveTo(panel, occupied.min.x - gap - width, leftTop - height);
-      leftTop -= height + gap;
+      moveTo(panel, modelCenterX - mainWidth / 2 - gap - width, besideLeftTop - height, frontZ);
+      besideLeftTop -= height + gap;
     }
   }
   root.updateMatrixWorld(true);

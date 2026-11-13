@@ -20,14 +20,14 @@ from __future__ import annotations
 import argparse
 import collections
 import json
-import re
 import sys
-from datetime import date
 from pathlib import Path
 
 import fast_simplification
 import numpy as np
 import trimesh
+
+from common import write_asset
 
 LICENCE = "CC BY 4.0"
 CREDIT = "BodyParts3D, © The Database Center for Life Science licensed under CC Attribution 4.0 International"
@@ -142,9 +142,6 @@ def reconstruct_wall(merged: dict, spec: dict, recipe: dict) -> None:
     recipe.setdefault("notes", []).append(spec["note"])
 
 
-def snake(text: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")
-
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -232,67 +229,26 @@ def main() -> None:
             v2, f2 = fast_simplification.simplify(v.astype(np.float32), f.astype(np.int32), target_reduction=1 - target / len(f))
             merged[name] = (v2.astype(np.float64), f2.astype(np.int64))
 
-    # Place: centred on x/z, standing on y = 0.
-    all_v = np.concatenate([v for v, _f in merged.values()])
-    lo, hi = all_v.min(axis=0), all_v.max(axis=0)
-    shift = np.array([-(lo[0] + hi[0]) / 2, -lo[1], -(lo[2] + hi[2]) / 2])
-    center = np.array([0.0, (hi[1] - lo[1]) / 2, 0.0])  # the object's centre after the shift
-
-    scene = trimesh.Scene()
-    entries = []
+    parts = []
     for part in recipe["parts"]:
         if part["name"] not in merged:
             continue
         v, f = merged[part["name"]]
-        v = v + shift
-        mesh = trimesh.Trimesh(vertices=v, faces=f, process=True)
-        mesh.fix_normals(multibody=True)  # each piece on its own (a part can be a cavity plus its wall)
-        rgb = [int(part["color"][i:i + 2], 16) for i in (1, 3, 5)]
-        mesh.visual = trimesh.visual.TextureVisuals(material=trimesh.visual.material.PBRMaterial(
-            name=snake(part["name"]), baseColorFactor=[*rgb, 255], roughnessFactor=part.get("roughness", 0.55),
-            metallicFactor=0.0, doubleSided=False))
-        node = snake(part["name"])
-        scene.add_geometry(mesh, node_name=node, geom_name=node)
-        # Teaching rig (first version): explode direction from the object's centre through the part's
-        # centroid; label anchor = the part's vertex farthest along that direction (on its outside).
-        centroid = mesh.vertices.mean(axis=0)
-        direction = centroid - center
-        norm = float(np.linalg.norm(direction))
-        direction = direction / norm if norm > 1e-6 else np.array([0.0, 1.0, 0.0])
-        anchor = mesh.vertices[int(np.argmax(mesh.vertices @ direction))]
         concepts = part.get("concepts", []) + part.get("own", [])
-        entries.append({
-            "node": node, "name": part["name"], "fma": concepts, "fmaNames": [names.get(c, "") for c in concepts],
-            "group": part.get("group"), "color": part["color"], "triangles": int(len(mesh.faces)),
-            "pieces": len(part_pieces[part["name"]]),
-            "centroid": [round(float(x), 4) for x in centroid], "labelAnchor": [round(float(x), 4) for x in anchor],
-            "explodeDir": [round(float(x), 4) for x in direction],
+        parts.append({
+            "name": part["name"], "group": part.get("group"), "color": part["color"], "roughness": part.get("roughness", 0.55),
+            "mesh": trimesh.Trimesh(vertices=v, faces=f, process=True),
+            "extra": {"fma": concepts, "fmaNames": [names.get(c, "") for c in concepts], "pieces": len(part_pieces[part["name"]])},
         })
-
-    out_assets, out_catalog = args.out / "assets", args.out / "catalog"
-    out_assets.mkdir(parents=True, exist_ok=True)
-    out_catalog.mkdir(parents=True, exist_ok=True)
-    glb_path = out_assets / f"{recipe['id']}.glb"
-    glb_path.write_bytes(scene.export(file_type="glb", include_normals=True))  # smooth shading
-    size = (hi - lo)
-    entry = {
-        "id": recipe["id"], "title": recipe["title"], "tier": "A",
-        "concept": recipe["concept"], "detail": recipe.get("detail"),
-        "glb": f"assets/{recipe['id']}.glb", "sizeM": [round(float(x), 4) for x in size],
-        "triangles": int(sum(e["triangles"] for e in entries)), "parts": entries,
+    write_asset(args.out, {
+        "id": recipe["id"], "title": recipe["title"], "tier": "A", "kind": recipe.get("kind", "anatomy"),
+        "concept": recipe["concept"], "detail": recipe.get("detail"), "keywords": recipe.get("keywords", []),
         "licence": LICENCE, "credit": CREDIT, "licenceNote": LICENCE_NOTE,
         "provenance": {
             "source": "BodyParts3D 4.0, PART-OF tree, 99% polygon reduction (dbarchive.biosciencedbc.jp)",
-            "built": str(date.today()), "recipe": str(args.recipe), "rawTriangles": int(total),
-            "notes": recipe.get("notes", []),
+            "recipe": str(args.recipe), "rawTriangles": int(total), "notes": recipe.get("notes", []),
         },
-    }
-    (out_catalog / f"{recipe['id']}.json").write_text(json.dumps(entry, indent=2))
-    print(f"{recipe['id']}: {len(entries)} parts, {entry['triangles']:,} triangles (from {total:,}), "
-          f"{glb_path.stat().st_size / 1e6:.1f} MB, size {entry['sizeM']} m")
-    for e in entries:
-        print(f"  {e['node']:<28} {e['pieces']:>3} pieces {e['triangles']:>6} tris")
-
+    }, parts)
 
 if __name__ == "__main__":
     main()

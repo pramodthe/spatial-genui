@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -25,6 +25,8 @@ export type LibraryEntry = {
   id: string;
   title: string;
   tier: string;
+  kind?: string;
+  keywords?: string[];
   sizeM: [number, number, number];
   triangles: number;
   parts: LibraryPart[];
@@ -32,20 +34,25 @@ export type LibraryEntry = {
   credit: string;
 };
 
-let cache: Map<string, LibraryEntry> | null = null;
-// Rebuilt catalogue files are picked up by restarting the server (tsx watch restarts on code edits only).
+let cache: { mtimeMs: number; entries: Map<string, LibraryEntry> } | null = null;
 
-/** Every catalogued asset whose GLB exists. Read once per process. */
+/**
+ * Every catalogued asset whose GLB exists. Re-read when the catalogue folder changes, so a model
+ * built by any process (the router builds molecules on demand) is seen by all of them.
+ */
 export function libraryCatalog(): Map<string, LibraryEntry> {
-  if (cache) return cache;
-  cache = new Map();
   const dir = join(LIBRARY_DIR, 'catalog');
-  if (!existsSync(dir)) return cache;
-  for (const file of readdirSync(dir).filter((f) => f.endsWith('.json')).sort()) {
-    const entry = JSON.parse(readFileSync(join(dir, file), 'utf8')) as LibraryEntry;
-    if (existsSync(join(LIBRARY_DIR, 'assets', `${entry.id}.glb`))) cache.set(entry.id, entry);
+  const mtimeMs = existsSync(dir) ? statSync(dir).mtimeMs : 0;
+  if (cache?.mtimeMs === mtimeMs) return cache.entries;
+  const entries = new Map<string, LibraryEntry>();
+  if (mtimeMs) {
+    for (const file of readdirSync(dir).filter((f) => f.endsWith('.json')).sort()) {
+      const entry = JSON.parse(readFileSync(join(dir, file), 'utf8')) as LibraryEntry;
+      if (existsSync(join(LIBRARY_DIR, 'assets', `${entry.id}.glb`))) entries.set(entry.id, entry);
+    }
   }
-  return cache;
+  cache = { mtimeMs, entries };
+  return entries;
 }
 
 export function assetPath(id: string): string | null {
@@ -57,19 +64,25 @@ export function shortCredit(entry: LibraryEntry): string {
   return `Model: ${entry.credit.split(',')[0]}, ${entry.licence}`;
 }
 
-/** The part of the system prompt that documents `assets` and lists what the library holds. */
-export function librarySection(): string {
-  const entries = [...libraryCatalog().values()];
+/** The library part of the system prompt, for the given assets (default: the whole catalogue). */
+export function librarySection(ids?: string[]): string {
+  const catalog = libraryCatalog();
+  const entries = ids ? ids.flatMap((id) => (catalog.has(id) ? [catalog.get(id)!] : [])) : [...catalog.values()];
   if (entries.length === 0) return '';
   const list = entries.map((e) => {
     const size = e.sizeM.map((m) => Math.round(m * 100)).join(' x ');
-    return `- '${e.id}': ${e.title}, real size ${size} cm. Parts: ${e.parts.map((p) => p.node).join(', ')}.`;
+    const notes = (e as LibraryEntry & { provenance?: { notes?: string[] } }).provenance?.notes ?? [];
+    return `- '${e.id}': ${e.title}, ${size} cm. Parts: ${e.parts.map((p) => p.node).join(', ')}.${notes.length ? ` Notes: ${notes.join(' ')}` : ''}`;
   });
+  // Several models (e.g. the molecules of a reaction): the host preloads only ids written as literals.
+  const several = entries.length > 1
+    ? `\nThis lesson has ${entries.length} models: get each one with its own call and its id written out (\`const second = assets.get('${entries[1].id}');\`), never in a loop over ids, and set them side by side along x with a gap between them.`
+    : '';
   return `
 
 ## Accurate 3D models from the library
-When the request is about something in this list, use the library model instead of building it from shapes: it comes from real scan or measurement data, so it is scientifically accurate, and every part is a separate, named mesh.
-${list.join('\n')}
+Use these models instead of building them from shapes: they come from real scan or measurement data, so they are scientifically accurate, and every part is a separate, named mesh. If a model's notes say it is not to scale, say so in the lesson.
+${list.join('\n')}${several}
 
 How to use one (the id must be written as a string; the host loads the model before build() runs):
 \`\`\`js

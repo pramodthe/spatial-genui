@@ -1,5 +1,111 @@
 [
-  { "id": "heart", "category": "biology", "prompt": "A human heart showing its four chambers and the main blood vessels", "parts": ["left_ventricle", "right_ventricle", "left_atrium", "right_atrium", "aorta", "pulmonary_artery"] },
-  { "id": "skull", "category": "biology", "prompt": "A human skull showing its individual bones", "parts": ["frontal_bone", "parietal_bone", "temporal_bone", "occipital_bone", "sphenoid_bone", "ethmoid_bone", "nasal_bone", "zygomatic_bone", "maxilla", "mandible"] },
-  { "id": "brain", "category": "biology", "prompt": "A human brain showing its lobes, the cerebellum and the brainstem", "parts": ["frontal_lobe", "parietal_lobe", "temporal_lobe", "occipital_lobe", "cerebellum", "pons", "medulla_oblongata", "midbrain"] }
+  {
+    "id": "heart",
+    "category": "biology",
+    "prompt": "A human heart showing its four chambers and the main blood vessels",
+    "parts": [
+      "left_ventricle",
+      "right_ventricle",
+      "left_atrium",
+      "right_atrium",
+      "aorta",
+      "pulmonary_artery"
+    ]
+  },
+  {
+    "id": "skull",
+    "category": "biology",
+    "prompt": "A human skull showing its individual bones",
+    "parts": [
+      "frontal_bone",
+      "parietal_bone",
+      "temporal_bone",
+      "occipital_bone",
+      "sphenoid_bone",
+      "ethmoid_bone",
+      "nasal_bone",
+      "zygomatic_bone",
+      "maxilla",
+      "mandible"
+    ]
+  },
+  {
+    "id": "brain",
+    "category": "biology",
+    "prompt": "A human brain showing its lobes, the cerebellum and the brainstem",
+    "parts": [
+      "frontal_lobe",
+      "parietal_lobe",
+      "temporal_lobe",
+      "occipital_lobe",
+      "cerebellum",
+      "pons",
+      "medulla_oblongata",
+      "midbrain"
+    ]
+  },
+  {
+    "id": "saturn",
+    "category": "astronomy",
+    "prompt": "Saturn with its rings and its largest moon, Titan",
+    "parts": [
+      "saturn",
+      "ring",
+      "titan"
+    ]
+  },
+  {
+    "id": "planets",
+    "category": "astronomy",
+    "prompt": "The eight planets of the Solar System side by side, showing their real relative sizes",
+    "parts": [
+      "mercury",
+      "venus",
+      "earth",
+      "mars",
+      "jupiter",
+      "saturn",
+      "uranus",
+      "neptune"
+    ]
+  },
+  {
+    "id": "solar-system",
+    "category": "astronomy",
+    "prompt": "The Solar System: the Sun and the eight planets on their orbits",
+    "parts": [
+      "sun",
+      "mercury",
+      "venus",
+      "earth",
+      "mars",
+      "jupiter",
+      "saturn",
+      "uranus",
+      "neptune",
+      "orbit"
+    ]
+  },
+  {
+    "id": "caffeine",
+    "category": "chemistry",
+    "prompt": "A caffeine molecule (C8H10N4O2) with its atoms and bonds",
+    "parts": [
+      "carbon",
+      "nitrogen",
+      "oxygen",
+      "hydrogen",
+      "bonds"
+    ]
+  },
+  {
+    "id": "co2",
+    "category": "chemistry",
+    "prompt": "A carbon dioxide molecule (CO2) with its double bonds",
+    "parts": [
+      "carbon",
+      "oxygen",
+      "bonds"
+    ]
+  }
 ]

@@ -5,6 +5,7 @@ import type { SceneStats } from './dryrun.js';
 import { dryRun } from './sandbox.js';
 import { complete, defaultTarget, type ChatMessage, type LlmTarget } from './llm.js';
 import { assetStubs, librarySection, libraryCatalog } from './library.js';
+import { routeAssets, type Route } from './router.js';
 import { SYSTEM_PROMPT, repairMessage } from './prompt.js';
 import { extractCode, validateModule } from './validate.js';
 
@@ -29,6 +30,8 @@ export type GenerationResult = {
   error?: string;
   attempts: Attempt[];
   totalMs: number;
+  /** Which library models the router chose for this request (library on only). */
+  route?: Route;
 };
 
 /**
@@ -41,12 +44,14 @@ export async function generate(
   options: { previousCode?: string; clientError?: string; target?: LlmTarget; log?: boolean; library?: boolean } = {},
 ): Promise<GenerationResult> {
   const target = options.target ?? defaultTarget;
-  const started = performance.now();
   // The asset library is on for the app; benchmarks turn it off so their prompt stays as published.
   const useLibrary = options.library ?? true;
+  const started = performance.now();
+  // Route first: only the models this request needs go into the prompt (molecules get built here).
+  const route = useLibrary && !options.previousCode ? await routeAssets(prompt, target) : undefined;
   const knownAssets = useLibrary ? new Set(libraryCatalog().keys()) : new Set<string>();
   const messages: ChatMessage[] = [
-    { role: 'system', content: useLibrary ? SYSTEM_PROMPT + librarySection() : SYSTEM_PROMPT },
+    { role: 'system', content: useLibrary ? SYSTEM_PROMPT + librarySection(route?.assets ?? []) : SYSTEM_PROMPT },
     { role: 'user', content: prompt },
   ];
   if (options.previousCode && options.clientError) {
@@ -65,6 +70,7 @@ export async function generate(
     provider: new URL(target.baseURL).host,
     attempts,
     totalMs: 0,
+    route,
   };
 
   for (let i = 0; i <= config.maxRepairs; i++) {

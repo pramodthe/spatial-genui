@@ -18,6 +18,9 @@ export default async function run({ frame, page }) {
       busy: window.genui.state.busy,
       // Times a lesson panel button or pressable ran its handler: proves a press on the lesson landed.
       lessonHandlerCalls: window.genui.inspect()?.handlerCalls ?? null,
+      // Where the lesson stands: a detected surface's label, or null when it floats at seated height.
+      onSurface: window.genui.inspect()?.onSurface ?? null,
+      status: window.genui.state.lastMount?.ok ?? null,
     }));
   }
   if (step === 'auto-repair') {

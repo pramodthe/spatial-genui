@@ -172,4 +172,79 @@ async function renderGlb(b64: string): Promise<{ grid?: string; hero?: string; s
   }
 }
 
-Object.assign(window, { exportModule, renderGlb });
+/**
+ * Part segmentation (M5): render a GLB from the given angles at `px` square, framed like renderGlb.
+ * mode 'color': lit, as made (PNG data URLs, for SAM 3.1). mode 'id': unlit vertex colours read back
+ * exactly from an offscreen buffer (no tone mapping, colour conversion or antialiasing), for a model
+ * whose vertex colours encode face numbers; black is background.
+ */
+async function renderViews(b64: string, views: { az: number; el: number }[], px: number, mode: 'color' | 'id'): Promise<{ images?: string[]; error?: string }> {
+  let model: THREE.Object3D | undefined;
+  const saved = { toneMapping: renderer.toneMapping, colorSpace: renderer.outputColorSpace, background: scene.background, environment: scene.environment };
+  const target = new THREE.WebGLRenderTarget(px, px, { samples: 0, colorSpace: THREE.NoColorSpace });
+  try {
+    const gltf = await new GLTFLoader().parseAsync(fromBase64(b64), '');
+    model = gltf.scene;
+    if (mode === 'id') {
+      model.traverse((o: any) => {
+        if (o.isMesh) o.material = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
+      });
+      renderer.toneMapping = THREE.NoToneMapping;
+      renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+      scene.background = new THREE.Color(0, 0, 0);
+      scene.environment = null;
+    }
+    scene.add(model);
+    model.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(model);
+    if (box.isEmpty()) return { error: 'The model is empty (no visible geometry).' };
+    const center = box.getCenter(new THREE.Vector3());
+    const radius = Math.max(box.getBoundingSphere(new THREE.Sphere()).radius, 0.001);
+    const distance = (radius / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2))) * 1.05;
+    camera.near = distance / 100;
+    camera.far = distance * 10;
+    camera.updateProjectionMatrix();
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = px;
+    const ctx = canvas.getContext('2d')!;
+    const pixels = new Uint8Array(px * px * 4);
+    const images: string[] = [];
+    for (const v of views) {
+      const az = THREE.MathUtils.degToRad(v.az);
+      const el = THREE.MathUtils.degToRad(v.el);
+      camera.position.set(center.x + distance * Math.cos(el) * Math.sin(az), center.y + distance * Math.sin(el), center.z + distance * Math.cos(el) * Math.cos(az));
+      camera.lookAt(center);
+      renderer.setRenderTarget(target);
+      renderer.render(scene, camera);
+      renderer.readRenderTargetPixels(target, 0, 0, px, px, pixels);
+      renderer.setRenderTarget(null);
+      // WebGL rows run bottom-up; images run top-down.
+      const image = ctx.createImageData(px, px);
+      for (let row = 0; row < px; row++) image.data.set(pixels.subarray((px - 1 - row) * px * 4, (px - row) * px * 4), row * px * 4);
+      for (let i = 3; i < image.data.length; i += 4) image.data[i] = 255;
+      ctx.putImageData(image, 0, 0);
+      images.push(canvas.toDataURL('image/png'));
+    }
+    return { images };
+  } catch (err) {
+    return { error: `Could not render the GLB: ${(err as Error).message}` };
+  } finally {
+    target.dispose();
+    renderer.toneMapping = saved.toneMapping;
+    renderer.outputColorSpace = saved.colorSpace;
+    scene.background = saved.background;
+    scene.environment = saved.environment;
+    if (model) {
+      scene.remove(model);
+      model.traverse((o: any) => {
+        o.geometry?.dispose();
+        for (const m of Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) {
+          for (const value of Object.values(m)) if (value instanceof THREE.Texture) value.dispose();
+          m.dispose();
+        }
+      });
+    }
+  }
+}
+
+Object.assign(window, { exportModule, renderGlb, renderViews });

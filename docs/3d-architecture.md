@@ -379,6 +379,34 @@ Rebuild the assets: download BodyParts3D into `data/bodyparts3d/` (see the build
   - Lesson text styling (mixed italics come from the agent's markup).
   - First steps that don't yet explain the topic. That is a lesson-plan problem, not a layout one.
 
+**M5 part segmentation, first attempt: SAM 3.1 on renders (Nov 13).**
+- **Pipeline** (`bench3d:segment`, `library/segment.py`):
+  1. Muse Ember lists the parts to find, the request's visible parts plus the main body.
+  2. The model is rendered from 10 angles, as made and as face-number colours. The renderer's new `renderViews` reads exact colours back from an offscreen buffer, so every pixel says which face it shows.
+  3. SAM 3.1 (Meta API, $0.0025 per image, about 1 s per call) finds each part in each view.
+  4. Masked pixels vote for their faces; the smallest overlapping mask wins. A mask covering most of the object is ignored, since SAM returns that when it can't find the part. Unclaimed faces next to a part join it, and the rest join the main body, or a part named after the object if SAM found no main body.
+  5. Low-poly models are subdivided first, keeping UVs, so boundaries can fall between faces.
+  - About 30 s and $0.15–0.20 of SAM per model. Meta's `meta-sam-parser` decodes the masks.
+- **Independent check** (`bench3d:judge-parts`): Claude Opus 5.5 sees each part in solid red with the rest faint and scores it 1–5.
+
+  | 18 models (6 retrieved, 12 TRELLIS.2) | Usable overall | Average part | Good parts (4–5) per model |
+  |---|---|---|---|
+  | Retrieved, SAM given part names | 2.33 | 3.43 | 1.8 |
+  | Retrieved, SAM given what parts look like | 2.17 | 3.36 | 2.0 |
+  | TRELLIS.2, part names | 1.83 | 3.23 | 1.4 |
+  | TRELLIS.2, what parts look like | 1.83 | 2.95 | 1.0 |
+
+- **Results:**
+  - **Distinct shapes come out well:** headstock, bridge and neck on guitars; saddle and pedals on bicycles; footpads; columns and entablature on temples; volcano craters.
+  - **Most models get only one or two clean parts.** The rest bleed: a seat that takes the chair's base, a frame that takes half of each wheel, strings as fragments.
+  - SAM doesn't know technical names ("descent stage", "vacuole", "crankshaft"). Describing what the parts look like didn't help on average.
+  - TRELLIS meshes, one fused surface, segment worse than retrieved models.
+- **Conclusion:** masks from 2D views, each slightly off and lifted onto the surface, give ragged regions. Not good enough for lessons as it stands.
+- **The usual remedy:** a 3D segmentation model that cuts the mesh into geometrically clean regions, with SAM 3.1 or Ember only naming them. Candidates:
+  - PartField (NVIDIA License: non-commercial research and educational use only).
+  - P3-SAM (Tencent Hunyuan 3D-Part Community License: not valid in the EU, UK or South Korea, Tencent's terms elsewhere).
+  - Both run on a Modal GPU. Choosing one is a licensing decision (section 9).
+
 ## 10. Sources
 
 - SceneCraft: An LLM Agent for Synthesizing 3D Scene as Blender Code. https://arxiv.org/abs/2403.01248

@@ -791,6 +791,15 @@ wheels = [
 ]
 
 [[package]]
+name = "meta-sam-parser"
+version = "0.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a8/54/53ad0eab6cc271ddbd61a66028e32c1aee7de14f4a77c86e8bb90525a342/meta_sam_parser-0.2.0.tar.gz", hash = "sha256:42842c86c48e79ee3d61226ac3ebc28a2ad135a6c3860833dccba54537493d80", size = 43356, upload-time = "2026-11-08T04:55:41.311Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/58/7a/3f715bf469948e513be343640e0d7d56f0de119a0ee4eb13dd5b0920240c/meta_sam_parser-0.2.0-py3-none-any.whl", hash = "sha256:5a8fe77672641f1bfdc028becdecfeb6b7101e094b9c361a175ef89a34c33b8c", size = 41498, upload-time = "2026-11-08T04:55:39.959Z" },
+]
+
+[[package]]
 name = "modal"
 version = "1.6.4"
 source = { registry = "https://pypi.org/simple" }
@@ -1566,6 +1575,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "gradio-client" },
     { name = "mcp" },
+    { name = "meta-sam-parser" },
     { name = "modal" },
     { name = "networkx" },
     { name = "scikit-image" },
@@ -1579,6 +1589,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.162.5" },
     { name = "gradio-client", specifier = ">=2.7.2" },
     { name = "mcp", specifier = ">=2.3" },
+    { name = "meta-sam-parser", specifier = ">=0.2.0" },
     { name = "modal", specifier = ">=1.6.4" },
     { name = "networkx", specifier = ">=3.7" },
     { name = "scikit-image", specifier = ">=0.26.0" },

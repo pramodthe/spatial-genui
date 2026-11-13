@@ -79,6 +79,14 @@ export function renderGlb(glb: Buffer): Promise<Render | { error: string; stats?
   });
 }
 
+/** M5: PNG renders of a GLB from the given angles, as made ('color') or as face-number colours ('id'). */
+export function renderViews(glb: Buffer, views: { az: number; el: number }[], px: number, mode: 'color' | 'id'): Promise<Buffer[] | { error: string }> {
+  return serialized(async (page) => {
+    const out = await page.evaluate(([b64, v, p, m]) => (window as any).renderViews(b64, v, p, m), [glb.toString('base64'), views, px, mode] as const);
+    return out.error ? { error: out.error } : (out.images as string[]).map(decode);
+  });
+}
+
 /** P1: build a validated Three.js module in the browser and export its root as GLB. */
 export function exportModuleToGlb(code: string): Promise<{ glb: Buffer } | { error: string }> {
   return serialized(async (page) => {

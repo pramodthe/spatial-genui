@@ -9,6 +9,7 @@ dependencies = [
   "fastapi>=0.162.5",
   "gradio-client>=2.7.2",
   "mcp>=2.3",
+  "meta-sam-parser>=0.2.0",
   "modal>=1.6.4",
   "networkx>=3.7",
   "scikit-image>=0.26.0",

@@ -19,7 +19,9 @@
     "bench3d:report": "tsx src/three-d/report3d.ts",
     "bench3d:import": "tsx src/three-d/import-external.ts",
     "bench3d:retrieve": "tsx src/three-d/retrieve.ts",
-    "bench3d:ingest": "tsx src/three-d/ingest-retrieved.ts"
+    "bench3d:ingest": "tsx src/three-d/ingest-retrieved.ts",
+    "bench3d:segment": "tsx src/three-d/segment-parts.ts",
+    "bench3d:judge-parts": "tsx src/three-d/judge-parts.ts"
   },
   "engines": {
     "node": ">=22.12.0"

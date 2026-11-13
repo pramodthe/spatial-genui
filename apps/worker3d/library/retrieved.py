@@ -39,9 +39,26 @@ MAX_REAL_SIZE_M = 2.5
 TURN_DEG = {"front": 0, "side": -90, "back": 180, "opposite side": 90}  # turn that brings this render view to +Z (side = seen from +X)
 
 
-def load_meshes(glb: Path) -> list[trimesh.Trimesh]:
+REFINE_MAX_FACES = 60_000
+REFINE_EDGE_SHARE = 0.015
+
+
+def load_meshes(glb: Path, refine: bool = False) -> list[trimesh.Trimesh]:
+    """The model's meshes in world coordinates. refine: split low-poly faces (uniformly, keeping UVs and
+    materials) until a typical edge is under 1.5% of the model's size or the model reaches about 60k
+    faces, so part boundaries found on renders can fall between faces. Deterministic, so every step of
+    one segmentation sees the same faces."""
     scene = trimesh.load(glb, force="scene")
-    return [m for m in scene.dump(concatenate=False) if isinstance(m, trimesh.Trimesh) and len(m.faces)]
+    meshes = [m for m in scene.dump(concatenate=False) if isinstance(m, trimesh.Trimesh) and len(m.faces)]
+    if refine and meshes:
+        extent = float(np.max(np.ptp(np.concatenate([m.vertices for m in meshes]), axis=0)))
+        while sum(len(m.faces) for m in meshes) * 4 <= REFINE_MAX_FACES:
+            coarse = [i for i, m in enumerate(meshes) if np.percentile(m.edges_unique_length, 90) > REFINE_EDGE_SHARE * extent]
+            if not coarse:
+                break
+            for i in coarse:
+                meshes[i] = meshes[i].subdivide()
+    return meshes
 
 
 def pieces_of(mesh: trimesh.Trimesh) -> np.ndarray:
@@ -51,8 +68,8 @@ def pieces_of(mesh: trimesh.Trimesh) -> np.ndarray:
     return trimesh.graph.connected_component_labels(shape.face_adjacency, node_count=len(shape.faces))
 
 
-def prepare(glb: Path, work: Path) -> None:
-    meshes = load_meshes(glb)
+def prepare(glb: Path, work: Path, refine: bool = False) -> None:
+    meshes = load_meshes(glb, refine)
     pieces = []  # (mesh index, piece label, area, centroid, bounds)
     labels = []
     for i, mesh in enumerate(meshes):
@@ -127,10 +144,10 @@ def prepare(glb: Path, work: Path) -> None:
     print(json.dumps({"ok": True, "pieces": len(pieces), "dropped": len(dropped), "groups": legend}))
 
 
-def ingest(glb: Path, work: Path, out: Path) -> dict:
+def ingest(glb: Path, work: Path, out: Path, refine: bool = False) -> dict:
     names = json.loads((work / "names.json").read_text())
     meta = json.loads((work / "meta.json").read_text())
-    meshes = load_meshes(glb)
+    meshes = load_meshes(glb, refine)
     face_groups = list(np.load(work / "groups.npz").values())
     turn = trimesh.transformations.rotation_matrix(math.radians(TURN_DEG.get(names.get("bestView"), 0)), [0, 1, 0])
     for mesh in meshes:
@@ -168,17 +185,18 @@ def ingest(glb: Path, work: Path, out: Path) -> dict:
 
     title = names.get("title") or meta["name"]
     slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:40] or meta["uid"][:12]
-    notes = [f"Made by {meta['author']} and shared on Sketchfab under {meta['licence']}; found through Objaverse 1.0 and "
-             f"chosen by Muse Ember from renders. Not checked by a subject expert."]
+    # meta.json may override the source description (e.g. a generated model rather than a Sketchfab one).
+    notes = [meta.get("note") or f"Made by {meta['author']} and shared on Sketchfab under {meta['licence']}; found through "
+             f"Objaverse 1.0 and chosen by Muse Ember from renders. Not checked by a subject expert."]
     if scale_note:
         notes.append(scale_note)
-    notes.append("Parts are the model's physically separate pieces, grouped by size and named by Muse Ember from a "
-                 "render of each group; pieces the author modelled as one (e.g. a guitar's body and neck) stay one part.")
+    notes.append(names.get("partsNote") or "Parts are the model's physically separate pieces, grouped by size and named by "
+                 "Muse Ember from a render of each group; pieces the author modelled as one (e.g. a guitar's body and neck) stay one part.")
     return write_asset(out, {
-        "id": f"{slug}-objaverse", "title": f"{title} (3D model by {meta['author']})", "tier": "C",
+        "id": meta.get("assetId") or f"{slug}-objaverse", "title": f"{title} (3D model by {meta['author']})", "tier": meta.get("tier", "C"),
         "kind": names.get("kind"), "concept": {"id": f"objaverse:{meta['uid']}", "name": title}, "detail": "retrieved",
         "keywords": sorted({str(k).lower() for k in names.get("keywords", [])} | {title.lower()}),
-        "credit": f"{meta['author']} (Sketchfab), \"{meta['name']}\", {meta['viewerUrl']}", "licence": meta["licence"],
+        "credit": meta.get("credit") or f"{meta['author']} (Sketchfab), \"{meta['name']}\", {meta['viewerUrl']}", "licence": meta["licence"],
         "provenance": {"source": meta["viewerUrl"], "objaverseUid": meta["uid"], "retrievedFor": meta.get("request"),
                        "dinoSimilarity": meta.get("similarity"), "pickReason": meta.get("reason"), "authorUrl": meta.get("authorUrl"),
                        "scale": round(scale, 6), "notes": notes},
@@ -191,12 +209,13 @@ def main() -> None:
     parser.add_argument("glb", type=Path)
     parser.add_argument("work", type=Path)
     parser.add_argument("--out", type=Path, default=Path("data/library"))
+    parser.add_argument("--refine", action="store_true", help="split low-poly faces first (segment.py does)")
     args = parser.parse_args()
     try:
         if args.step == "prepare":
-            prepare(args.glb, args.work)
+            prepare(args.glb, args.work, args.refine)
         else:
-            entry = ingest(args.glb, args.work, args.out)
+            entry = ingest(args.glb, args.work, args.out, args.refine)
             print(json.dumps({"ok": True, "id": entry["id"], "parts": [p["name"] for p in entry["parts"]]}))
     except Exception as err:
         print(json.dumps({"ok": False, "error": f"{type(err).__name__}: {err}"[:500]}))

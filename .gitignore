@@ -9,6 +9,7 @@ dist/
 # Benchmark: keep results (jsonl, summaries) but not screenshots or scratch runs
 bench/results/*/shots/
 bench/results/_*/
+bench/results/_*.flag
 bench/results/*.log
 # Phase 3: per-job code, GLBs and renders, and full-size reference images (regenerate with npm run bench3d)
 bench/results/*/jobs/

@@ -53,8 +53,8 @@ export async function judge(target: LlmTarget, req: AssetRequest, grid: Buffer):
   };
 }
 
-/** M1: a reference picture from Muse Image (Meta API), shared by all pipelines for the same object. */
-export async function referenceImage(req: AssetRequest): Promise<{ jpeg: Buffer; ms: number }> {
+/** One picture from Muse Image (Meta API) for a prompt. */
+export async function museImage(prompt: string): Promise<{ jpeg: Buffer; ms: number }> {
   const base = process.env.META_API_BASE || 'https://api.meta.ai/v1';
   const key = process.env.META_API_KEY;
   if (!key) throw new Error('Set META_API_KEY in .env for reference images.');
@@ -62,10 +62,15 @@ export async function referenceImage(req: AssetRequest): Promise<{ jpeg: Buffer;
   const res = await fetch(`${base.replace(/\/$/, '')}/images/generations`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'muse-image-1.0', prompt: referenceImagePrompt(req), n: 1, size: '1024x1024', output_format: 'jpeg' }),
+    body: JSON.stringify({ model: 'muse-image-1.0', prompt, n: 1, size: '1024x1024', output_format: 'jpeg' }),
     signal: AbortSignal.timeout(180_000),
   });
   if (!res.ok) throw new Error(`Muse Image ${res.status}: ${(await res.text()).slice(0, 300)}`);
   const body = (await res.json()) as { data: { b64_json: string }[] };
   return { jpeg: Buffer.from(body.data[0].b64_json, 'base64'), ms: Math.round(performance.now() - started) };
+}
+
+/** M1: a reference picture from Muse Image, shared by all pipelines for the same object (fixed style, unchecked). */
+export function referenceImage(req: AssetRequest): Promise<{ jpeg: Buffer; ms: number }> {
+  return museImage(referenceImagePrompt(req));
 }

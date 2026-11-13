@@ -32,6 +32,8 @@ export type GenerationResult = {
   totalMs: number;
   /** Which library models the router chose for this request (library on only). */
   route?: Route;
+  /** On-demand assets: models being fetched or generated in the background for this lesson (see three-d/acquire.ts). */
+  pendingAssets?: { jobId: string; name: string }[];
 };
 
 /**
@@ -41,14 +43,26 @@ export type GenerationResult = {
  */
 export async function generate(
   prompt: string,
-  options: { previousCode?: string; clientError?: string; target?: LlmTarget; log?: boolean; library?: boolean } = {},
+  options: { previousCode?: string; clientError?: string; target?: LlmTarget; log?: boolean; library?: boolean; onDemand?: boolean } = {},
 ): Promise<GenerationResult> {
   const target = options.target ?? defaultTarget;
   // The asset library is on for the app; benchmarks turn it off so their prompt stays as published.
   const useLibrary = options.library ?? true;
   const started = performance.now();
   // Route first: only the models this request needs go into the prompt (molecules get built here).
-  const route = useLibrary && !options.previousCode ? await routeAssets(prompt, target) : undefined;
+  const route = useLibrary && !options.previousCode ? await routeAssets(prompt, target, { wantObjects: options.onDemand }) : undefined;
+  // On-demand assets: a real object the library lacks is fetched or generated in the background. This
+  // lesson is written now without it; the client can ask again once the model is in the library.
+  let pendingAssets: GenerationResult['pendingAssets'];
+  if (options.onDemand && route?.wanted?.length) {
+    const { startAssetJob } = await import('./three-d/acquire.js');
+    for (const wanted of route.wanted) {
+      const job = startAssetJob(wanted);
+      // Already built (the router didn't recognise it under this name): use it in this lesson.
+      if (job.status === 'done' && job.assetId && libraryCatalog().has(job.assetId)) route.assets.push(job.assetId);
+      else if (job.status !== 'failed') (pendingAssets ??= []).push({ jobId: job.id, name: job.name });
+    }
+  }
   const knownAssets = useLibrary ? new Set(libraryCatalog().keys()) : new Set<string>();
   const messages: ChatMessage[] = [
     { role: 'system', content: useLibrary ? SYSTEM_PROMPT + librarySection(route?.assets ?? []) : SYSTEM_PROMPT },
@@ -71,6 +85,7 @@ export async function generate(
     attempts,
     totalMs: 0,
     route,
+    pendingAssets,
   };
 
   for (let i = 0; i <= config.maxRepairs; i++) {

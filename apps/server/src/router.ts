@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { complete, type LlmTarget } from './llm.js';
 import { LIBRARY_DIR, libraryCatalog } from './library.js';
+import type { AssetWanted } from './three-d/acquire.js';
 
 /**
  * Asset router (concept grounding, docs/3d-architecture.md section 4.1): before a lesson is written,
@@ -20,11 +21,17 @@ export type Route = {
   failed: string[];
   ms: number;
   method: 'model' | 'keywords';
+  /** With on-demand assets: a real-world object the lesson is about that the library lacks. */
+  wanted?: AssetWanted[];
 };
 
 const ROUTER_SYSTEM = `You pick accurate 3D models for a mixed-reality lesson. You get the lesson request and a catalogue of models built from scientific data. Reply with only a JSON object:
 {"assets": ["<catalogue ids the lesson should show>"], "molecules": ["<English names of chemical compounds the lesson needs as 3D molecules that are not in the catalogue>"]}
 Choose only what the lesson needs (usually 1, at most 4). Use the catalogue when an entry fits the request; list molecules only for real chemical compounds (e.g. "caffeine", "glucose", "carbon dioxide"). If nothing fits, return empty lists.`;
+
+// Added only when on-demand assets are on, so the router's published prompt stays as it was.
+const ROUTER_OBJECTS = `
+Also add "objects": a list with at most one real-world physical object the lesson is about that should be shown as a realistic 3D model and is not in the catalogue (e.g. a microscope, a violin, a steam locomotive): {"name": "<its everyday name, 1-3 words>", "describe": "<one line: what it is and what it looks like, as you would brief an artist>", "parts": ["<3-7 parts the lesson would label>"]}. It must be the thing the lesson teaches (its parts, how it works), not a prop used to teach something else (a pizza for fractions, coins for counting, a ball for gravity): the lesson builds props itself so they can be cut, counted or thrown. Leave the list empty when a catalogue entry fits, for molecules and other things the catalogue builds from data, for abstract ideas, and for scenes with many objects.`;
 
 function catalogueText(): string {
   return [...libraryCatalog().values()]
@@ -85,21 +92,31 @@ function keywordRoute(prompt: string): string[] {
     .map((e) => e.id);
 }
 
-export async function routeAssets(prompt: string, target: LlmTarget): Promise<Route> {
+export async function routeAssets(prompt: string, target: LlmTarget, options: { wantObjects?: boolean } = {}): Promise<Route> {
   const started = performance.now();
   const known = libraryCatalog();
   let assets: string[] = [];
   let molecules: string[] = [];
+  let wanted: AssetWanted[] = [];
   let method: Route['method'] = 'model';
   try {
     // A small decision: low reasoning keeps routing to a few seconds.
     const router = { ...target, extraBody: { ...target.extraBody, reasoning_effort: 'low' } };
     const reply = await complete([
-      { role: 'system', content: ROUTER_SYSTEM },
+      { role: 'system', content: options.wantObjects ? ROUTER_SYSTEM + ROUTER_OBJECTS : ROUTER_SYSTEM },
       { role: 'user', content: `Lesson request: ${prompt}\n\nCatalogue:\n${catalogueText()}` },
     ], router);
     const json = reply.text.slice(reply.text.indexOf('{'), reply.text.lastIndexOf('}') + 1);
-    const parsed = JSON.parse(json) as { assets?: unknown; molecules?: unknown };
+    const parsed = JSON.parse(json) as { assets?: unknown; molecules?: unknown; objects?: unknown };
+    if (options.wantObjects && Array.isArray(parsed.objects)) {
+      wanted = (parsed.objects as { name?: unknown; describe?: unknown; parts?: unknown }[])
+        .filter((o) => o && typeof o.name === 'string' && /^[\w '-]{2,40}$/.test(o.name) && typeof o.describe === 'string')
+        .slice(0, 1)
+        .map((o) => ({
+          name: (o.name as string).trim().toLowerCase(), describe: (o.describe as string).slice(0, 300),
+          parts: (Array.isArray(o.parts) ? o.parts : []).map(String).filter((p) => /^[\w '-]{2,40}$/.test(p)).slice(0, 8),
+        }));
+    }
     assets = (Array.isArray(parsed.assets) ? parsed.assets : []).map(String).filter((id) => known.has(id));
     molecules = (Array.isArray(parsed.molecules) ? parsed.molecules : []).map(String).filter((m) => /^[\w ,'()+-]{2,60}$/.test(m)).slice(0, 4);
   } catch {
@@ -124,5 +141,5 @@ export async function routeAssets(prompt: string, target: LlmTarget): Promise<Ro
     }
   }
   // At most 4: e.g. photosynthesis needs carbon dioxide and water in, glucose and oxygen out.
-  return { assets: [...new Set(assets)].slice(0, 4), built, failed, ms: Math.round(performance.now() - started), method };
+  return { assets: [...new Set(assets)].slice(0, 4), built, failed, ms: Math.round(performance.now() - started), method, ...(wanted.length ? { wanted } : {}) };
 }

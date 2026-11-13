@@ -20,6 +20,10 @@ export const config = {
   // max reasoning needed ~40k on hard requests). Same limit for every model keeps the benchmark fair.
   maxCompletionTokens: 64000,
   runsDir: fileURLToPath(new URL('../runs/', import.meta.url)),
+  // On-demand assets (three-d/acquire.ts): when a lesson is about a real object the library lacks, fetch
+  // or generate a model in the background. Off unless ASSETS_ON_DEMAND=1: each model costs a reference
+  // picture and a minute or two of Modal GPU time.
+  onDemandAssets: process.env.ASSETS_ON_DEMAND === '1',
   // Python 3D backend (apps/worker3d/modal_app.py on Modal). Unset: run the 3D workers locally.
   worker3dUrl: process.env.WORKER3D_URL || '',
   worker3dToken: process.env.WORKER3D_TOKEN || '',

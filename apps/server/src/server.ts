@@ -41,8 +41,17 @@ const server = createServer(async (req, res) => {
       const result = await generate(prompt, {
         previousCode: typeof body.previousCode === 'string' ? body.previousCode : undefined,
         clientError: typeof body.clientError === 'string' ? body.clientError : undefined,
+        onDemand: config.onDemandAssets,
       });
       return send(res, 200, result);
+    }
+    // On-demand assets: progress of a background model job started by a lesson request.
+    const jobMatch = req.method === 'GET' && req.url?.match(/^\/api\/assets\/jobs(?:\/([a-z0-9-]+))?$/);
+    if (jobMatch) {
+      const { assetJob, assetJobs } = await import('./three-d/acquire.js');
+      if (!jobMatch[1]) return send(res, 200, { jobs: assetJobs() });
+      const job = assetJob(jobMatch[1]);
+      return job ? send(res, 200, job) : send(res, 404, { error: 'Unknown job' });
     }
     send(res, 404, { error: 'Not found' });
   } catch (err) {
@@ -54,6 +63,7 @@ const server = createServer(async (req, res) => {
 server.listen(config.port, () => {
   console.log(`GenUI agent server on http://localhost:${config.port}`);
   console.log(`Model: ${config.model} via ${config.baseURL}${config.apiKey ? '' : '  (LLM_API_KEY is empty!)'}`);
+  console.log(`On-demand assets: ${config.onDemandAssets ? 'on' : 'off (set ASSETS_ON_DEMAND=1 to fetch or generate models a lesson lacks)'}`);
 });
 
 async function readJson(req: IncomingMessage): Promise<any> {

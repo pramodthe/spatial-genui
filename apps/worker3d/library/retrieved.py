@@ -146,7 +146,10 @@ def prepare(glb: Path, work: Path, refine: bool = False) -> None:
     print(json.dumps({"ok": True, "pieces": len(pieces), "dropped": len(dropped), "groups": legend}))
 
 
-def ingest(glb: Path, work: Path, out: Path, refine: bool = False) -> dict:
+def ingest(glb: Path, work: Path, out: Path, refine: bool = False, split_regions: bool = False) -> dict:
+    """split_regions: keep each segmentation region (<work>/regions-merged.npy, from segment.py) as its own
+    piece under its part, instead of one piece per part. For the repair stage, which can then move a
+    whole region to another part without cutting any mesh."""
     names = json.loads((work / "names.json").read_text())
     meta = json.loads((work / "meta.json").read_text())
     meshes = load_meshes(glb, refine)
@@ -173,6 +176,9 @@ def ingest(glb: Path, work: Path, out: Path, refine: bool = False) -> dict:
     for mesh in meshes:
         mesh.apply_scale(scale)
 
+    regions = None
+    if split_regions and (work / "regions-merged.npy").exists():
+        regions = np.split(np.load(work / "regions-merged.npy"), np.cumsum([len(m.faces) for m in meshes])[:-1])
     # Groups with the same name are one part; each part keeps one piece per original mesh (material).
     by_name: dict[str, list[int]] = {}
     named = {int(g) - 1: re.sub(r"[_\s]+", " ", str(n)).strip().lower() for g, n in names["parts"].items()}
@@ -183,9 +189,13 @@ def ingest(glb: Path, work: Path, out: Path, refine: bool = False) -> dict:
     for n, (name, groups) in enumerate(by_name.items()):
         pieces = []
         for i, mesh in enumerate(meshes):
-            faces = np.flatnonzero(np.isin(face_groups[i], groups))
-            if len(faces):
-                pieces.append(mesh.submesh([faces], append=True))
+            mine = np.isin(face_groups[i], groups)
+            if not mine.any():
+                continue
+            if regions is None:
+                pieces.append(mesh.submesh([np.flatnonzero(mine)], append=True))
+            else:
+                pieces += [mesh.submesh([np.flatnonzero(mine & (regions[i] == r))], append=True) for r in np.unique(regions[i][mine])]
         if pieces:
             parts.append({"name": name, "meshes": pieces, "color": PALETTE[groups[0]], "extra": {"groups": [g + 1 for g in groups]}})
 
@@ -216,12 +226,13 @@ def main() -> None:
     parser.add_argument("work", type=Path)
     parser.add_argument("--out", type=Path, default=Path("data/library"))
     parser.add_argument("--refine", action="store_true", help="split low-poly faces first (segment.py does)")
+    parser.add_argument("--split-regions", action="store_true", help="ingest: one piece per segmentation region (for the repair stage)")
     args = parser.parse_args()
     try:
         if args.step == "prepare":
             prepare(args.glb, args.work, args.refine)
         else:
-            entry = ingest(args.glb, args.work, args.out, args.refine)
+            entry = ingest(args.glb, args.work, args.out, args.refine, args.split_regions)
             print(json.dumps({"ok": True, "id": entry["id"], "parts": [p["name"] for p in entry["parts"]]}))
     except Exception as err:
         print(json.dumps({"ok": False, "error": f"{type(err).__name__}: {err}"[:500]}))

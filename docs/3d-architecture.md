@@ -462,6 +462,46 @@ Rebuild the assets: download BodyParts3D into `data/bodyparts3d/` (see the build
   - **Biology ties on fidelity** but loses clarity because the real-size flower (10 cm) sits small and far away with tiny labels. Next: scale small models up further in lessons.
   - Library lessons are still faster and cheaper.
 
+**On-demand path (Nov 13).** One job now takes a real-world object from "not in the library" to a library model with named parts (`apps/server/src/three-d/acquire.ts`; the stages are shared with the benchmarks through `stages.ts`):
+
+```
+reference picture: Ember briefs it, Muse Image draws it, Ember checks it (redrawn up to 3 times)
+  -> search Objaverse (CC0 / CC BY), rank by DINOv3, Ember picks from renders     tier C
+  -> if nothing fits: TRELLIS.2 builds one from the reference picture             tier D
+  -> P3-SAM cuts regions, Ember names them, Ember checks the names
+  -> library asset with credit, licence and provenance
+```
+
+- **How a lesson uses it:**
+  - With `ASSETS_ON_DEMAND=1` the router also names at most one real-world object the lesson is about that the library lacks. The rule: the thing the lesson teaches, not a prop such as a pizza for fractions. Ember and Sonnet both got it right on 7 of 7 re-check requests.
+  - The lesson is served at once, built from shapes. The job runs in the background (one at a time; `GET /api/assets/jobs/<id>` reports progress).
+  - The page shows progress and offers "Rebuild with the accurate model" when the asset is in. It never rebuilds on its own, since the learner may be mid-lesson.
+  - Off by default: each model costs a reference picture and one to three minutes of Modal GPU time.
+  - `npm run assets:acquire -- --name <object> --describe "<one line>"` runs the same path from the command line, to test it or to stock the library ahead of time (`--no-search` generates).
+- **First run, a microscope (retrieved):** 187 s end to end.
+  - A CC BY school microscope was found on Objaverse.
+  - 29 P3-SAM regions were named and merged into eyepiece, body tube, objective lenses, stage, focus knob and base. The self-check merged away a doubtful "arm".
+  - Stored at real size (35 cm), with keywords so the router finds it next time.
+- **The reference picture is checked before anything is built from it.** A model generated from a picture repeats the picture's mistakes.
+  - **What went wrong before:** the Phase 3 gear train's reference showed the gears from an angle, overlapping, and TRELLIS.2 put the small gear at right angles to the big one. Every later stage inherited that, including a Blender repair that spent half an hour on it.
+  - **The new first stage** (`checkedReference`):
+    - Ember writes a brief, with the view that shows the structure and the facts the picture must show.
+    - Muse Image draws it.
+    - Ember checks the picture against the facts. A failed picture is redrawn with its problems named.
+    - No model is generated from a picture scoring under 3 of 5.
+  - **Gear train, regenerated from a checked picture:** 392 s.
+    - The gears are in one plane with their teeth together and the crank is on the small gear.
+    - The parts came out right with no repair: base plate, drive gear, driven gear, crank handle, axle, axle support.
+    - The check rejected two pictures with extra gears at different depths and kept a correct one.
+  - **Costs and flaws seen:**
+    - A face-on picture leaves depth to the generator: the new model's base plate is ragged at the back. The brief now asks for a slightly turned and raised view.
+    - Ember's first brief invented structure ("the base plate behind the gears") and marked a correct picture down for it, causing two needless redraws. The brief may now state only structure the request gives or every such object has.
+    - Not every error starts in the picture: the engine's reference was good, and its faults came from part naming.
+- **Not done yet:**
+  - The "model ready" notice exists on the desktop page only, not inside the headset.
+  - The page flow hasn't been run in the emulator.
+  - The Blender repair stage is not part of this path.
+
 ## 10. Sources
 
 - SceneCraft: An LLM Agent for Synthesizing 3D Scene as Blender Code. https://arxiv.org/abs/2403.01248

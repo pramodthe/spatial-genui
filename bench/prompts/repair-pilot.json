@@ -1,23 +1,26 @@
 [
   {
     "asset": "gear-train-trellis",
-    "from": "data/library-retired",
     "objectId": "gear-train",
     "lesson": "Teach me how two gears change speed and turning force.",
-    "needs": "A small drive gear and a larger driven gear, in one plane with their teeth meshing, each on its own axle; the crank handle on the small gear's axle; the base plate under them. Each of these is its own, correctly named part."
+    "needs": "A small drive gear and a larger driven gear, in one plane with their teeth meshing, each on its own axle; the crank handle on the small gear's axle; the base plate under them. Each of these is its own, correctly named part.",
+    "glb": "bench/results/_seg-input-trellis/gear-train.glb",
+    "work": "data/segment-work/trellis-p3v/gear-train"
   },
   {
     "asset": "engine-cylinder-trellis",
-    "from": "data/library-retired",
     "objectId": "engine-cylinder",
     "lesson": "Show me how a car engine cylinder works, stroke by stroke.",
-    "needs": "One cylinder, cut away so the inside shows, with the piston inside it, the connecting rod joining the piston to the crankshaft below, and the spark plug and the intake and exhaust valves at the top. Each of these is its own, correctly named part, in the right place."
+    "needs": "One cylinder, cut away so the inside shows, with the piston inside it, the connecting rod joining the piston to the crankshaft below, and the spark plug and the intake and exhaust valves at the top. Each of these is its own, correctly named part, in the right place.",
+    "glb": "bench/results/_seg-input-trellis/engine-cylinder.glb",
+    "work": "data/segment-work/trellis-p3v/engine-cylinder"
   },
   {
     "asset": "plant-cell-trellis",
-    "from": "data/library",
     "objectId": "plant-cell",
     "lesson": "Teach me the parts of a plant cell, with a short quiz.",
-    "needs": "Each organelle the lesson labels (cell wall, cell membrane, nucleus, chloroplasts, vacuole, mitochondria) is its own, correctly named part."
+    "needs": "Each organelle the lesson labels (cell wall, cell membrane, nucleus, chloroplasts, vacuole, mitochondria) is its own, correctly named part.",
+    "glb": "bench/results/_seg-input-trellis/plant-cell.glb",
+    "work": "data/segment-work/trellis-p3v/plant-cell"
   }
 ]

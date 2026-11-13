@@ -64,8 +64,10 @@ def handle(request: dict) -> dict:
             export_cameras=False, export_lights=False,
             export_extras=True,  # custom properties (e.g. a part's motion) go into the node's extras
         )
-        glb = base64.b64encode(open(path, "rb").read()).decode()
-        return {"ok": True, "glb_base64": glb, "scene": scene_info()}
+        reply = {"ok": True, "scene": scene_info()}
+        if request.get("inline", True):  # callers that can read the file say inline: false (large models)
+            reply["glb_base64"] = base64.b64encode(open(path, "rb").read()).decode()
+        return reply
     return {"ok": False, "error": f"Unknown op {op!r}"}
 
 

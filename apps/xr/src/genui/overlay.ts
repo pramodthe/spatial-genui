@@ -13,7 +13,11 @@ type GenerateResponse = {
   totalMs?: number;
   model?: string;
   stats?: Record<string, unknown>;
+  /** Models being fetched or generated in the background for this lesson (the server's on-demand path). */
+  pendingAssets?: { jobId: string; name: string }[];
 };
+
+type AssetJob = { id: string; name: string; status: 'queued' | 'running' | 'done' | 'failed'; events: { message: string }[]; assetId?: string; error?: string };
 
 type GenUIState = {
   prompt: string | null;
@@ -22,6 +26,8 @@ type GenUIState = {
   lastMount: MountReport | null;
   runtimeErrors: string[];
   busy: boolean;
+  /** Background model jobs for the current lesson, as last polled. */
+  assetJobs: AssetJob[];
 };
 
 const state: GenUIState = {
@@ -31,11 +37,15 @@ const state: GenUIState = {
   lastMount: null,
   runtimeErrors: [],
   busy: false,
+  assetJobs: [],
 };
 
 let statusEl: HTMLDivElement;
+let assetsEl: HTMLDivElement;
 let codeEl: HTMLPreElement;
 let repairButton: HTMLButtonElement;
+let rebuildButton: HTMLButtonElement;
+let assetWatch = 0;
 
 export function createOverlay() {
   const root = document.createElement('div');
@@ -51,10 +61,12 @@ export function createOverlay() {
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button data-action="generate">Generate</button>
       <button data-action="repair" hidden>Repair runtime error</button>
+      <button data-action="rebuild" hidden>Rebuild with the accurate model</button>
       <button data-action="clear">Clear</button>
       <button data-action="code">Show code</button>
     </div>
     <div data-role="status" style="white-space:pre-wrap;color:#b8bec8"></div>
+    <div data-role="assets" style="white-space:pre-wrap;color:#9fd3a8"></div>
     <pre data-role="code" hidden style="max-height:40vh;overflow:auto;margin:0;font:12px/1.4 ui-monospace,monospace;background:#0f1114;padding:8px;border-radius:8px"></pre>`;
   for (const button of root.querySelectorAll('button')) {
     button.style.cssText =
@@ -64,6 +76,8 @@ export function createOverlay() {
 
   const input = root.querySelector('textarea')!;
   statusEl = root.querySelector('[data-role="status"]')!;
+  assetsEl = root.querySelector('[data-role="assets"]')!;
+  rebuildButton = root.querySelector('[data-action="rebuild"]')!;
   codeEl = root.querySelector('[data-role="code"]')!;
   repairButton = root.querySelector('[data-action="repair"]')!;
 
@@ -71,6 +85,7 @@ export function createOverlay() {
     const action = (event.target as HTMLElement).dataset.action;
     if (action === 'generate') void generate(input.value);
     if (action === 'repair') void repair();
+    if (action === 'rebuild') void rebuild();
     if (action === 'clear') clear();
     if (action === 'code') codeEl.hidden = !codeEl.hidden;
   });
@@ -85,6 +100,7 @@ export function createOverlay() {
   (window as unknown as { genui: unknown }).genui = {
     generate,
     repair,
+    rebuild,
     mount,
     clear,
     state,
@@ -108,6 +124,7 @@ async function generate(prompt: string, extra: { previousCode?: string; clientEr
   state.busy = true;
   state.prompt = prompt;
   repairButton.hidden = true;
+  stopWatchingAssets();
   setStatus('Generating…');
   try {
     const res = await fetch('/api/generate', {
@@ -131,6 +148,7 @@ async function generate(prompt: string, extra: { previousCode?: string; clientEr
           (state.lastMount.credits.length ? `\n${state.lastMount.credits.join('\n')}` : ''),
       );
     }
+    if (data.pendingAssets?.length) watchAssets(data.pendingAssets);
   } catch (err) {
     setStatus(`Request failed: ${(err as Error).message}`);
   } finally {
@@ -148,6 +166,45 @@ async function mount(code: string) {
   return state.lastMount;
 }
 
+/**
+ * On-demand assets: the lesson was built from shapes because the library had no model of its subject;
+ * the server is fetching or generating one. Show its progress and, when it is in the library, offer
+ * to build the lesson again around it (never automatically: the learner may be mid-lesson).
+ */
+function watchAssets(pending: { jobId: string; name: string }[]) {
+  const watch = ++assetWatch;
+  const poll = async () => {
+    if (watch !== assetWatch) return;
+    try {
+      state.assetJobs = await Promise.all(pending.map(async (p) => (await fetch(`/api/assets/jobs/${p.jobId}`)).json() as Promise<AssetJob>));
+    } catch {
+      setTimeout(poll, 5000); // the server may be restarting
+      return;
+    }
+    if (watch !== assetWatch) return;
+    assetsEl.textContent = state.assetJobs.map((job) =>
+      job.status === 'done' ? `An accurate model of ${job.name} is ready.`
+        : job.status === 'failed' ? `No accurate model of ${job.name}: ${job.error}`
+          : `Getting an accurate model of ${job.name}: ${job.events[job.events.length - 1]?.message ?? 'queued'}...`).join('\n');
+    const running = state.assetJobs.some((job) => job.status === 'queued' || job.status === 'running');
+    rebuildButton.hidden = running || !state.assetJobs.some((job) => job.status === 'done');
+    if (running) setTimeout(poll, 3000);
+  };
+  void poll();
+}
+
+function stopWatchingAssets() {
+  assetWatch++;
+  state.assetJobs = [];
+  assetsEl.textContent = '';
+  rebuildButton.hidden = true;
+}
+
+/** Build the current lesson again, now that the model it lacked is in the library. */
+async function rebuild() {
+  return state.prompt ? generate(state.prompt) : state;
+}
+
 async function repair() {
   if (!state.prompt || !state.code || state.runtimeErrors.length === 0) return state;
   return generate(state.prompt, { previousCode: state.code, clientError: state.runtimeErrors.join('\n') });
@@ -158,6 +215,7 @@ function clear() {
   state.code = null;
   state.runtimeErrors = [];
   repairButton.hidden = true;
+  stopWatchingAssets();
   setStatus('');
 }
 

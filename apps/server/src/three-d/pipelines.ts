@@ -174,17 +174,34 @@ function extractPython(reply: string): string | null {
 }
 
 /** P3: an agent with Blender tools, served by the Blender MCP server (apps/worker3d). */
+/**
+ * Options for a Blender agent session. Defaults are Phase 3's P3 (build a model from scratch).
+ * - system: the agent's instructions.
+ * - maxTurns: model turns per step.
+ * - turnTimeoutMs: give up on one model turn after this long and retry it (default: the client's 30 minutes).
+ * - look: adds a `look` tool. The harness exports the scene, `render` turns the GLB into pictures and a
+ *   caption, and the agent gets them, so it can see its work instead of inferring it from numbers.
+ */
+export type BlenderSessionOptions = {
+  system?: string;
+  maxTurns?: number;
+  turnTimeoutMs?: number;
+  look?: { description: string; render: (glb: Buffer) => Promise<{ text: string; images: Buffer[] }> };
+};
+
 export class BlenderSession implements Session {
   usage = emptyUsage();
   private messages: OpenAI.Chat.ChatCompletionMessageParam[];
   private version = 0;
+  private maxTurns: number;
 
-  private constructor(private client: Client, private tools: OpenAI.Chat.ChatCompletionTool[], private target: LlmTarget, private jobDir: string, private backend: Backend, system: string, private maxTurns: number) {
-    this.messages = [{ role: 'system', content: system }];
+  private constructor(private client: Client, private tools: OpenAI.Chat.ChatCompletionTool[], private target: LlmTarget, private jobDir: string, private backend: Backend, private options: BlenderSessionOptions) {
+    this.messages = [{ role: 'system', content: options.system ?? systemPrompt('p3-blender') }];
+    this.maxTurns = options.maxTurns ?? MAX_TOOL_TURNS;
+    if (options.look) this.tools.push({ type: 'function', function: { name: 'look', description: options.look.description, parameters: { type: 'object', properties: {} } } });
   }
 
-  /** `system`: the agent's instructions (default: build a model from scratch, Phase 3's P3); `maxTurns`: tool calls per step. */
-  static async open(target: LlmTarget, jobDir: string, backend: Backend, system = systemPrompt('p3-blender'), maxTurns = MAX_TOOL_TURNS): Promise<BlenderSession> {
+  static async open(target: LlmTarget, jobDir: string, backend: Backend, options: BlenderSessionOptions = {}): Promise<BlenderSession> {
     // Local: the MCP server gets the SDK's minimal default environment (no API keys) and runs Blender
     // in the macOS sandbox. Modal: the hosted MCP server gives this session its own Blender sandbox.
     const transport = backend === 'modal'
@@ -197,20 +214,36 @@ export class BlenderSession implements Session {
     const tools = listed.tools
       .filter((t) => t.name !== 'export_glb' && t.name !== 'close_session')
       .map((t) => ({ type: 'function' as const, function: { name: t.name, description: t.description ?? '', parameters: t.inputSchema as Record<string, unknown> } }));
-    return new BlenderSession(client, tools, target, jobDir, backend, system, maxTurns);
+    return new BlenderSession(client, tools, target, jobDir, backend, options);
   }
 
-  /** A long session outlives brief network drops (DNS, Wi-Fi): wait and retry them instead of failing the job. */
+  /**
+   * A long session outlives brief network drops (DNS, Wi-Fi) and stalled requests: wait and retry them
+   * instead of failing the job. With a turn timeout the client's own retries are off, so this loop is
+   * the only one: up to 10 tries per turn, which rides out about 6 minutes without a connection.
+   */
   private async completeRetrying() {
+    const timeoutMs = this.options.turnTimeoutMs;
     for (let attempt = 1; ; attempt++) {
       try {
-        return await completeWithTools(this.messages, this.tools, this.target);
+        return await completeWithTools(this.messages, this.tools, this.target, timeoutMs ? { timeoutMs, maxRetries: 0 } : {});
       } catch (err) {
-        const connection = (err as Error).constructor?.name === 'APIConnectionError' || /fetch failed|ENOTFOUND|ECONNRESET/.test(String((err as Error).message));
-        if (!connection || attempt >= 5) throw err;
-        await this.log(`connection lost (${(err as Error).message}); retrying in 30 s`);
+        const connection = /APIConnection/.test((err as Error).constructor?.name ?? '') || /timed out|fetch failed|ENOTFOUND|ECONNRESET/i.test(String((err as Error).message));
+        if (!connection || attempt >= 10) throw err;
+        await this.log(`no reply (${(err as Error).message}); retrying in 30 s`);
         await new Promise((r) => setTimeout(r, 30_000));
       }
+    }
+  }
+
+  /** The `look` tool: export the scene and let the session's renderer turn it into pictures for the agent. */
+  private async lookAtScene(): Promise<{ text: string; images: Buffer[] }> {
+    try {
+      const out = await this.export();
+      if ('error' in out) return { text: out.error, images: [] };
+      return await this.options.look!.render(out.glb);
+    } catch (err) {
+      return { text: `Could not render the scene: ${(err as Error).message}`, images: [] };
     }
   }
 
@@ -257,11 +290,23 @@ export class BlenderSession implements Session {
       this.messages.push(reply.message);
       if (reply.text) await this.log(`assistant: ${reply.text}`);
       if (!reply.toolCalls.length) return;
+      const pictures: Buffer[] = [];
       for (const call of reply.toolCalls) {
         this.usage.toolCalls++;
-        const result = await this.callTool(call.name, call.arguments);
+        let result: string;
+        if (call.name === 'look' && this.options.look) {
+          const seen = await this.lookAtScene();
+          result = seen.images.length ? `${seen.text}\nThe pictures follow in the next message.` : seen.text;
+          pictures.push(...seen.images);
+        } else {
+          result = await this.callTool(call.name, call.arguments);
+        }
         await this.log(`tool ${call.name}: ${call.arguments.slice(0, 4000)}\n=> ${result.slice(0, 1500)}`);
         this.messages.push({ role: 'tool', tool_call_id: call.id, content: result });
+      }
+      // Tool results carry text only, so pictures go in a user message right after them.
+      if (pictures.length) {
+        this.messages.push({ role: 'user', content: [{ type: 'text', text: 'The pictures from look:' }, ...pictures.map((p) => ({ type: 'image_url' as const, image_url: { url: `data:image/jpeg;base64,${p.toString('base64')}` } }))] });
       }
     }
     // Out of turns: export whatever the scene holds; the model gets a chance to finish on the next step.
@@ -278,7 +323,8 @@ export class BlenderSession implements Session {
     }
   }
 
-  private async export(): Promise<{ glb: Buffer } | { error: string }> {
+  /** The scene as a GLB (also left in the job folder as v<n>.glb). */
+  async export(): Promise<{ glb: Buffer } | { error: string }> {
     const name = `v${++this.version}.glb`;
     const raw = await this.callTool('export_glb', this.backend === 'modal' ? '{}' : JSON.stringify({ filename: name }), false);
     try {

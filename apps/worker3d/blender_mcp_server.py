@@ -93,11 +93,9 @@ async def export_glb(filename: str = "model.glb") -> str:
     name = Path(filename).name
     if not name.endswith(".glb"):
         name += ".glb"
-    result = await bridge.request({"op": "export", "path": str(JOB_DIR / name)}, timeout=120)
     # The file is in the job directory, which the harness reads. Sending it back inline too (base64) broke
     # the stdio connection for a 4.5 MB textured model.
-    result.pop("glb_base64", None)
-    return json.dumps(result)
+    return json.dumps(await bridge.request({"op": "export", "path": str(JOB_DIR / name), "inline": False}, timeout=120))
 
 
 if __name__ == "__main__":

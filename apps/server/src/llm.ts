@@ -106,6 +106,8 @@ export async function completeWithTools(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
   tools: OpenAI.Chat.ChatCompletionTool[],
   target: LlmTarget = defaultTarget,
+  /** Per-request limits, for long agent sessions that do their own retrying (default: the client's). */
+  request: { timeoutMs?: number; maxRetries?: number } = {},
 ): Promise<ToolCompletion> {
   if (!target.apiKey) {
     throw new Error(`No API key for ${target.id}. Add it to the .env file at the repo root.`);
@@ -117,7 +119,10 @@ export async function completeWithTools(
     tools,
     [target.maxTokensParam ?? 'max_completion_tokens']: config.maxCompletionTokens,
     ...target.extraBody,
-  } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming);
+  } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming, {
+    ...(request.timeoutMs != null ? { timeout: request.timeoutMs } : {}),
+    ...(request.maxRetries != null ? { maxRetries: request.maxRetries } : {}),
+  });
   const choice = res.choices[0];
   const toolCalls = (choice?.message?.tool_calls ?? [])
     .filter((c): c is OpenAI.Chat.ChatCompletionMessageFunctionToolCall => c.type === 'function')

@@ -179,6 +179,42 @@ If there's no time for these, the paper's claim narrows to the multi-model bench
 **Exit gate (Fri Nov 13, end of day):** prompt → agent-written code → working in the IWSDK scene, with grabbable objects, for at least 7 of 10 development prompts.
 **Fallback:** if free code is too unreliable, the product switches to Version C and Version A stays a research result. A negative result is still a valid result.
 
+#### RQ1 results: open vs declarative vs controlled (Nov 13)
+
+**Built** (`apps/server/src/a2ui/`):
+
+- **Version C, declarative:** the agent writes A2UI v1.0 messages (`createSurface`, `updateComponents`, `updateDataModel`) against a spatial catalog, `urn:spatial-genui:catalog:spatial:1.0`. 3D: `Scene`, `Shape`, `Group`, `Arrow`, `Orbit`, `Spin`. Panels: `Panel` holding A2UI's basic `Column`/`Row`/`Card`/`Text`/`Button`/`Divider`, plus `QuizCard` and `StepTour`. Values bind with `@path`; buttons call local functions (`setData`, `highlight`, `toggleVisible`, `toggleMotion`, `resetPositions`, `checkSort`, `run`). As far as we know this is the first A2UI renderer for WebXR with hand interaction.
+- **Version D, controlled:** the agent picks one of five hand-built lesson components (`ExplorableObject`, `OrbitSystem`, `ProcessCycle`, `BarChart`, `SortingGame`, each with an optional quiz) and fills in its data; it decides no layout and no interactions.
+- **One renderer for C and D** (`runtime.js`): their JSON compiles into the same kind of module version A writes, so the host, the safety checks, the dry run, the emulator probes and the judge are identical for all three. Only what the agent writes differs.
+- Version A' (code restricted to a helper library) was not built.
+
+**Method:** the 12 held-out prompts (`test-12.json`) × 2 repetitions per model, the same agent loop (≤2 repairs), the emulator probes, and Claude Opus 5.5 as the single independent judge, as in runs 3-5. Version A is runs 4 (Sonnet) and 3 (Ember); its system prompt is byte-identical to today's. Data: `bench/results/_rq1-compare` (combined), `_rq1-a2ui-v3-*`, `_rq1-template-v2`.
+
+| Version | Model | pass@1 | Success | Grab works | Quality (1-5) | Median time | Output tokens | Cost / success |
+|---|---|---|---|---|---|---|---|---|
+| A, open (code) | Sonnet 5.5 | 100% | 100% | 100% | **4.29** | 41.7 s | 6,399 | $0.070 |
+| C, declarative (A2UI) | Sonnet 5.5 | 71% | 100% | 90% | 3.88 | 39.8 s | 7,653 | $0.087 |
+| D, controlled (templates) | Sonnet 5.5 | 100% | 100% | 67% | 3.01 | **10.7 s** | 1,443 | $0.017 |
+| A, open (code) | Ember 1.0 | 100% | 100% | 100% | **4.30** | 27.6 s | 17,063 | – |
+| C, declarative (A2UI) | Ember 1.0 | 63% | 92% | 85% | 3.60 | 30.4 s | 13,610 | $0.008 |
+| D, controlled (templates) | Ember 1.0 | 100% | 100% | 67% | 2.98 | **8.6 s** | 3,796 | $0.002 |
+
+Every generated scene that passed mounted cleanly in the emulator (142 of 142).
+
+**Findings:**
+
+1. **With current frontier models, open code is both the most reliable and the best.** This goes against LLMER's argument that JSON avoids script errors. Code passed every check on the first try; A2UI needed repairs in about a third of runs (panel text too small, malformed or misnested JSON) and failed 2 of 24 for Ember.
+2. **Control buys reliability and speed and costs fit.** Templates never failed and were 3-4× faster and about 4× cheaper than code with the same model (Sonnet: $0.017 vs $0.070 per lesson), but scored 3.0. Request fidelity was 2.3 against 4.6 for code: a hand-built component rarely fits a request it wasn't built for (a colour button, a habit tracker).
+3. **Declarative sits in between:** 0.4-0.7 below code and 0.6-0.9 above templates (Sonnet / Ember).
+4. **Caveat:** version A's prompt was tuned over four runs on the dev prompts, while C and D are first versions.
+
+**What the first C/D runs found in our own renderer** (fixed before the measured runs; earlier runs kept as a record):
+
+- Panel turns written as `[x, y, z]` were ignored, so every panel faced straight ahead. The D lessons were recompiled from their saved JSON; no model calls changed.
+- "Unknown function undefined" gave the model nothing to repair with.
+- A single number for `rotationDeg` was rejected.
+- Ember sometimes misplaces one closing bracket deep inside nested actions. A bounded repair now tries small edits at the parse error and keeps only edits that let parsing get further; the result still goes through every check.
+
 ### Phase 2: LLM benchmark for spatial GenUI
 
 **Goal:** a measured answer to which model generates spatial UI best.
@@ -476,6 +512,43 @@ Triangles, meshes, time and cost are for the pipeline alone (medians; cost is th
 | Full lesson, excluding slow 3D | 30 s or less |
 
 **Measure:** compare against generating everything one after another, and re-run part of the benchmark to confirm quality didn't drop.
+
+#### RQ4 results: parallel builders (Nov 13)
+
+**Built** (`apps/server/src/a2ui/parallel.ts`, on version C's catalog and renderer):
+
+1. **Plan:** a fast planner (Haiku 5.5, or Ember at low reasoning) splits the lesson into 2-6 parts. Each part gets its place, the ids other parts may refer to (`exports`), and the shared data paths.
+2. **Placeholders** appear as soon as the plan exists.
+3. **Builders:** one per part, all at the same time, with the same model as one-shot.
+4. **Per-part checks:** each part passes the catalog checks and its own dry run, with the other parts' exports as stand-ins, and gets the same 1 + 2 attempts as one-shot generation.
+5. **Streaming:** each part streams to the client as A2UI's `updateComponents` the moment it passes, with AG-UI-style events: `RUN_STARTED`, `PLAN_READY`, `COMPONENT_STARTED`/`READY`/`FAILED`, `RUN_FINISHED`.
+
+`POST /api/generate-stream` serves it, and `/?parallel=1` streams lessons into the headset.
+
+**Method:** the same 12 prompts × 2 against one-shot version C with the same checker (v3), builder model, emulator and judge. `npm run bench:rq4`. Data: `bench/results/_rq4-parallel-v3-*` vs `_rq1-a2ui-v3-*`.
+
+| | Model | Success | First try | Placeholders | First real content | Full lesson | Output tokens | Quality (1-5) |
+|---|---|---|---|---|---|---|---|---|
+| One-shot | Sonnet 5.5 | 24/24 | 17 | – | 39.8 s | 39.8 s | 5,622 | 3.88 |
+| Parallel | Sonnet 5.5 (+ Haiku plans) | 23/24 | 14 | 6.2 s | **18.5 s** | 50.0 s | 9,093 | 3.62 |
+| One-shot | Ember 1.0 | 22/24 | 15 | – | 29.1 s | 29.1 s | 12,017 | 3.84 |
+| Parallel | Ember 1.0 (+ Ember low plans) | 20/24 | 12 | 4.7 s | **14.0 s** | 40.0 s | 20,712 | 3.58 |
+
+**Findings:**
+
+1. **Parallel builders show real content about 2× sooner**, and something within 5-6 s. But the whole lesson takes 25-40% longer, uses 1.6-1.7× the output tokens, and scores about 0.26 lower: parts built apart fit together less well than one design.
+2. **The latency targets above are not met.** Placeholders arrive in 5-6 s against a 1 s target (the planner's call), first content in 14-19 s against 8 s, the full lesson in 40-50 s against 30 s.
+3. **The product therefore keeps one-shot code (version A) for live lessons**, with ready-made lessons for an instant start (Phase 4). Parallel streaming is there for requests where showing progress matters.
+
+**Design iterations** (each kept as a record):
+
+| Version | Change | Ember success |
+|---|---|---|
+| v1 | 2 attempts per part; text size and budgets checked only on the merged lesson | 7/24 |
+| v2 | the same attempt budget as one-shot, plus a dry run per part | 10/24 |
+| v3 | the JSON repair and wrapped-step fixes from RQ1 | 20/24 |
+
+The main structural risk remains that a lesson needs every part to succeed. A lesson with a failed part still shows what was built, but counts as a failure.
 
 ### Phase 6: final architecture and deployment
 

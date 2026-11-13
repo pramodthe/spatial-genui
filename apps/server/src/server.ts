@@ -1,18 +1,19 @@
 import { createReadStream, statSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { generate } from './agent.js';
+import { generate, type GenerationResult } from './agent.js';
 import { config } from './config.js';
 import { assetPath, libraryCatalog, shortCredit } from './library.js';
 import type { LlmTarget } from './llm.js';
 import { loadModel } from './models.js';
 import { EXAMPLE_MODULE } from './prompt.js';
+import { admit, recordSpend, spendToday, visitorOf } from './guard.js';
 
 const MAX_BODY_BYTES = 200_000;
 
 const server = createServer(async (req, res) => {
   try {
     if (req.method === 'GET' && req.url === '/api/health') {
-      return send(res, 200, { ok: true, model: config.model, provider: new URL(config.baseURL).host, hasKey: Boolean(config.apiKey) });
+      return send(res, 200, { ok: true, model: config.model, provider: new URL(config.baseURL).host, hasKey: Boolean(config.apiKey), spend: spendToday() });
     }
     if (req.method === 'GET' && req.url === '/api/library/catalog') {
       // What the browser host needs to build asset handles: parts, anchors, credit (no file paths).
@@ -40,11 +41,14 @@ const server = createServer(async (req, res) => {
         // Host smoke test without an API call: the system prompt's own example module.
         return send(res, 200, { ok: true, prompt, model: 'built-in example', code: EXAMPLE_MODULE, attempts: [{ stage: 'ok', ms: 0 }], totalMs: 0 });
       }
+      const refusal = await admit(visitorOf(req), prompt);
+      if (refusal) return send(res, refusal.status, { ok: false, error: refusal.error, reason: refusal.reason });
       const result = await generate(prompt, {
         previousCode: typeof body.previousCode === 'string' ? body.previousCode : undefined,
         clientError: typeof body.clientError === 'string' ? body.clientError : undefined,
         onDemand: config.onDemandAssets,
       });
+      await spent(result);
       return send(res, 200, result);
     }
     // Parallel generation (SPEC.md Phase 5): the run's events as newline-delimited JSON while it happens
@@ -55,9 +59,13 @@ const server = createServer(async (req, res) => {
       if (!prompt || prompt.length > 2000) {
         return send(res, 400, { error: 'Send { "prompt": "…" } (1–2000 characters).' });
       }
+      const refusal = await admit(visitorOf(req), prompt);
+      if (refusal) return send(res, refusal.status, { ok: false, error: refusal.error, reason: refusal.reason });
       res.writeHead(200, { 'content-type': 'application/x-ndjson', 'cache-control': 'no-cache' });
       const line = (data: unknown) => res.write(JSON.stringify(data) + '\n');
-      const result = await generate(prompt, { format: 'a2ui-parallel', planner: await parallelPlanner(), onEvent: line });
+      const plannerTarget = await parallelPlanner();
+      const result = await generate(prompt, { format: 'a2ui-parallel', planner: plannerTarget, onEvent: line });
+      await spent(result, plannerTarget?.id);
       line({ type: 'RESULT', result });
       res.end();
       return;
@@ -102,6 +110,15 @@ function parallelPlanner(): Promise<LlmTarget | undefined> {
     return undefined;
   });
   return planner;
+}
+
+/** Count a run toward the daily budget: every call at its own model's price (planner calls at the planner's). */
+function spent(result: GenerationResult, plannerId?: string) {
+  return recordSpend(result.attempts.map((a) => ({
+    model: a.role === 'planner' && plannerId ? plannerId : result.model,
+    promptTokens: a.promptTokens,
+    completionTokens: a.completionTokens,
+  })));
 }
 
 function send(res: ServerResponse, status: number, data: unknown) {

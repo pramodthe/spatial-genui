@@ -39,6 +39,8 @@ export type BenchRow = {
   firstTryOk: boolean;
   stages: string[];
   failureKinds: string[];
+  /** The error each failed attempt got back (shortened), for the failure analysis. */
+  attemptErrors?: string[];
   attempts: number;
   firstAttemptMs: number;
   totalMs: number;
@@ -152,6 +154,7 @@ async function runOne(m: ModelEntry, p: PromptCase, rep: number): Promise<BenchR
       firstTryOk: format === 'a2ui-parallel' ? r.attempts.every((a) => a.stage === 'ok') : r.attempts[0]?.stage === 'ok',
       stages: r.attempts.map((a) => a.stage),
       failureKinds: r.attempts.filter((a) => a.stage !== 'ok').map((a) => classifyFailure(a.stage, a.error ?? '', a.finishReason)),
+      attemptErrors: r.attempts.filter((a) => a.stage !== 'ok').map((a) => `${a.role ? `${a.role}: ` : ''}${(a.error ?? '').slice(0, 400)}`),
       attempts: r.attempts.length,
       firstAttemptMs: r.attempts[0]?.ms ?? 0,
       totalMs: r.totalMs,

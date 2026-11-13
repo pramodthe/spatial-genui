@@ -28,6 +28,7 @@ World.create(
       const prompt = lessonPrompt();
       if (prompt) void generate(prompt);
     },
+    ask: (prompt) => void generate(prompt),
     onStatus: onLessonStatus,
   });
   createOverlay();

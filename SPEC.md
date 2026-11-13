@@ -594,6 +594,29 @@ The main structural risk remains that a lesson needs every part to succeed. A le
 
 ---
 
+### Phase 7: live generation quality and saved courses (Nov 13-14)
+
+The product is lessons the agent generates, not a model library. This phase raises the look of generated
+lessons and lets slow, careful generation happen in the background.
+
+- **Paintbox (`kit`)**: procedural materials, textures, shape helpers and effects for generated code.
+- **Saved courses** (`apps/server/src/courses.ts`, picker shelf): a subject becomes a planned course of
+  3-4 lessons ending in a quiz; lessons are written one at a time, just in time, and kept in `data/courses`.
+  Measured: 210-364 s per lesson (Sonnet 5.5), three lessons, all first try.
+- **Grab-and-drop quiz** (`kit.card`, `kit.matchQuiz`): name cards dropped on the part they name. One quiz
+  lesson written live, first try, 201 s. Drop logic tested by script; not yet tested with real hands.
+- **Look-and-fix** (`npm run review`, automatic for course lessons): the agent sees three pictures of its
+  lesson and revises it once. Two lessons tried: one clear gain (jet engine), one small (tank); one more
+  writing pass each (112 s, 172 s). Not yet scored by a judge.
+- **3D paths on one object** (a Sherman tank, one run each; scratch in `bench/results/_compare3`):
+  three.js code 573 s and about $0.80, about 50 movable parts; TRELLIS 476 s, realistic, one fused piece;
+  Blender agent with Muse Spark about 36 min, blocky; TRELLIS body split by the Blender agent: 5 named
+  parts for 552 s and about $0.01 more, with rough cuts.
+
+Open: a measured comparison over more objects (needed before any claim in the paper), a looks score on the
+benchmark (`bench:judge --looks` exists, not yet run), capping cut faces of split parts, and the latency
+of live lessons (3-6 minutes).
+
 ## 7. Schedule (parallel lanes)
 
 The schedule assumes 2 people. With 3, split Lane B into "XR" and "3D".

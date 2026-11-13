@@ -18,3 +18,4 @@ bench/prompts
 data/*
 !data/library
 docs
+apps/server/.cache

@@ -180,6 +180,7 @@ function renderSpatialA2UI(api, surface) {
     if (Array.isArray(p)) object.position.set(num(p[0], 0), num(p[1], 0), num(p[2], 0));
     const r = spec.rotationDeg;
     if (Array.isArray(r)) object.rotation.set(num(r[0], 0) * DEG, num(r[1], 0) * DEG, num(r[2], 0) * DEG);
+    else if (typeof r === 'number') object.rotation.y = num(r, 0) * DEG; // a single number turns around y
     if (typeof spec.scale === 'number') object.scale.setScalar(spec.scale);
     if (typeof spec.name === 'string') object.name = spec.name;
   }
@@ -332,7 +333,8 @@ function renderSpatialA2UI(api, surface) {
     const handle = ui('<style>\n' + STYLE + '\n</style><div class="panel">' + contentMarkup + '</div>', {
       width: Math.min(Math.max(num(spec.width, 0.32), 0.2), 0.6),
       position,
-      rotationY: Math.max(-0.4, Math.min(0.4, num(spec.rotationDeg, 0) * DEG)),
+      // Panels only turn around y: [x, y, z] or a single number both work.
+      rotationY: Math.max(-0.4, Math.min(0.4, num(Array.isArray(spec.rotationDeg) ? spec.rotationDeg[1] : spec.rotationDeg, 0) * DEG)),
     });
     return handle;
   }

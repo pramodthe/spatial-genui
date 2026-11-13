@@ -3,7 +3,10 @@
 // A2UI components, all at the same time; each part streams to the client the moment it passes its checks
 // (A2UI's createSurface + updateComponents), over placeholders shown as soon as the plan exists.
 // Compared with one-shot version C (same catalog, renderer, checks and builder model).
+import { config } from '../config.js';
 import { complete, type ChatMessage, type LlmTarget } from '../llm.js';
+import { dryRun } from '../sandbox.js';
+import { validateModule } from '../validate.js';
 import { checkSurface, compileSurface, extractJson, SPATIAL_CATALOG_ID, type A2UIComponent, type Surface } from './catalog.js';
 import { CATALOG_DOCS, FRAMING, SPACE_AND_QUALITY, jsonRepairMessage } from './prompts.js';
 
@@ -135,10 +138,13 @@ export async function generateParallel(
   // 3. The finished lesson: the parts that made it, checked together.
   if (ready.size === 0) return finish(false, 'No part was built.');
   const surface = merge(plan, ready, false);
-  const problems = checkSurface(surface);
-  if (problems.length) return finish(false, `The merged lesson failed its checks: ${problems.join(' ')}`);
+  // Whatever was built is still a lesson (references to a missing part do nothing), so the client gets it
+  // either way; a failed part or a failed merged check still makes the run a failure.
   result.code = compileSurface(surface);
   result.source = JSON.stringify(surface);
+  const missing = new Set(result.failedParts.flatMap((id) => plan!.parts.find((p) => p.id === id)?.exports ?? []));
+  const problems = checkSurface(surface).filter((problem) => ![...missing].some((id) => problem.includes(`"${id}"`)));
+  if (problems.length) return finish(false, `The merged lesson failed its checks: ${problems.join(' ')}`);
   return finish(true);
 
   function finish(ok: boolean, error?: string): ParallelResult {
@@ -157,17 +163,43 @@ async function buildPart(plan: Plan, part: PlanPart, target: LlmTarget, calls: C
     { role: 'user', content: `The plan:\n${JSON.stringify(plan, null, 1)}\n\nBuild part "${part.id}".` },
   ];
   let lastError = '';
-  for (let i = 0; i < 2; i++) {
+  // The same attempt budget as one-shot generation (1 + config.maxRepairs).
+  for (let i = 0; i <= config.maxRepairs; i++) {
     const reply = await complete(messages, target);
     messages.push({ role: 'assistant', content: reply.text });
     const parsed = extractJson(reply.text) as { top?: unknown; components?: unknown } | null;
     const problems = parsed ? checkPart(plan, part, parsed) : [reply.finishReason === 'length' ? 'The reply was cut off; write a shorter part.' : 'No valid JSON found (one ```json block).'];
+    // The part on its own through the host checks and the dry run (text size, budgets), so the builder
+    // can fix what one-shot generation would have been asked to fix.
+    if (problems.length === 0) problems.push(...(await dryRunPart(plan, part, parsed as { top: string[]; components: A2UIComponent[] })));
     calls.push(record(`part:${part.id}`, reply, problems.length === 0, problems.join(' ')));
     if (problems.length === 0) return parsed as { top: string[]; components: A2UIComponent[] };
     lastError = problems.join(' ');
     messages.push({ role: 'user', content: jsonRepairMessage(problems.join('\n')) });
   }
   return { error: lastError };
+}
+
+async function dryRunPart(plan: Plan, part: PlanPart, built: { top: string[]; components: A2UIComponent[] }): Promise<string[]> {
+  const validation = validateModule(compileSurface(probeSurface(plan, part, built)));
+  if (!validation.ok) return [validation.error];
+  const run = await dryRun(validation.transformed, {});
+  return run.ok ? [] : [run.error];
+}
+
+/** The part alone in a scene, with the other parts' exports standing in as small placeholders. */
+function probeSurface(plan: Plan, part: PlanPart, built: { top: string[]; components: A2UIComponent[] }): Surface {
+  const others = plan.parts.filter((p) => p.id !== part.id).flatMap((p) => p.exports ?? []);
+  return {
+    surfaceId: 'probe',
+    catalogId: SPATIAL_CATALOG_ID,
+    dataModel: plan.dataModel,
+    components: [
+      { id: 'root', component: 'Scene', children: [...built.top, ...others] },
+      ...built.components,
+      ...others.map((id) => ({ id, component: 'Shape', shape: 'sphere', radius: 0.01 })),
+    ],
+  };
 }
 
 /** A part's own problems: its ids, its exports, and everything the renderer checks, with the other
@@ -181,18 +213,7 @@ function checkPart(plan: Plan, part: PlanPart, built: { top?: unknown; component
   for (const id of part.exports ?? []) if (!own.has(id)) problems.push(`Create "${id}": it is in your part's exports.`);
   for (const id of built.top as string[]) if (!own.has(id)) problems.push(`top lists "${id}", which you didn't create.`);
   if (problems.length) return problems;
-  const others = plan.parts.filter((p) => p.id !== part.id).flatMap((p) => p.exports ?? []);
-  const probe: Surface = {
-    surfaceId: 'probe',
-    catalogId: SPATIAL_CATALOG_ID,
-    dataModel: plan.dataModel,
-    components: [
-      { id: 'root', component: 'Scene', children: [...(built.top as string[]), ...others] },
-      ...components,
-      ...others.map((id) => ({ id, component: 'Shape', shape: 'sphere', radius: 0.01 })),
-    ],
-  };
-  return checkSurface(probe);
+  return checkSurface(probeSurface(plan, part, built as { top: string[]; components: A2UIComponent[] }));
 }
 
 function checkPlan(plan: unknown): string[] {

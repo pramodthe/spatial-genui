@@ -140,8 +140,11 @@ export function checkSurface(surface: Surface): string[] {
       else if (typeof c.answer !== 'number' || c.answer < 0 || c.answer >= options.length) problems.push(`"${c.id}": answer is the index (0-based) of the right option.`);
     }
     if (c.component === 'StepTour' && (!Array.isArray(c.steps) || c.steps.length === 0)) problems.push(`"${c.id}": steps must be a non-empty list.`);
+    // rotationDeg may also be a single number (a turn around y).
+    if (typeof c.rotationDeg === 'number' && !Number.isFinite(c.rotationDeg)) problems.push(`"${c.id}": rotationDeg must be a number or [x, y, z].`);
     for (const key of ['position', 'rotationDeg', 'from', 'to', 'center']) {
       const v = c[key];
+      if (key === 'rotationDeg' && typeof v === 'number') continue;
       if (v !== undefined && !(Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === 'number' && Number.isFinite(n)))) problems.push(`"${c.id}": ${key} must be [x, y, z] numbers.`);
     }
     // Hand traits only work on direct children of the scene.
@@ -189,7 +192,11 @@ function checkAction(owner: string, action: Record<string, any>, byId: Map<strin
   const visit = (fn: Record<string, any>) => {
     const name = fn?.['@call'];
     if (typeof name !== 'string' || !(name in FUNCTIONS)) {
-      problems.push(`"${owner}": unknown function ${JSON.stringify(name)}. Use: ${Object.keys(FUNCTIONS).join(', ')}.`);
+      // Say what was written next to the expected shape: the usual mistake is the shape, not the name.
+      const wrote = JSON.stringify(fn)?.slice(0, 120);
+      problems.push(typeof name === 'string'
+        ? `"${owner}": unknown function "${name}". Use: ${Object.keys(FUNCTIONS).join(', ')}.`
+        : `"${owner}": a function call is {"@call": "<name>", "args": {...}}, e.g. {"functionCall": {"@call": "highlight", "args": {"target": "some_id"}}}; you wrote ${wrote}.`);
       return;
     }
     const args = fn.args ?? {};

@@ -7,7 +7,8 @@ import { assetPath, libraryCatalog, shortCredit } from './library.js';
 import type { LlmTarget } from './llm.js';
 import { loadModel } from './models.js';
 import { EXAMPLE_MODULE } from './prompt.js';
-import { admit, recordSpend, spendToday, visitorOf } from './guard.js';
+import { admit, admitVoice, recordSpend, spendToday, visitorOf } from './guard.js';
+import { transcribe } from './voice.js';
 
 const MAX_BODY_BYTES = 200_000;
 
@@ -71,6 +72,15 @@ const server = createServer(async (req, res) => {
       res.end();
       return;
     }
+    // Voice input from the headset (Quest Browser has no speech recognition): a short 16 kHz mono WAV in,
+    // the transcript out. The Meta key stays on the server.
+    if (req.method === 'POST' && req.url === '/api/transcribe') {
+      const refusal = admitVoice(visitorOf(req));
+      if (refusal) return send(res, refusal.status, { ok: false, error: refusal.error, reason: refusal.reason });
+      const audio = await readBytes(req, MAX_AUDIO_BYTES);
+      const result = await transcribe(audio);
+      return send(res, result.ok ? 200 : 502, result);
+    }
     // On-demand assets: progress of a background model job started by a lesson request.
     const jobMatch = req.method === 'GET' && req.url?.match(/^\/api\/assets\/jobs(?:\/([a-z0-9-]+))?$/);
     if (jobMatch) {
@@ -122,6 +132,20 @@ function serveStatic(url: string, res: ServerResponse) {
     'cache-control': immutable ? 'public, max-age=31536000, immutable' : 'no-cache',
   });
   createReadStream(file).pipe(res);
+}
+
+// About a minute of 16 kHz mono 16-bit audio.
+const MAX_AUDIO_BYTES = 2_000_000;
+
+async function readBytes(req: IncomingMessage, limit: number): Promise<Buffer> {
+  let size = 0;
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > limit) throw new Error('Recording too long.');
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
 }
 
 async function readJson(req: IncomingMessage): Promise<any> {

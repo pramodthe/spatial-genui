@@ -121,6 +121,19 @@ async function checkContent(prompt: string): Promise<{ refusal: Refusal | null; 
   }
 }
 
+// Voice: transcription is cheap ($3 per 1,000 audio-minutes) but still limited per visitor.
+const VOICE_LIMIT = 20;
+const recentVoice = new Map<string, number[]>();
+
+export function admitVoice(visitor: string): Refusal | null {
+  const now = Date.now();
+  const times = (recentVoice.get(visitor) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
+  if (times.length >= VOICE_LIMIT) return { status: 429, reason: 'rate', error: 'Too many voice requests; try again in a few minutes.' };
+  times.push(now);
+  recentVoice.set(visitor, times);
+  return null;
+}
+
 /** Every guard, cheapest first. Null means go ahead (and the request counts toward the visitor's limit). */
 export async function admit(visitor: string, prompt: string): Promise<Refusal | null> {
   const rate = checkRate(visitor);

@@ -94,7 +94,11 @@ ${SPACE_AND_QUALITY}`;
 /** Plan, build the parts in parallel, and merge. `onEvent` gets the stream (for the client). */
 export async function generateParallel(
   prompt: string,
-  options: { builder: LlmTarget; planner?: LlmTarget; onEvent?: (event: RunEvent) => void },
+  options: {
+    builder: LlmTarget; planner?: LlmTarget; onEvent?: (event: RunEvent) => void;
+    /** The app: if the planner's provider fails, plan with the builder instead (benchmarks keep the planner fixed). */
+    plannerFallback?: boolean;
+  },
 ): Promise<ParallelResult> {
   const started = performance.now();
   const now = () => Math.round(performance.now() - started);
@@ -107,7 +111,14 @@ export async function generateParallel(
   const planMessages: ChatMessage[] = [{ role: 'system', content: PLANNER_PROMPT }, { role: 'user', content: prompt }];
   let plan: Plan | undefined;
   for (let i = 0; i < 2 && !plan; i++) {
-    const reply = await complete(planMessages, options.planner ?? options.builder);
+    let reply;
+    try {
+      reply = await complete(planMessages, options.planner ?? options.builder);
+    } catch (err) {
+      if (!options.plannerFallback || !options.planner) throw err;
+      console.warn(`Planner failed (${(err as Error).message}); the builder plans.`);
+      reply = await complete(planMessages, options.builder);
+    }
     const problems = checkPlan(extractJson(reply.text));
     calls.push(record('planner', reply, problems.length === 0, problems.join(' ')));
     planMessages.push({ role: 'assistant', content: reply.text });

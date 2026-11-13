@@ -69,7 +69,7 @@ export async function generate(
   options: {
     previousCode?: string; clientError?: string; target?: LlmTarget; log?: boolean; library?: boolean; onDemand?: boolean; format?: GenUIFormat;
     /** Parallel generation: the planner model (default: the same as target) and the event stream. */
-    planner?: LlmTarget; onEvent?: (event: RunEvent) => void;
+    planner?: LlmTarget; onEvent?: (event: RunEvent) => void; plannerFallback?: boolean;
   } = {},
 ): Promise<GenerationResult> {
   const target = options.target ?? defaultTarget;
@@ -196,10 +196,10 @@ async function finishParallel(
   result: GenerationResult,
   prompt: string,
   target: LlmTarget,
-  options: { planner?: LlmTarget; onEvent?: (event: RunEvent) => void; log?: boolean },
+  options: { planner?: LlmTarget; onEvent?: (event: RunEvent) => void; log?: boolean; plannerFallback?: boolean },
   started: number,
 ): Promise<GenerationResult> {
-  const run = await generateParallel(prompt, { builder: target, planner: options.planner, onEvent: options.onEvent });
+  const run = await generateParallel(prompt, { builder: target, planner: options.planner, onEvent: options.onEvent, plannerFallback: options.plannerFallback });
   result.attempts.push(...run.calls.map((c) => ({
     ms: c.ms, promptTokens: c.promptTokens, completionTokens: c.completionTokens, finishReason: c.finishReason,
     stage: c.ok ? ('ok' as const) : ('validate' as const), error: c.error, role: c.role,

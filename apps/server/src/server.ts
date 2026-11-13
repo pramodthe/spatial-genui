@@ -66,7 +66,7 @@ const server = createServer(async (req, res) => {
       res.writeHead(200, { 'content-type': 'application/x-ndjson', 'cache-control': 'no-cache' });
       const line = (data: unknown) => res.write(JSON.stringify(data) + '\n');
       const plannerTarget = await parallelPlanner();
-      const result = await generate(prompt, { format: 'a2ui-parallel', planner: plannerTarget, onEvent: line });
+      const result = await generate(prompt, { format: 'a2ui-parallel', planner: plannerTarget, onEvent: line, plannerFallback: true });
       await spent(result, plannerTarget?.id);
       line({ type: 'RESULT', result });
       res.end();

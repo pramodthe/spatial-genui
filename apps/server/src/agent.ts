@@ -74,6 +74,8 @@ export async function generate(
     previousCode?: string; clientError?: string; target?: LlmTarget;
     /** Look-and-fix: pictures (data URLs) of previousCode as it rendered; the agent revises it once. */
     pictures?: string[]; log?: boolean; library?: boolean; onDemand?: boolean; format?: GenUIFormat;
+    /** Library models this lesson is given, instead of letting the router choose (a course's own generated model). */
+    assets?: string[];
     /** Parallel generation: the planner model (default: the same as target) and the event stream. */
     planner?: LlmTarget; onEvent?: (event: RunEvent) => void; plannerFallback?: boolean;
   } = {},
@@ -85,7 +87,7 @@ export async function generate(
   const useLibrary = (options.library ?? true) && format === 'code';
   const started = performance.now();
   // Route first: only the models this request needs go into the prompt (molecules get built here).
-  const route = useLibrary && !options.previousCode ? await routeAssets(prompt, target, { wantObjects: options.onDemand }) : undefined;
+  const route = useLibrary && !options.previousCode && !options.assets ? await routeAssets(prompt, target, { wantObjects: options.onDemand }) : undefined;
   // On-demand assets: a real object the library lacks is fetched or generated in the background. This
   // lesson is written now without it; the client can ask again once the model is in the library.
   let pendingAssets: GenerationResult['pendingAssets'];
@@ -100,7 +102,7 @@ export async function generate(
   }
   const knownAssets = useLibrary ? new Set(libraryCatalog().keys()) : new Set<string>();
   const messages: ChatMessage[] = [
-    { role: 'system', content: useLibrary ? SYSTEM_PROMPT + librarySection(route?.assets ?? []) : systemPromptFor(format) },
+    { role: 'system', content: useLibrary ? SYSTEM_PROMPT + librarySection(options.assets ?? route?.assets ?? []) : systemPromptFor(format) },
     { role: 'user', content: prompt },
   ];
   const repair = format === 'code' ? repairMessage : jsonRepairMessage;

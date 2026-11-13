@@ -294,7 +294,7 @@ class LessonPickerSystem extends createSystem({
   /** Keep asking while something is being planned or written. */
   private pollCourses() {
     clearTimeout(this.coursePoll);
-    const active = this.courses.some((c) => c.status === 'planning' || c.lessons.some((l) => l.status === 'generating'));
+    const active = this.courses.some((c) => c.status === 'planning' || c.model?.status === 'building' || c.lessons.some((l) => l.status === 'generating'));
     if (active) this.coursePoll = window.setTimeout(() => void this.refreshCourses(), COURSE_POLL_MS);
   }
 
@@ -313,15 +313,18 @@ class LessonPickerSystem extends createSystem({
       document.getElementById(`course-${i}-state`)?.setProperties({ text: courseProgress(row) });
     }
     if (!course) return;
+    const modelling = course.model?.status === 'building';
     document.getElementById('course-sub')?.setProperties({
-      text: ascii(course.status === 'failed' ? `Could not be planned: ${course.error ?? ''}` : course.subtitle || 'Pinch a lesson to open it.'),
+      text: ascii(course.status === 'failed' ? `Could not be planned: ${course.error ?? ''}`
+        : modelling ? `Building its 3D model: ${course.model?.stage ?? 'starting'}`
+        : course.subtitle || 'Pinch a lesson to open it.'),
     });
     for (let i = 0; i < COURSE_STEPS; i++) {
       const lesson = course.lessons[i];
       document.getElementById(`step-${i}`)?.setProperties({ display: lesson ? 'flex' : 'none', borderColor: lesson?.status === 'ready' ? '#3cb44b' : '#4a4e57' });
       if (!lesson) continue;
       document.getElementById(`step-${i}-title`)?.setProperties({ text: `${i + 1}. ${ascii(lesson.title)}` });
-      document.getElementById(`step-${i}-state`)?.setProperties({ text: STEP_STATES[lesson.status] });
+      document.getElementById(`step-${i}-state`)?.setProperties({ text: modelling && lesson.status === 'pending' ? 'Waits for the 3D model' : STEP_STATES[lesson.status] });
     }
   }
 

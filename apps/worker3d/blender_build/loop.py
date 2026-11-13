@@ -33,7 +33,8 @@ AGAIN = 2  # times a dropped sandbox call is made again
 REFUSALS = 3  # finish is sent back this many times at most
 SHAPES = ("prism", "box", "ball", "sheet", "rounded_path", "lathe", "rod", "tube", "bevel", "smooth", "cut", "copies", "material")
 SPLIT_SHAPES = ("take_box", "take_cylinder")
-SPLIT_TURNS = 60  # looking at each cut costs turns a build from nothing does not need
+SPLIT_TURNS = 40  # looking at each cut costs turns a build from nothing does not need
+SPLIT_WRAP_UP = 22  # from this turn the agent is told to stop refining: a course is waiting for the model
 PROFILE_TOOL = {"type": "function", "name": "profile", "description": "Measure one object's shape in a single call: it is sliced into 12 slabs along each axis, and each slab reports how far the surface reaches in the other two directions (mm). A jump between neighbouring slabs marks a joint: where a turret meets a deck, where a barrel leaves a turret, where a track ends. Use this instead of running code to measure.",
                 "parameters": {"type": "object", "additionalProperties": False, "required": ["part"], "properties": {"part": {"type": "string", "description": "exact object name, such as body"}}}}
 PROFILE = """
@@ -359,6 +360,9 @@ class Live:
             if self.spent > TOKENS * WRAP_UP and not warned:
                 warned = True
                 conversation.append({"type": "message", "role": "user", "content": [{"type": "input_text", "text": "You are near the budget. Fix only what is plainly wrong, then call finish."}]})
+            elif ASSETS and turn >= SPLIT_WRAP_UP and not warned:
+                warned = True
+                conversation.append({"type": "message", "role": "user", "content": [{"type": "input_text", "text": "You have used most of your calls. Rough parts now are worth more than perfect parts later: stop refining, name what you have, and call finish."}]})
             self.save()
             if self.result:
                 break

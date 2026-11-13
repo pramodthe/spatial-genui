@@ -1,12 +1,15 @@
 """Library asset from a finished GLB whose top-level objects are the parts (e.g. a model repaired in
-Blender by bench3d:repair). Usage:
+Blender by bench3d:repair, or a generated model the Blender agent cut into parts). Usage:
     python library/ingest_glb.py <model.glb> --like <catalog entry .json> --id <new id> --note "<what changed>" [--out data/library]
+        [--view front|side|back|"opposite side"] [--longest <metres>]
+--view turns the model so that view of it faces the learner (+Z); --longest scales it to that longest side.
 
 Each top-level node is one part, named after the node; its meshes keep their materials. A part whose
 node carries motion custom properties (Blender: motion_type "rotate" | "slide", motion_axis [x, y, z]
 in Blender's Z-up world frame, motion_range [from, to] in degrees or metres) becomes a moving part:
 its node sits at the object's origin (the pivot), and the motion is converted to glTF's Y-up frame.
-Title, concept, credit, licence and provenance come from the --like entry (the model before repair).
+Title, concept, credit, licence and provenance come from the --like entry (the model before repair, or
+a description of a new model: without an "id" it is not recorded as a repair).
 
 Trusted code: it reads model files (no code in them runs) and writes library files.
 """
@@ -15,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 import struct
 import sys
@@ -25,6 +29,7 @@ import trimesh
 
 from common import write_asset
 
+TURN_DEG = {"front": 0, "side": -90, "back": 180, "opposite side": 90}  # as in retrieved.py: brings that render view to +Z
 PALETTE = ["#e6194b", "#3cb44b", "#4363d8", "#ffe119", "#f58231", "#911eb4", "#42d4f4", "#f032e6", "#bfef45", "#fabed4"]
 
 
@@ -64,7 +69,7 @@ def preview(entry: dict, out: Path, path: Path) -> None:
     path.write_bytes(shown.export(file_type="glb"))
 
 
-def ingest(glb: Path, like: dict, asset_id: str, note: str, out: Path) -> dict:
+def ingest(glb: Path, like: dict, asset_id: str, note: str, out: Path, view: str = "front", longest: float = 0) -> dict:
     doc = gltf_json(glb)
     roots = doc["scenes"][doc.get("scene", 0)]["nodes"]
     top_names = {doc["nodes"][i].get("name", f"node_{i}"): doc["nodes"][i] for i in roots}
@@ -82,6 +87,13 @@ def ingest(glb: Path, like: dict, asset_id: str, note: str, out: Path) -> dict:
         mesh = scene.geometry[geometry].copy()
         mesh.apply_transform(transform)
         pieces.setdefault(top_of(node), []).append(mesh)
+    placed = trimesh.transformations.rotation_matrix(math.radians(TURN_DEG.get(view, 0)), [0, 1, 0])
+    if longest > 0:
+        corners = np.concatenate([m.bounds for meshes in pieces.values() for m in meshes])
+        placed[:3, :3] *= longest / float((corners.max(axis=0) - corners.min(axis=0)).max())
+    for meshes in pieces.values():
+        for mesh in meshes:
+            mesh.apply_transform(placed)
     parts = []
     for i, (node, meshes) in enumerate(pieces.items()):
         gltf_node = top_names.get(node, {})
@@ -89,17 +101,18 @@ def ingest(glb: Path, like: dict, asset_id: str, note: str, out: Path) -> dict:
         extras = gltf_node.get("extras", {})
         motion = motion_of(extras)
         if motion:
-            part["pivot"] = scene.graph.get(node)[0][:3, 3].tolist()
+            part["pivot"] = (placed @ np.append(scene.graph.get(node)[0][:3, 3], 1))[:3].tolist()
             part["extra"] = {"motion": motion}
         if isinstance(extras.get("teeth"), (int, float)) and extras["teeth"] > 0:
             part.setdefault("extra", {})["teeth"] = int(extras["teeth"])
         parts.append(part)
     provenance = {k: v for k, v in like.get("provenance", {}).items() if k != "built"}
     provenance["notes"] = list(provenance.get("notes", [])) + [note]
-    provenance["repairedFrom"] = like["id"]
+    if like.get("id"):
+        provenance["repairedFrom"] = like["id"]
     return write_asset(out, {
         "id": asset_id, "title": like["title"], "tier": like.get("tier", "D"), "kind": like.get("kind"), "concept": like["concept"],
-        "detail": "repaired", "keywords": like.get("keywords", []), "credit": like["credit"], "licence": like["licence"],
+        "detail": like.get("detail", "repaired"), "keywords": like.get("keywords", []), "credit": like["credit"], "licence": like["licence"],
         "provenance": provenance,
     }, parts)
 
@@ -112,9 +125,11 @@ def main() -> None:
     parser.add_argument("--note", required=True)
     parser.add_argument("--out", type=Path, default=Path("data/library"))
     parser.add_argument("--preview", type=Path, help="also write each part in a flat colour (palette order) here")
+    parser.add_argument("--view", choices=sorted(TURN_DEG), default="front", help="the view of the model that should face the learner")
+    parser.add_argument("--longest", type=float, default=0, help="scale the model to this longest side in metres (0: leave its size)")
     args = parser.parse_args()
     try:
-        entry = ingest(args.glb, json.loads(args.like.read_text()), args.id, args.note, args.out)
+        entry = ingest(args.glb, json.loads(args.like.read_text()), args.id, args.note, args.out, args.view, args.longest)
         if args.preview:
             preview(entry, args.out, args.preview)
         print(json.dumps({"ok": True, "id": entry["id"], "parts": [p["name"] for p in entry["parts"]],

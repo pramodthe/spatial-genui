@@ -217,13 +217,14 @@ Name every region, with no exceptions. Give regions the same name when they are 
 
 // Asked for only when the model's description doesn't exist yet (the on-demand path): the benchmarks
 // get it from an earlier planning step, and their prompt stays as published.
-const NAME_META = `
-Also describe the object, as further keys of the same JSON object:
-"title": "<short name of the object, e.g. Microscope>",
+const META_KEYS = `"title": "<short name of the object, e.g. Microscope>",
 "bestView": "<the view a learner should see first, the one that shows the object most clearly (a bicycle from the side, a guitar from the front): front, side, back, or opposite side (the side facing away from the side view)>",
 "sizeM": <the real object's largest dimension in metres>,
 "kind": "<one of: anatomy, biology, astronomy, chemistry, mechanical, everyday, architecture, earth-science>",
 "keywords": ["<3-8 words a lesson request might use for it>"]`;
+const NAME_META = `
+Also describe the object, as further keys of the same JSON object:
+${META_KEYS}`;
 
 export const PARTS_NOTE = 'Parts are regions cut by P3-SAM (Tencent Hunyuan3D-Part, non-commercial licence) and named by Muse Ember from a render of each region.';
 
@@ -326,3 +327,70 @@ export async function verifyParts(opts: { glbPath: string; dir: string; objectNa
   if (!after.ok) throw new Error(`finalize: ${after.error}`);
   return { before: parts, parts: after.parts as string[], verdicts };
 }
+
+// --- Parts cut by an agent in Blender (the generated path of saved courses) --------------------------
+// Instead of naming the regions P3-SAM finds, an agent looks at the model in Blender and takes named
+// volumes out of it, one part at a time.
+
+export const SPLIT_NOTE = 'Parts were cut out of the generated model by an agent working in Blender (Muse Spark), by eye: where one part ends and the next begins is approximate.';
+
+export type ModelDescription = { title: string; bestView: 'front' | 'side' | 'back' | 'opposite side'; sizeM: number; kind?: string; keywords: string[] };
+
+const DESCRIBE_SYSTEM = `You describe a 3D model before a mixed-reality lesson uses it. You see four views of the model as made (front, side = seen from the right, back, above) and what it shows. Reply with only a JSON object:
+{${META_KEYS}}`;
+
+/** What a finished model is, which of its views a learner should face, and how big the real thing is. */
+export async function describeModel(opts: { glbPath: string; name: string; describe: string }): Promise<ModelDescription> {
+  const render = await renderGlb(await readFile(opts.glbPath));
+  if (!('grid' in render)) throw new Error('render failed');
+  const reply = await complete([
+    { role: 'system', content: DESCRIBE_SYSTEM },
+    { role: 'user', content: [{ type: 'text', text: `It shows: ${opts.name}. ${opts.describe}` }, { type: 'image_url', image_url: { url: dataUrl(render.grid) } }] },
+  ], await ember());
+  const said = parseJson<Partial<ModelDescription>>(reply.text) ?? {};
+  const views = ['front', 'side', 'back', 'opposite side'] as const;
+  return {
+    title: typeof said.title === 'string' && said.title.trim() ? said.title.trim().slice(0, 60) : opts.name,
+    bestView: views.find((v) => v === said.bestView) ?? 'front',
+    sizeM: typeof said.sizeM === 'number' && said.sizeM > 0 ? said.sizeM : 0,
+    kind: typeof said.kind === 'string' ? said.kind : undefined,
+    keywords: (Array.isArray(said.keywords) ? said.keywords : []).map((k) => String(k).toLowerCase()).slice(0, 8),
+  };
+}
+
+/**
+ * Have the Blender agent (apps/worker3d/blender_build, split mode) cut a one-piece model into named
+ * parts. Writes <dir>/model.glb (one top-level object per part, looking as before) and returns the part
+ * names. Takes around ten minutes: the agent looks, cuts, looks again. Resumable: a finished split is kept.
+ */
+export async function splitInBlender(opts: { glbPath: string; dir: string; name: string; describe: string; parts: string[] }): Promise<{ parts: string[]; tokens: number; minutes: number }> {
+  const scenePath = join(opts.dir, 'scene.json');
+  const partsOf = async () => (existsSync(scenePath) && existsSync(join(opts.dir, 'model.glb'))
+    ? ((JSON.parse(await readFile(scenePath, 'utf8')) as { parts?: { name: string }[] }).parts ?? []).map((p) => p.name)
+    : []);
+  let run = { tokens: 0, minutes: 0 };
+  if ((await partsOf()).length < MIN_SPLIT_PARTS) {
+    const brief = `${opts.name}: ${opts.describe}${opts.parts.length ? ` Parts a learner should be able to take off: ${opts.parts.join(', ')}.` : ''}`;
+    const stdout = await new Promise<string>((done) => {
+      // Trusted code: the loop sends the agent's steps to our Modal sandbox; nothing model-written runs here.
+      const child = spawn(join(WORKER, '.venv/bin/python3'), ['-m', 'blender_build.loop', '--name', slugFor(opts.name), '--brief', brief, '--model', opts.glbPath, '--out', opts.dir],
+        { cwd: WORKER, env: { ...process.env, PYTHONUNBUFFERED: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
+      let out = '';
+      child.stdout.on('data', (d) => (out += d));
+      const timer = setTimeout(() => child.kill('SIGKILL'), 40 * 60_000);
+      child.on('close', () => {
+        clearTimeout(timer);
+        done(out);
+      });
+    });
+    const last = parseJson<{ ok?: boolean; error?: string; tokens?: number; minutes?: number }>(stdout.trim().split('\n').filter((l) => l.startsWith('{')).at(-1) ?? '');
+    if (!last?.ok) throw new Error(`the Blender agent made no model: ${last?.error ?? (stdout.trim().split('\n').at(-1) ?? 'no output').slice(0, 200)}`);
+    run = { tokens: last.tokens ?? 0, minutes: last.minutes ?? 0 };
+  }
+  const parts = await partsOf();
+  if (parts.length < MIN_SPLIT_PARTS) throw new Error(`the Blender agent kept ${parts.length} part${parts.length === 1 ? '' : 's'}; a lesson needs at least ${MIN_SPLIT_PARTS}`);
+  return { parts, ...run };
+}
+
+const MIN_SPLIT_PARTS = 3;
+const slugFor = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'object';

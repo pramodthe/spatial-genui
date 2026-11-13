@@ -10,6 +10,8 @@ export type CourseSummary = {
   subtitle: string;
   status: 'planning' | 'building' | 'ready' | 'failed';
   error?: string;
+  /** The course's own 3D model, generated before its lessons are written. */
+  model?: { name: string; status: 'building' | 'ready' | 'failed'; stage?: string };
   lessons: CourseLessonSummary[];
 };
 export type CourseLesson = CourseLessonSummary & { prompt: string; code?: string; polish?: 'running' | 'done' | 'kept' | 'failed' };
@@ -38,6 +40,7 @@ export async function fetchCourseLesson(courseId: string, index: number): Promis
 export function courseProgress(course: CourseSummary): string {
   if (course.status === 'planning') return 'Planning...';
   if (course.status === 'failed') return 'Could not be planned';
+  if (course.model?.status === 'building') return 'Building its 3D model...';
   const ready = course.lessons.filter((l) => l.status === 'ready').length;
   const writing = course.lessons.findIndex((l) => l.status === 'generating');
   if (writing >= 0) return `Writing lesson ${writing + 1} of ${course.lessons.length}...`;

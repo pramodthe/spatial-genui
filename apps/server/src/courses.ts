@@ -14,6 +14,10 @@ import { loadModel } from './models.js';
  * written in the background and kept on disk, so the learner can leave and come back to a ready course.
  * Lessons are written just in time: the first at once, each next one when the one before it is opened
  * (COURSE_BUILD_ALL=1 writes the whole course straight away). One lesson is written at a time.
+ *
+ * A course about one physical object first gets its own 3D model (three-d/acquire.ts: a reference
+ * picture, TRELLIS.2, then an agent in Blender cuts it into named parts; around fifteen minutes). Its
+ * lessons are written once the model is in, and use it. COURSE_MODELS=0 turns this off.
  */
 
 export type LessonState = 'pending' | 'generating' | 'ready' | 'failed';
@@ -42,6 +46,21 @@ export type CourseLesson = {
   critique?: string;
 };
 
+/** The course's own generated 3D model. */
+export type CourseModel = {
+  name: string;
+  describe: string;
+  parts: string[];
+  status: 'building' | 'ready' | 'failed';
+  /** What the build is doing now, for the shelf. */
+  stage?: string;
+  /** Its id in the library, once built, and the parts it really has. */
+  assetId?: string;
+  built?: string[];
+  error?: string;
+  seconds?: number;
+};
+
 export type Course = {
   id: string;
   /** What the learner asked for. */
@@ -51,11 +70,13 @@ export type Course = {
   status: 'planning' | 'building' | 'ready' | 'failed';
   error?: string;
   createdAt: string;
+  model?: CourseModel;
   lessons: CourseLesson[];
 };
 
 const COURSES_DIR = process.env.COURSES_DIR || fileURLToPath(new URL('../../../data/courses/', import.meta.url));
 const BUILD_ALL = process.env.COURSE_BUILD_ALL === '1';
+const MODELS = process.env.COURSE_MODELS !== '0';
 const MAX_COURSES = 200;
 
 const PLANNER_PROMPT = `You plan a short hands-on course for a mixed-reality headset. Each lesson is one interactive 3D scene on the learner's desk: a detailed model they can pick up, turn and take apart, with one small panel of text and buttons. A lesson has no video, no long reading and no typing.
@@ -65,9 +86,10 @@ Plan 3 to 4 lessons for the learner's request:
 - Every lesson must be something to SEE and HANDLE in 3D: a structure with parts, a process shown step by step, a cause and its effect the learner can change with a button or by moving something. No lesson that is only facts on a panel.
 - The LAST lesson is a hands-on check of the lessons before it: the learner picks up name cards and drops each one on the part of the model it names (4 to 6 cards). Give it "kind": "quiz"; every other lesson has "kind": "explore". Its prompt names the model to show and the parts to match.
 - "prompt" is the full request for the agent that builds that lesson. It knows nothing else, so name the subject, what the 3D model must show, and what the learner does with it (2 to 3 sentences).
+- "model": when the course is about ONE real physical object (a jet engine, a microscope, a guitar, a heart), describe it, and a realistic 3D model of its outside is built with separate parts. "name" is its everyday name (1 to 3 words), "describe" is one sentence on what it looks like from outside, "parts" are 4 to 7 outside parts a learner could take off and name. The first lesson and the quiz then use this model. Use null when the course is about a process, an idea or several things (the water cycle, photosynthesis, the solar system).
 
 Reply with only this JSON:
-{"title": "2 to 5 words", "subtitle": "one short line", "lessons": [{"title": "2 to 4 words", "objective": "After this you can ...", "kind": "explore", "prompt": "..."}]}`;
+{"title": "2 to 5 words", "subtitle": "one short line", "model": {"name": "...", "describe": "...", "parts": ["..."]}, "lessons": [{"title": "2 to 4 words", "objective": "After this you can ...", "kind": "explore", "prompt": "..."}]}`;
 
 const QUIZ_NOTE = 'Build this lesson as a grab-and-drop matching quiz with kit.matchQuiz: the detailed model stands still on its stand, the name cards wait in a row in front of it, and one panel shows the score, the last result and a "Start over" button.';
 
@@ -89,6 +111,8 @@ function load() {
       }
       if (course.status === 'planning') Object.assign(course, { status: 'failed', error: 'The server restarted while planning.' });
       courses.set(course.id, course);
+      // A model build carries on from the files it left (each stage keeps its result).
+      if (course.model?.status === 'building') void buildModel(course);
     } catch (err) {
       console.warn(`Skipping unreadable course file ${file}: ${(err as Error).message}`);
     }
@@ -141,7 +165,7 @@ async function plan(course: Course) {
     const target = await plannerTarget();
     const reply = await complete([{ role: 'system', content: PLANNER_PROMPT }, { role: 'user', content: course.request }], target);
     await recordSpend([{ model: target.id, promptTokens: reply.promptTokens, completionTokens: reply.completionTokens }]);
-    const outline = extractJson(reply.text) as { title?: unknown; subtitle?: unknown; lessons?: unknown } | null;
+    const outline = extractJson(reply.text) as { title?: unknown; subtitle?: unknown; model?: unknown; lessons?: unknown } | null;
     const lessons = (Array.isArray(outline?.lessons) ? outline.lessons : [])
       .filter((l): l is { title: string; objective?: unknown; kind?: unknown; prompt: string } => typeof l?.title === 'string' && typeof l?.prompt === 'string' && l.prompt.trim().length > 0)
       .slice(0, 5);
@@ -157,13 +181,62 @@ async function plan(course: Course) {
       status: 'pending',
     }));
     course.status = 'building';
+    const wanted = MODELS ? wantedModel(outline?.model) : null;
+    if (wanted) course.model = { ...wanted, status: 'building', stage: 'Waiting to start' };
     await save(course);
-    queue(course, 0);
-    if (BUILD_ALL) for (let i = 1; i < course.lessons.length; i++) queue(course, i);
+    if (wanted) void buildModel(course);
+    else queueFirst(course);
   } catch (err) {
     Object.assign(course, { status: 'failed', error: (err as Error).message, subtitle: '' });
     await save(course);
   }
+}
+
+function queueFirst(course: Course) {
+  queue(course, 0);
+  if (BUILD_ALL) for (let i = 1; i < course.lessons.length; i++) queue(course, i);
+}
+
+const PLAIN_NAME = /^[\w '-]{2,40}$/;
+
+/** The planner's model request, if it is usable. */
+function wantedModel(model: unknown): Pick<CourseModel, 'name' | 'describe' | 'parts'> | null {
+  const m = model as { name?: unknown; describe?: unknown; parts?: unknown } | null;
+  if (!m || typeof m.name !== 'string' || !PLAIN_NAME.test(m.name.trim()) || typeof m.describe !== 'string' || !m.describe.trim()) return null;
+  const parts = (Array.isArray(m.parts) ? m.parts : []).map((p) => String(p).trim().toLowerCase()).filter((p) => PLAIN_NAME.test(p)).slice(0, 8);
+  return { name: m.name.trim().toLowerCase(), describe: m.describe.trim().slice(0, 300), parts };
+}
+
+/**
+ * Build the course's 3D model in the background, then start its first lesson. A model that can't be
+ * built is not the end of the course: its lessons are then written with shapes alone.
+ */
+async function buildModel(course: Course) {
+  const model = course.model!;
+  const started = Date.now();
+  // Always generated, never searched for: the course gets a model made for it.
+  const { startAssetJob } = await import('./three-d/acquire.js'); // loaded on first use, like the on-demand path
+  const job = startAssetJob({ name: model.name, describe: model.describe, parts: model.parts }, { search: false, parts: 'blender' });
+  while (job.status === 'queued' || job.status === 'running') {
+    model.stage = job.events.at(-1)?.message ?? 'Waiting to start';
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  delete model.stage;
+  if (job.status === 'done' && job.assetId) Object.assign(model, { status: 'ready', assetId: job.assetId, built: job.parts ?? [] });
+  else Object.assign(model, { status: 'failed', error: (job.error ?? 'no model').slice(0, 300) });
+  model.seconds = Math.round((Date.now() - started) / 1000);
+  await save(course);
+  queueFirst(course);
+}
+
+/** What a lesson's agent is told about the course's model, and the library ids it is given. */
+function modelFor(course: Course): { note: string; assets?: string[] } {
+  const model = course.model;
+  if (model?.status !== 'ready' || !model.assetId) return { note: '' };
+  return {
+    note: `\nA realistic 3D model of the ${model.name} was made for this course ('${model.assetId}', with separate parts: ${(model.built ?? []).join(', ')}). Use it whenever the lesson shows the ${model.name} from outside, so that every lesson of the course shows the same object.`,
+    assets: [model.assetId],
+  };
 }
 
 // One lesson is written at a time, whatever the number of courses: lessons are long, costly model calls.
@@ -173,6 +246,7 @@ let working: Promise<void> = Promise.resolve();
 export function queue(course: Course, index: number, retry = false) {
   const lesson = course.lessons[index];
   if (!lesson || !(lesson.status === 'pending' || (retry && lesson.status === 'failed'))) return;
+  if (course.model?.status === 'building') return; // its lessons start when the model is in
   lesson.status = 'generating';
   delete lesson.error;
   working = working.then(() => build(course, lesson)).catch((err) => console.error(err));
@@ -181,7 +255,8 @@ export function queue(course: Course, index: number, retry = false) {
 async function build(course: Course, lesson: CourseLesson) {
   const started = Date.now();
   try {
-    const result = await generate(lesson.prompt, { onDemand: false });
+    const given = modelFor(course);
+    const result = await generate(lesson.prompt + given.note, { onDemand: false, assets: given.assets });
     await recordSpend(result.attempts.map((a) => ({ model: result.model, promptTokens: a.promptTokens, completionTokens: a.completionTokens })));
     if (!result.ok || !result.code) throw new Error(result.error ?? 'The lesson could not be written.');
     Object.assign(lesson, { status: 'ready', code: result.code, model: result.model, generatedAt: new Date().toISOString() });
@@ -217,7 +292,8 @@ export function polishLesson(course: Course, index: number, pictures: string[]):
   lesson.polish = 'running';
   working = working.then(async () => {
     try {
-      const result = await generate(lesson.prompt, { previousCode: lesson.code, pictures, onDemand: false });
+      const given = modelFor(course);
+      const result = await generate(lesson.prompt + given.note, { previousCode: lesson.code, pictures, onDemand: false, assets: given.assets });
       await recordSpend(result.attempts.map((a) => ({ model: result.model, promptTokens: a.promptTokens, completionTokens: a.completionTokens })));
       if (!result.ok || !result.code) throw new Error(result.error ?? 'no revision');
       lesson.critique = result.critique;

@@ -377,6 +377,15 @@ export async function mountGenerated(code: string): Promise<MountReport> {
 
   const warnings: string[] = [];
   mounted.root = root;
+  // Measure the lesson as it first appears. A part that update() sizes or places (a light beam drawn by
+  // stretching a unit cylinder) would otherwise count at its unplaced size and shrink the whole lesson.
+  if (typeof result.update === 'function') {
+    try {
+      (result.update as NonNullable<Mounted['update']>)(0, 1 / 72);
+    } catch {
+      // A broken update() is reported when the lesson runs.
+    }
+  }
   // Kit materials get their real-world texture scale now that every shape exists.
   try {
     mounted.kit?.finalize(root);

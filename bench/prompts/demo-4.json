@@ -1,0 +1,26 @@
+[
+  {
+    "id": "heart",
+    "tier": "demo",
+    "domain": "biology",
+    "prompt": "Show me how blood flows through the heart, step by step."
+  },
+  {
+    "id": "microscope",
+    "tier": "demo",
+    "domain": "science",
+    "prompt": "Teach me the parts of a microscope and what each part does."
+  },
+  {
+    "id": "gears",
+    "tier": "demo",
+    "domain": "physics",
+    "prompt": "Teach me how two gears change speed and turning force."
+  },
+  {
+    "id": "flower",
+    "tier": "demo",
+    "domain": "biology",
+    "prompt": "Teach me the parts of a flower and what each part does."
+  }
+]

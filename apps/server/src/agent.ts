@@ -11,16 +11,18 @@ import { extractCode, validateModule } from './validate.js';
 import { checkSurface, compileSurface, extractJson, surfaceFrom, type Surface } from './a2ui/catalog.js';
 import { A2UI_SYSTEM_PROMPT, TEMPLATE_SYSTEM_PROMPT, jsonRepairMessage } from './a2ui/prompts.js';
 import { expandTemplate } from './a2ui/templates.js';
+import { generateParallel, type ParallelResult, type RunEvent } from './a2ui/parallel.js';
 
 /**
  * What the agent writes (RQ1's three GenUI types): 'code' = a full module (open, version A),
  * 'a2ui' = A2UI v1.0 JSON on the spatial catalog (declarative, C), 'template' = one hand-built lesson
  * component filled with data (controlled, D). C and D compile to a module, so everything after is shared.
+ * 'a2ui-parallel' is C split across parallel builders after a plan (RQ4, a2ui/parallel.ts).
  */
-export type GenUIFormat = 'code' | 'a2ui' | 'template';
+export type GenUIFormat = 'code' | 'a2ui' | 'template' | 'a2ui-parallel';
 
 export function systemPromptFor(format: GenUIFormat): string {
-  return format === 'a2ui' ? A2UI_SYSTEM_PROMPT : format === 'template' ? TEMPLATE_SYSTEM_PROMPT : SYSTEM_PROMPT;
+  return format === 'a2ui' || format === 'a2ui-parallel' ? A2UI_SYSTEM_PROMPT : format === 'template' ? TEMPLATE_SYSTEM_PROMPT : SYSTEM_PROMPT;
 }
 
 export type Attempt = {
@@ -30,6 +32,8 @@ export type Attempt = {
   finishReason: string | null;
   stage: 'ok' | 'no-code' | 'validate' | 'dry-run';
   error?: string;
+  /** Parallel generation: which call this was (planner, part:<id>). */
+  role?: string;
 };
 
 export type GenerationResult = {
@@ -49,6 +53,8 @@ export type GenerationResult = {
   totalMs: number;
   /** Which library models the router chose for this request (library on only). */
   route?: Route;
+  /** Parallel generation (RQ4): when the plan, the first part and each part were ready (ms from the start). */
+  timings?: ParallelResult['timings'];
   /** On-demand assets: models being fetched or generated in the background for this lesson (see three-d/acquire.ts). */
   pendingAssets?: { jobId: string; name: string }[];
 };
@@ -60,7 +66,11 @@ export type GenerationResult = {
  */
 export async function generate(
   prompt: string,
-  options: { previousCode?: string; clientError?: string; target?: LlmTarget; log?: boolean; library?: boolean; onDemand?: boolean; format?: GenUIFormat } = {},
+  options: {
+    previousCode?: string; clientError?: string; target?: LlmTarget; log?: boolean; library?: boolean; onDemand?: boolean; format?: GenUIFormat;
+    /** Parallel generation: the planner model (default: the same as target) and the event stream. */
+    planner?: LlmTarget; onEvent?: (event: RunEvent) => void;
+  } = {},
 ): Promise<GenerationResult> {
   const target = options.target ?? defaultTarget;
   const format = options.format ?? 'code';
@@ -108,6 +118,8 @@ export async function generate(
     route,
     pendingAssets,
   };
+
+  if (format === 'a2ui-parallel') return finishParallel(result, prompt, target, options, started);
 
   for (let i = 0; i <= config.maxRepairs; i++) {
     const reply = await complete(messages, target);
@@ -174,6 +186,36 @@ export async function generate(
   }
 
   if (!result.ok) result.error = attempts.at(-1)?.error ?? 'Generation failed.';
+  result.totalMs = Math.round(performance.now() - started);
+  if (options.log !== false) await logRun(result);
+  return result;
+}
+
+/** Parallel version of C: plan, build the parts at once, then the same final gates (host checks, dry run). */
+async function finishParallel(
+  result: GenerationResult,
+  prompt: string,
+  target: LlmTarget,
+  options: { planner?: LlmTarget; onEvent?: (event: RunEvent) => void; log?: boolean },
+  started: number,
+): Promise<GenerationResult> {
+  const run = await generateParallel(prompt, { builder: target, planner: options.planner, onEvent: options.onEvent });
+  result.attempts.push(...run.calls.map((c) => ({
+    ms: c.ms, promptTokens: c.promptTokens, completionTokens: c.completionTokens, finishReason: c.finishReason,
+    stage: c.ok ? ('ok' as const) : ('validate' as const), error: c.error, role: c.role,
+  })));
+  result.timings = run.timings;
+  result.source = run.source;
+  result.code = run.code;
+  result.ok = run.ok;
+  result.error = run.error;
+  if (run.ok && run.code) {
+    const validation = validateModule(run.code);
+    const dry = validation.ok ? await dryRun(validation.transformed, {}) : null;
+    if (!validation.ok) Object.assign(result, { ok: false, error: validation.error });
+    else if (!dry!.ok) Object.assign(result, { ok: false, error: dry!.error });
+    else Object.assign(result, { stats: dry!.stats, warnings: dry!.warnings });
+  }
   result.totalMs = Math.round(performance.now() - started);
   if (options.log !== false) await logRun(result);
   return result;

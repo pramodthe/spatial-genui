@@ -67,6 +67,21 @@
       "priceCached": 0.004
     },
     {
+      "id": "muse-ember-1.0-low",
+      "family": "Meta",
+      "baseURL": "https://api.meta.ai/v1",
+      "apiKeyEnv": "META_API_KEY",
+      "model": "muse-ember-1.0",
+      "extraBody": {
+        "reasoning_effort": "low"
+      },
+      "enabled": false,
+      "priceIn": 0.1,
+      "priceOut": 0.5,
+      "priceCached": 0.004,
+      "note": "Planner for parallel generation (RQ4): Ember with low reasoning, for speed."
+    },
+    {
       "id": "kimi-k3.1-pro-fw",
       "family": "Moonshot",
       "baseURL": "https://api.fireworks.ai/inference/v1",

@@ -17,6 +17,9 @@ export type LessonStatus = {
   since: number;
 };
 
+// Parallel generation (SPEC.md Phase 5): /?parallel=1 streams a lesson in part by part (/api/generate-stream).
+const PARALLEL = new URLSearchParams(location.search).has('parallel');
+
 // A runtime error this soon after mounting comes from loading the lesson (a panel element it never
 // created, a broken first frame), not from the learner using it: repair once without asking.
 const AUTO_REPAIR_WINDOW_MS = 8000;
@@ -72,8 +75,9 @@ export function onLessonStatus(listener: (status: LessonStatus) => void): () => 
   return () => statusListeners.delete(listener);
 }
 
-function setPhase(phase: LessonStatus['phase'], message = '') {
-  lessonStatus = { phase, prompt: state.prompt, message, since: performance.now() };
+function setPhase(phase: LessonStatus['phase'], message = '', keepSince = false) {
+  const since = keepSince && lessonStatus.phase === phase ? lessonStatus.since : performance.now();
+  lessonStatus = { phase, prompt: state.prompt, message, since };
   for (const listener of statusListeners) listener(lessonStatus);
 }
 
@@ -153,6 +157,7 @@ export function createOverlay() {
   // Scriptable entry point for automated tests (CLI/Playwright) and the benchmark harness.
   (window as unknown as { genui: unknown }).genui = {
     generate,
+    generateParallel: (prompt: string) => generateStream(prompt),
     repair,
     rebuild,
     mount,
@@ -174,7 +179,8 @@ export function reportRuntimeError(message: string) {
   state.runtimeErrors.push(message);
   console.error('[GenUI]', message);
   setStatus(`Runtime error: ${message}`);
-  if (!state.code) return;
+  // While a lesson streams in, its partial versions are replaced as parts arrive: only the final one counts.
+  if (!state.code || streaming) return;
   repairButton.hidden = false;
   // In a headset nobody can reach the repair button: a lesson that breaks while loading is repaired
   // once on its own. A later break (from using it) waits for the learner to ask ("Fix it").
@@ -195,6 +201,7 @@ let repairPending = false;
 export async function generate(prompt: string, extra: { previousCode?: string; clientError?: string } = {}) {
   prompt = prompt.trim();
   if (!prompt || state.busy) return state;
+  if (PARALLEL && !extra.previousCode) return generateStream(prompt);
   state.busy = true;
   repairPending = false;
   if (!extra.previousCode) state.autoRepaired = false; // a new lesson gets its own automatic repair
@@ -234,6 +241,98 @@ export async function generate(prompt: string, extra: { previousCode?: string; c
     state.busy = false;
   }
   return state;
+}
+
+/** True while a parallel lesson streams in (its partial mounts don't dock the picker or trigger repairs). */
+let streaming = false;
+
+/**
+ * Parallel generation: placeholders as soon as the plan exists, then each part as it is ready. Every event
+ * carries the whole lesson so far, so each one is a plain remount.
+ */
+async function generateStream(prompt: string) {
+  prompt = prompt.trim();
+  if (!prompt || state.busy) return state;
+  state.busy = true;
+  streaming = true;
+  repairPending = false;
+  state.autoRepaired = false;
+  state.prompt = prompt;
+  repairButton.hidden = true;
+  stopWatchingAssets();
+  setStatus('Planning…');
+  setPhase('building', 'planning');
+  try {
+    const res = await fetch('/api/generate-stream', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ prompt }),
+    });
+    if (!res.ok || !res.body) throw new Error(res.statusText || `HTTP ${res.status}`);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffered = '';
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffered += decoder.decode(value, { stream: true });
+      for (let nl = buffered.indexOf('\n'); nl >= 0; nl = buffered.indexOf('\n')) {
+        const line = buffered.slice(0, nl).trim();
+        buffered = buffered.slice(nl + 1);
+        if (line) await onStreamEvent(JSON.parse(line));
+      }
+    }
+  } catch (err) {
+    setStatus(`Request failed: ${(err as Error).message}`);
+    setPhase('failed', (err as Error).message);
+  } finally {
+    streaming = false;
+    state.busy = false;
+  }
+  return state;
+}
+
+type StreamEvent =
+  | { type: 'PLAN_READY'; ms: number; code: string; plan: { parts: { id: string }[] } }
+  | { type: 'COMPONENT_READY'; ms: number; code: string; ready: number; total: number; partId: string }
+  | { type: 'COMPONENT_FAILED'; ms: number; partId: string; error: string }
+  | { type: 'RESULT'; result: GenerateResponse & { timings?: { planMs: number; firstPartMs: number | null; totalMs: number } } }
+  | { type: string };
+
+async function onStreamEvent(event: StreamEvent) {
+  if (event.type === 'PLAN_READY' && 'plan' in event) {
+    await mountPartial(event.code);
+    setPhase('building', `0 of ${event.plan.parts.length} parts`, true);
+    setStatus(`Plan ready in ${(event.ms / 1000).toFixed(1)} s: ${event.plan.parts.map((p) => p.id).join(', ')}`);
+  } else if (event.type === 'COMPONENT_READY' && 'ready' in event) {
+    await mountPartial(event.code);
+    setPhase('building', `${event.ready} of ${event.total} parts`, true);
+    setStatus(`${event.partId} ready at ${(event.ms / 1000).toFixed(1)} s (${event.ready} of ${event.total})`);
+  } else if (event.type === 'COMPONENT_FAILED' && 'error' in event) {
+    setStatus(`${event.partId} failed: ${event.error}`);
+  } else if (event.type === 'RESULT' && 'result' in event) {
+    const result = event.result;
+    state.lastResponse = result;
+    if (!result.ok || !result.code) {
+      setStatus(`Generation failed: ${result.error ?? 'unknown error'}`);
+      setPhase('failed', result.error ?? 'unknown error');
+      return;
+    }
+    streaming = false; // the finished lesson is a normal lesson (picker docks, repairs apply)
+    await mount(result.code);
+    const t = result.timings;
+    if (state.lastMount?.ok && t) {
+      setStatus(`Done in ${(t.totalMs / 1000).toFixed(1)} s (plan ${(t.planMs / 1000).toFixed(1)} s, first part ${((t.firstPartMs ?? 0) / 1000).toFixed(1)} s) with ${result.model}.`);
+    }
+  }
+}
+
+/** Mount a lesson that is still streaming in: no picker docking, no repair. */
+async function mountPartial(code: string) {
+  state.code = code;
+  state.runtimeErrors = [];
+  codeEl.textContent = code;
+  state.lastMount = await mountGenerated(code);
 }
 
 async function mount(code: string) {

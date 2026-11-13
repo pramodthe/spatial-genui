@@ -4,12 +4,12 @@
 import { SPATIAL_CATALOG_ID } from './catalog.js';
 import { TEMPLATE_DOCS, EXAMPLE_TEMPLATE } from './templates.js';
 
-const FRAMING = `You are a generative UI engine for a mixed-reality (passthrough) app on Meta Quest.
+export const FRAMING = `You are a generative UI engine for a mixed-reality (passthrough) app on Meta Quest.
 A seated user asks for something ("teach me the solar system", "a quiz about cells"). You describe the
 complete interactive spatial component. The app renders it at runtime and the user interacts with it
 using only their hands (pinch to grab, poke or pinch to press).`;
 
-const SPACE_AND_QUALITY = `# Space, comfort and quality
+export const SPACE_AND_QUALITY = `# Space, comfort and quality
 - Units are meters. The scene's origin sits on the user's desk, about 0.5 m in front of them; +Y is up,
   +Z points toward the user. Keep everything inside 0.8 m wide x 0.5 m tall x 0.5 m deep, above y = 0.
 - Make interactive objects at least 0.03 m across so a pinch can hit them; keep them within reach.
@@ -51,16 +51,8 @@ export const EXAMPLE_A2UI = [
   },
 ];
 
-export const A2UI_SYSTEM_PROMPT = `${FRAMING}
-
-# Output format: A2UI v1.0
-Reply with exactly one \`\`\`json code block containing a JSON array of A2UI v1.0 messages, and nothing
-else. Usually one createSurface message is enough:
-[{"version": "1.0", "createSurface": {"surfaceId": "lesson", "catalogId": "${SPATIAL_CATALOG_ID}",
-  "dataModel": {...}, "components": [...]}}]
-You may follow it with {"version": "1.0", "updateDataModel": {"surfaceId": "lesson", "path": "/x", "value": ...}}.
-
-Components are a flat list. Each has a unique "id" (letters, digits, underscores; no hyphens), a
+/** The catalog's components, values and actions; shared by version C and the parallel builders (parallel.ts). */
+export const CATALOG_DOCS = `Components are a flat list. Each has a unique "id" (letters, digits, underscores; no hyphens), a
 "component" type and its properties. Containers list child ids. The component with id "root" is the
 Scene. Every component must be reachable from root, and each id is used in one place only.
 
@@ -100,7 +92,18 @@ An action is {"functionCall": {"@call": name, "args": {...}}}:
 - resetPositions {} - put grabbed objects back where they started.
 - checkSort { items: [{ id, bin }], resultPath, allRight? } - counts objects that sit over their bin (an
   object id over a box Shape id) and writes the result text to resultPath.
-- run { calls: [functionCalls] } - several of the above in order.
+- run { calls: [functionCalls] } - several of the above in order.`;
+
+export const A2UI_SYSTEM_PROMPT = `${FRAMING}
+
+# Output format: A2UI v1.0
+Reply with exactly one \`\`\`json code block containing a JSON array of A2UI v1.0 messages, and nothing
+else. Usually one createSurface message is enough:
+[{"version": "1.0", "createSurface": {"surfaceId": "lesson", "catalogId": "${SPATIAL_CATALOG_ID}",
+  "dataModel": {...}, "components": [...]}}]
+You may follow it with {"version": "1.0", "updateDataModel": {"surfaceId": "lesson", "path": "/x", "value": ...}}.
+
+${CATALOG_DOCS}
 
 ${SPACE_AND_QUALITY}
 

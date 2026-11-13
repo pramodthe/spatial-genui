@@ -4,11 +4,13 @@
 //
 // Usage: npm run bench -- [--prompts ../../bench/prompts/test-12.json] [--models ../../bench/models.json]
 //                         [--only id,id] [--prompt-ids id,id] [--runs 1] [--limit 12] [--concurrency 4] [--out ../../bench/results/<name>]
-//                         [--format code|a2ui|template]   (RQ1: open code, A2UI JSON, or a filled template)
+//                         [--format code|a2ui|template|a2ui-parallel]   (RQ1: open code, A2UI JSON, or a filled
+//                         template; RQ4: A2UI split across parallel builders) [--planner model-id]
 import { existsSync } from 'node:fs';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
-import { generate, systemPromptFor, type GenUIFormat } from './agent.js';
+import { generate, systemPromptFor, type GenUIFormat, type GenerationResult } from './agent.js';
+import { loadModel } from './models.js';
 import { config } from './config.js';
 import type { LlmTarget } from './llm.js';
 import { parseCli } from './args.js';
@@ -53,17 +55,21 @@ export type BenchRow = {
   format?: GenUIFormat;
   /** The agent's JSON for formats a2ui and template (code is then the compiled module). */
   source?: string;
+  /** a2ui-parallel: plan, first part and finish times (ms). */
+  timings?: GenerationResult['timings'];
 };
 
 const cli = parseCli(process.argv.slice(2), {
-  values: ['prompts', 'models', 'only', 'prompt-ids', 'runs', 'limit', 'concurrency', 'out', 'format'],
+  values: ['prompts', 'models', 'only', 'prompt-ids', 'runs', 'limit', 'concurrency', 'out', 'format', 'planner'],
   booleans: ['library'],
-  usage: 'npm run bench -- [--prompts f] [--models f] [--only id,id] [--prompt-ids id,id] [--runs n] [--limit n] [--concurrency n] [--out dir] [--library] [--format code|a2ui|template]',
+  usage: 'npm run bench -- [--prompts f] [--models f] [--only id,id] [--prompt-ids id,id] [--runs n] [--limit n] [--concurrency n] [--out dir] [--library] [--format code|a2ui|template|a2ui-parallel] [--planner id]',
 });
 const args = cli.flags;
 const useLibrary = cli.booleans.has('library');
 const format = (args.format ?? 'code') as GenUIFormat;
-if (!['code', 'a2ui', 'template'].includes(format)) throw new Error(`--format must be code, a2ui or template (got ${format})`);
+if (!['code', 'a2ui', 'template', 'a2ui-parallel'].includes(format)) throw new Error(`--format must be code, a2ui, template or a2ui-parallel (got ${format})`);
+// Parallel generation: the planner model (default: each row's own model).
+const planner = args.planner ? await loadModel(args.planner) : undefined;
 const repoRoot = resolve(import.meta.dirname, '../../..');
 const promptsFile = resolve(args.prompts ?? join(repoRoot, 'bench/prompts/test-12.json'));
 const modelsFile = resolve(args.models ?? join(repoRoot, 'bench/models.json'));
@@ -104,6 +110,7 @@ await writeFile(
     skipped, maxRepairs: config.maxRepairs, maxCompletionTokens: config.maxCompletionTokens,
     library: useLibrary && format === 'code',
     format,
+    planner: planner?.id,
     // With the library on, the router adds only the chosen models' section (recorded per row as route).
     systemPrompt: format !== 'code' ? systemPromptFor(format) : useLibrary ? SYSTEM_PROMPT + librarySection() : SYSTEM_PROMPT,
   }, null, 2),
@@ -135,13 +142,14 @@ async function runOne(m: ModelEntry, p: PromptCase, rep: number): Promise<BenchR
   const base = { model: m.id, family: m.family, promptId: p.id, tier: p.tier, domain: p.domain, rep };
   try {
     // The 3D asset library is off unless asked for, so runs stay comparable with the published ones.
-    const r = await generate(p.prompt, { target: m, log: false, library: useLibrary, format });
+    const r = await generate(p.prompt, { target: m, log: false, library: useLibrary, format, planner });
     const promptTokens = r.attempts.reduce((s, a) => s + a.promptTokens, 0);
     const completionTokens = r.attempts.reduce((s, a) => s + a.completionTokens, 0);
     return {
       ...base,
       ok: r.ok,
-      firstTryOk: r.attempts[0]?.stage === 'ok',
+      // Parallel: every call (planner and parts) passed without a repair.
+      firstTryOk: format === 'a2ui-parallel' ? r.attempts.every((a) => a.stage === 'ok') : r.attempts[0]?.stage === 'ok',
       stages: r.attempts.map((a) => a.stage),
       failureKinds: r.attempts.filter((a) => a.stage !== 'ok').map((a) => classifyFailure(a.stage, a.error ?? '', a.finishReason)),
       attempts: r.attempts.length,
@@ -159,6 +167,7 @@ async function runOne(m: ModelEntry, p: PromptCase, rep: number): Promise<BenchR
       route: r.route,
       format,
       source: r.source,
+      timings: r.timings,
     };
   } catch (err) {
     return {

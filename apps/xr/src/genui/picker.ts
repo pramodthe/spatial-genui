@@ -199,7 +199,7 @@ class LessonPickerSystem extends createSystem({
     const title = EXAMPLE_LESSONS.find((lesson) => lesson.prompt === prompt)?.title ?? 'your lesson';
     const text = {
       idle: 'Pick a lesson to start.',
-      building: `Writing ${title === 'your lesson' ? title : `the ${title} lesson`}... ${seconds} s`,
+      building: `Writing ${title === 'your lesson' ? title : `the ${title} lesson`}${message ? ` (${ascii(message)})` : ''}... ${seconds} s`,
       fixing: `Fixing a problem in the lesson... ${seconds} s`,
       ready: `${title === 'your lesson' ? 'Your lesson' : title} is ready.`,
       failed: `That didn't work: ${ascii(message)}`,

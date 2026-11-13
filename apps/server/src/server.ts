@@ -3,6 +3,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { generate } from './agent.js';
 import { config } from './config.js';
 import { assetPath, libraryCatalog, shortCredit } from './library.js';
+import type { LlmTarget } from './llm.js';
+import { loadModel } from './models.js';
 import { EXAMPLE_MODULE } from './prompt.js';
 
 const MAX_BODY_BYTES = 200_000;
@@ -45,6 +47,21 @@ const server = createServer(async (req, res) => {
       });
       return send(res, 200, result);
     }
+    // Parallel generation (SPEC.md Phase 5): the run's events as newline-delimited JSON while it happens
+    // (plan with placeholders, then each part as it is ready), ending with the full result.
+    if (req.method === 'POST' && req.url === '/api/generate-stream') {
+      const body = await readJson(req);
+      const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
+      if (!prompt || prompt.length > 2000) {
+        return send(res, 400, { error: 'Send { "prompt": "…" } (1–2000 characters).' });
+      }
+      res.writeHead(200, { 'content-type': 'application/x-ndjson', 'cache-control': 'no-cache' });
+      const line = (data: unknown) => res.write(JSON.stringify(data) + '\n');
+      const result = await generate(prompt, { format: 'a2ui-parallel', planner: await parallelPlanner(), onEvent: line });
+      line({ type: 'RESULT', result });
+      res.end();
+      return;
+    }
     // On-demand assets: progress of a background model job started by a lesson request.
     const jobMatch = req.method === 'GET' && req.url?.match(/^\/api\/assets\/jobs(?:\/([a-z0-9-]+))?$/);
     if (jobMatch) {
@@ -75,6 +92,16 @@ async function readJson(req: IncomingMessage): Promise<any> {
     chunks.push(chunk);
   }
   return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+}
+
+/** A fast model plans parallel runs (PARALLEL_PLANNER, a bench/models.json id); without one, the main model plans. */
+let planner: Promise<LlmTarget | undefined> | null = null;
+function parallelPlanner(): Promise<LlmTarget | undefined> {
+  planner ??= loadModel(process.env.PARALLEL_PLANNER || 'claude-haiku-5-5').catch((err) => {
+    console.warn(`Parallel planner unavailable (${(err as Error).message}); the main model plans.`);
+    return undefined;
+  });
+  return planner;
 }
 
 function send(res: ServerResponse, status: number, data: unknown) {

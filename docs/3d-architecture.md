@@ -502,6 +502,24 @@ reference picture: Ember briefs it, Muse Image draws it, Ember checks it (redraw
   - The page flow hasn't been run in the emulator.
   - The Blender repair stage is not part of this path.
 
+**Blender repair pilot (Nov 13).** `bench3d:repair`: an agent in the sandboxed headless Blender (Phase 3's MCP server) fixes a segmented model's parts and structure; Muse Ember reviews each round from renders and the best round wins. Motion is out of scope for now. Tried on the old gear train, whose gears stand at right angles:
+
+| Agent | Rounds | Result | Steps | Time | Cost |
+|---|---|---|---|---|---|
+| Claude Sonnet 5.5 (no caching through the OpenAI-compatible endpoint) | 1 | Six correct parts, small gear turned into the big gear's plane; export failed, so never scored | 34 tool calls | 25 min | $3.61 |
+| Muse Spark 1.3 contributor, bare tools | 0 | Stopped after an hour, still measuring | 22 | 60 min | cents |
+| Muse Spark 1.3 contributor, with the fixes below | 2 | Part names right in round 2, gears still not meshing; critic 2/5 (from 1/5) | 48 | 57 min | $0.07 |
+
+- **Fixes made for the agent:**
+  - Each P3-SAM region is its own piece under its part (`retrieved.py --split-regions`).
+  - Every piece's measurements are in the first message.
+  - A helper kit is preloaded in Blender (`apps/worker3d/repair_kit.py`: list parts, split loose pieces, cut at a plane, assign, rotate, move, join).
+  - A `look` tool shows the agent the model as the critic sees it.
+  - A step with no reply in 6 minutes is retried.
+  - Meta's prompt cache served 93% of the input.
+  - Exports are no longer sent inline (a 4.5 MB model broke the connection).
+- **Conclusion:** repair after the fact is slow and, with Spark, did not fix the structure. The same model regenerated from a checked reference picture came out right in 6.5 minutes (above). So mistakes are caught at the picture first; repair stays a pilot for what a better picture cannot fix.
+
 ## 10. Sources
 
 - SceneCraft: An LLM Agent for Synthesizing 3D Scene as Blender Code. https://arxiv.org/abs/2403.01248

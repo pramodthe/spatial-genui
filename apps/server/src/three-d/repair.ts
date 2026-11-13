@@ -209,7 +209,8 @@ for (const c of cases) {
     } finally {
       await session.close();
     }
-    const best = history.reduce((a, b) => (b.score > a.score ? b : a));
+    // On a tie the later round wins: it has the critic's earlier problems addressed (e.g. proper part names).
+    const best = history.reduce((a, b) => (b.score >= a.score ? b : a));
     const { promptTokens, cachedTokens, completionTokens } = session.usage;
     const cost = agent.priceIn != null && agent.priceOut != null
       ? ((promptTokens - cachedTokens) * agent.priceIn + cachedTokens * (agent.priceCached ?? agent.priceIn) + completionTokens * agent.priceOut) / 1e6 : null;

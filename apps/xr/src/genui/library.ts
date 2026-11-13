@@ -13,6 +13,7 @@ type CatalogPart = {
   group?: string | null;
   labelAnchor: [number, number, number];
   explodeDir: [number, number, number];
+  motion?: { type: 'rotate' | 'slide'; axis: [number, number, number]; range: [number, number] };
 };
 type CatalogEntry = { id: string; title: string; url: string; creditShort: string; credit: string; parts: CatalogPart[] };
 
@@ -26,6 +27,7 @@ export type AssetHandle = {
   label(id: string, text?: string): LabelHandle;
   labelParts(ids: string[]): LabelHandle[];
   explode(amount: number): void;
+  move(id: string, t: number): void;
   cutaway(on?: boolean): void;
   xray(on?: boolean, keep?: string[]): void;
   highlight(id: string | null): void;
@@ -89,6 +91,7 @@ export function assetHandle(entries: Map<string, CatalogEntry>, id: string, deps
     return mesh ? [{
       id: p.node, name: p.name, group: p.group ?? null, object3D: mesh,
       labelAnchor: new Vector3(...p.labelAnchor), explodeDir: new Vector3(...p.explodeDir),
+      ...(p.motion ? { motion: { type: p.motion.type, axis: new Vector3(...p.motion.axis).normalize(), range: p.motion.range } } : {}),
     }] : [];
   });
   const find = (partId: string) => {
@@ -112,6 +115,7 @@ export function assetHandle(entries: Map<string, CatalogEntry>, id: string, deps
     xray: (on, keep) => rig.xray(on, keep),
     highlight: (partId) => rig.highlight(partId),
     reset: () => rig.reset(),
+    move: (partId, t) => rig.move(partId, t),
   };
 }
 

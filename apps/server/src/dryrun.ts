@@ -237,7 +237,7 @@ function panelTextSize(markup: string, widthM: number): { minTextCm: number; min
 export type AssetStub = {
   id: string;
   creditShort?: string;
-  parts: { node: string; name: string; group?: string | null; centroid: number[]; labelAnchor: number[]; explodeDir: number[]; triangles: number }[];
+  parts: { node: string; name: string; group?: string | null; centroid: number[]; labelAnchor: number[]; explodeDir: number[]; triangles: number; motion?: { type: string } }[];
 };
 
 // Same markup as the browser rig's labels (apps/xr/src/genui/rig.ts), so the panel checks see what the headset will show.
@@ -307,6 +307,15 @@ function stubAsset(entry: AssetStub, ui: StubUi) {
     xray(_on?: boolean, keep: string[] = []) { checkIds(keep); },
     highlight(id: string | null) { if (id !== null) find(id); },
     reset() {},
+    move(id: string, t: number) {
+      // Same errors as the browser rig, so the agent learns which parts move before the headset does.
+      const part = entry.parts.find((p) => p.node === find(id).id)!;
+      if (!part.motion) {
+        const moving = entry.parts.filter((p) => p.motion).map((p) => p.node);
+        throw new Error(`Part '${id}' doesn't move. Moving parts: ${moving.join(', ') || 'none'}.`);
+      }
+      if (typeof t !== 'number' || !Number.isFinite(t)) throw new Error('move(id, t) takes a number: 0 to 1 sweeps the part\'s motion (rotating parts keep turning past 1).');
+    },
   };
 }
 

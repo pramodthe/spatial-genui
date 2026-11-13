@@ -70,7 +70,7 @@ for (const obj of objects) {
   const row: JobRow = {
     objectId: obj.id, category: obj.category, pipeline, variant, model: cli.flags.label!, criticModel: '–',
     ok: round.ok, rounds: [round], finalRound: round.ok ? 0 : null, lastRound: round.ok ? 0 : null,
-    usage: { calls: 0, promptTokens: 0, completionTokens: 0, llmMs: 0, toolCalls: 0 },
+    usage: { calls: 0, promptTokens: 0, cachedTokens: 0, completionTokens: 0, llmMs: 0, toolCalls: 0 },
     criticUsage: { calls: 0, promptTokens: 0, completionTokens: 0, ms: 0 }, totalMs: 0, external: true,
   };
   await appendFile(resultsFile, JSON.stringify(row) + '\n');

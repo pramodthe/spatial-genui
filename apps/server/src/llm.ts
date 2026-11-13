@@ -11,6 +11,8 @@ export type Completion = {
   text: string;
   finishReason: string | null;
   promptTokens: number;
+  /** Of promptTokens, how many the provider served from its prompt cache (billed at the cached rate). */
+  cachedTokens: number;
   completionTokens: number;
   ms: number;
 };
@@ -86,6 +88,7 @@ export async function complete(messages: ChatMessage[], target: LlmTarget = defa
     text: choice?.message?.content ?? '',
     finishReason: choice?.finish_reason ?? null,
     promptTokens: res.usage?.prompt_tokens ?? 0,
+    cachedTokens: (res.usage as { prompt_tokens_details?: { cached_tokens?: number } } | undefined)?.prompt_tokens_details?.cached_tokens ?? 0,
     completionTokens: res.usage?.completion_tokens ?? 0,
     ms: Math.round(performance.now() - started),
   };
@@ -123,6 +126,7 @@ export async function completeWithTools(
     text: choice?.message?.content ?? '',
     finishReason: choice?.finish_reason ?? null,
     promptTokens: res.usage?.prompt_tokens ?? 0,
+    cachedTokens: (res.usage as { prompt_tokens_details?: { cached_tokens?: number } } | undefined)?.prompt_tokens_details?.cached_tokens ?? 0,
     completionTokens: res.usage?.completion_tokens ?? 0,
     ms: Math.round(performance.now() - started),
     toolCalls,

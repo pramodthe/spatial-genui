@@ -37,7 +37,10 @@
       "baseURL": "https://api.meta.ai/v1",
       "apiKeyEnv": "META_API_KEY",
       "model": "muse-spark-1.3-contributor",
-      "enabled": false
+      "enabled": false,
+      "priceIn": 1.25,
+      "priceCached": 0.15,
+      "priceOut": 4.25
     },
     {
       "id": "deepseek-v4.1-flash",
@@ -60,7 +63,8 @@
       },
       "enabled": true,
       "priceIn": 0.1,
-      "priceOut": 0.5
+      "priceOut": 0.5,
+      "priceCached": 0.004
     },
     {
       "id": "kimi-k3.1-pro-fw",
@@ -158,6 +162,18 @@
       "priceIn": 2,
       "priceOut": 10,
       "enabled": false
+    },
+    {
+      "id": "muse-spark-1.3-contributor",
+      "family": "Meta",
+      "baseURL": "https://api.meta.ai/v1",
+      "apiKeyEnv": "META_API_KEY",
+      "model": "muse-spark-1.3-contributor",
+      "enabled": false,
+      "priceIn": 0.1,
+      "priceCached": 0.002,
+      "priceOut": 0.2,
+      "note": "Contributor mode: discounted, and Meta may use prompts, files and responses to train future models."
     }
   ]
 }

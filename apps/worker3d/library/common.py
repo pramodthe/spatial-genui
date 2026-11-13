@@ -38,6 +38,8 @@ def write_asset(out: Path, meta: dict, parts: list[dict]) -> dict:
              catalogue record}]
            A part from an existing model (retrieval) gives `meshes` (a list, each keeping its own textured
            material) instead of `mesh`; `color` is then only its colour in catalogue listings.
+           A moving part gives `pivot` (metres, same frame as its meshes): its node sits there, so turning
+           the node in an app turns the part about the pivot. Its motion goes in `extra`.
     """
     def meshes_of(part: dict) -> list[trimesh.Trimesh]:
         return part["meshes"] if "meshes" in part else [part["mesh"]]
@@ -52,13 +54,17 @@ def write_asset(out: Path, meta: dict, parts: list[dict]) -> dict:
     for part in parts:
         node = snake(part["name"])
         if "meshes" in part:
-            # Existing materials and normals stay as the author made them; children of one part node.
-            scene.graph.update(frame_from=scene.graph.base_frame, frame_to=node)
+            # Existing materials and normals stay as the author made them; children of one part node,
+            # which sits at the part's pivot (the origin unless it moves).
+            pivot = np.asarray(part.get("pivot", [0.0, 0.0, 0.0]), dtype=float) + (shift if "pivot" in part else 0)
+            scene.graph.update(frame_from=scene.graph.base_frame, frame_to=node, matrix=trimesh.transformations.translation_matrix(pivot))
             pieces = []
             for i, source in enumerate(part["meshes"]):
                 piece = source.copy()
                 piece.apply_translation(shift)
-                scene.add_geometry(piece, node_name=f"{node}_{i}", geom_name=f"{node}_{i}", parent_node_name=node)
+                local = piece.copy()
+                local.apply_translation(-pivot)
+                scene.add_geometry(local, node_name=f"{node}_{i}", geom_name=f"{node}_{i}", parent_node_name=node)
                 pieces.append(piece)
             vertices = np.concatenate([m.vertices for m in pieces])
             triangles = sum(len(m.faces) for m in pieces)
@@ -87,6 +93,7 @@ def write_asset(out: Path, meta: dict, parts: list[dict]) -> dict:
             "triangles": int(triangles),
             "centroid": [round(float(x), 4) for x in centroid], "labelAnchor": [round(float(x), 4) for x in anchor],
             "explodeDir": [round(float(x), 4) for x in direction],
+            **({"pivot": [round(float(x), 4) for x in np.asarray(part["pivot"]) + shift]} if "pivot" in part else {}),
             **part.get("extra", {}),
         })
 

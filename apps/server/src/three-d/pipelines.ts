@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { readFile, writeFile } from 'node:fs/promises';
+import { appendFile, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type OpenAI from 'openai';
@@ -32,7 +32,7 @@ const MAX_REPAIRS = 2;
 const MAX_TOOL_TURNS = 16;
 const MAX_TOOL_RESULT_CHARS = 8000;
 
-export type Usage = { calls: number; promptTokens: number; completionTokens: number; llmMs: number; toolCalls: number };
+export type Usage = { calls: number; promptTokens: number; cachedTokens: number; completionTokens: number; llmMs: number; toolCalls: number };
 export type StepResult =
   | { ok: true; glb: Buffer; code?: string; repairs: number }
   | { ok: false; error: string; code?: string; repairs: number };
@@ -61,11 +61,12 @@ function userContent(text: string, image?: string): ContentPart[] | string {
 function track(usage: Usage, reply: Completion) {
   usage.calls++;
   usage.promptTokens += reply.promptTokens;
+  usage.cachedTokens += reply.cachedTokens;
   usage.completionTokens += reply.completionTokens;
   usage.llmMs += reply.ms;
 }
 
-const emptyUsage = (): Usage => ({ calls: 0, promptTokens: 0, completionTokens: 0, llmMs: 0, toolCalls: 0 });
+const emptyUsage = (): Usage => ({ calls: 0, promptTokens: 0, cachedTokens: 0, completionTokens: 0, llmMs: 0, toolCalls: 0 });
 
 /** P1 (Three.js) and P2 (CadQuery): the model writes the whole program; errors go back for repair. */
 class CodeSession implements Session {
@@ -173,14 +174,17 @@ function extractPython(reply: string): string | null {
 }
 
 /** P3: an agent with Blender tools, served by the Blender MCP server (apps/worker3d). */
-class BlenderSession implements Session {
+export class BlenderSession implements Session {
   usage = emptyUsage();
-  private messages: OpenAI.Chat.ChatCompletionMessageParam[] = [{ role: 'system', content: systemPrompt('p3-blender') }];
+  private messages: OpenAI.Chat.ChatCompletionMessageParam[];
   private version = 0;
 
-  private constructor(private client: Client, private tools: OpenAI.Chat.ChatCompletionTool[], private target: LlmTarget, private jobDir: string, private backend: Backend) {}
+  private constructor(private client: Client, private tools: OpenAI.Chat.ChatCompletionTool[], private target: LlmTarget, private jobDir: string, private backend: Backend, system: string, private maxTurns: number) {
+    this.messages = [{ role: 'system', content: system }];
+  }
 
-  static async open(target: LlmTarget, jobDir: string, backend: Backend): Promise<BlenderSession> {
+  /** `system`: the agent's instructions (default: build a model from scratch, Phase 3's P3); `maxTurns`: tool calls per step. */
+  static async open(target: LlmTarget, jobDir: string, backend: Backend, system = systemPrompt('p3-blender'), maxTurns = MAX_TOOL_TURNS): Promise<BlenderSession> {
     // Local: the MCP server gets the SDK's minimal default environment (no API keys) and runs Blender
     // in the macOS sandbox. Modal: the hosted MCP server gives this session its own Blender sandbox.
     const transport = backend === 'modal'
@@ -193,7 +197,31 @@ class BlenderSession implements Session {
     const tools = listed.tools
       .filter((t) => t.name !== 'export_glb' && t.name !== 'close_session')
       .map((t) => ({ type: 'function' as const, function: { name: t.name, description: t.description ?? '', parameters: t.inputSchema as Record<string, unknown> } }));
-    return new BlenderSession(client, tools, target, jobDir, backend);
+    return new BlenderSession(client, tools, target, jobDir, backend, system, maxTurns);
+  }
+
+  /** A long session outlives brief network drops (DNS, Wi-Fi): wait and retry them instead of failing the job. */
+  private async completeRetrying() {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await completeWithTools(this.messages, this.tools, this.target);
+      } catch (err) {
+        const connection = (err as Error).constructor?.name === 'APIConnectionError' || /fetch failed|ENOTFOUND|ECONNRESET/.test(String((err as Error).message));
+        if (!connection || attempt >= 5) throw err;
+        await this.log(`connection lost (${(err as Error).message}); retrying in 30 s`);
+        await new Promise((r) => setTimeout(r, 30_000));
+      }
+    }
+  }
+
+  /** The agent's turns and tool calls, for reviewing a run afterwards (<job>/transcript.log). */
+  private log(line: string) {
+    return appendFile(join(this.jobDir, 'transcript.log'), `[${new Date().toISOString().slice(11, 19)}] ${line}\n\n`).catch(() => undefined);
+  }
+
+  /** The harness's own Blender code (e.g. importing the model to repair); not shown to the agent. */
+  exec(code: string) {
+    return this.callTool('execute_blender_code', JSON.stringify({ code }), false);
   }
 
   start(text: string, image?: string) {
@@ -223,14 +251,17 @@ class BlenderSession implements Session {
 
   /** Let the model call tools until it answers without one (done) or runs out of turns. */
   private async agentLoop() {
-    for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
-      const reply = await completeWithTools(this.messages, this.tools, this.target);
+    for (let turn = 0; turn < this.maxTurns; turn++) {
+      const reply = await this.completeRetrying();
       track(this.usage, reply);
       this.messages.push(reply.message);
+      if (reply.text) await this.log(`assistant: ${reply.text}`);
       if (!reply.toolCalls.length) return;
       for (const call of reply.toolCalls) {
         this.usage.toolCalls++;
-        this.messages.push({ role: 'tool', tool_call_id: call.id, content: await this.callTool(call.name, call.arguments) });
+        const result = await this.callTool(call.name, call.arguments);
+        await this.log(`tool ${call.name}: ${call.arguments.slice(0, 4000)}\n=> ${result.slice(0, 1500)}`);
+        this.messages.push({ role: 'tool', tool_call_id: call.id, content: result });
       }
     }
     // Out of turns: export whatever the scene holds; the model gets a chance to finish on the next step.

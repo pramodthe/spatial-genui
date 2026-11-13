@@ -89,11 +89,15 @@ async def get_scene_info() -> str:
 
 @mcp.tool()
 async def export_glb(filename: str = "model.glb") -> str:
-    """Export the scene as GLB (Y up, modifiers applied) into the job directory; the file also comes back base64-encoded."""
+    """Export the scene as GLB (Y up, modifiers applied) into the job directory, and return the scene summary."""
     name = Path(filename).name
     if not name.endswith(".glb"):
         name += ".glb"
-    return json.dumps(await bridge.request({"op": "export", "path": str(JOB_DIR / name)}, timeout=120))
+    result = await bridge.request({"op": "export", "path": str(JOB_DIR / name)}, timeout=120)
+    # The file is in the job directory, which the harness reads. Sending it back inline too (base64) broke
+    # the stdio connection for a 4.5 MB textured model.
+    result.pop("glb_base64", None)
+    return json.dumps(result)
 
 
 if __name__ == "__main__":

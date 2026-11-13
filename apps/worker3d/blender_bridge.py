@@ -62,6 +62,7 @@ def handle(request: dict) -> dict:
         bpy.ops.export_scene.gltf(
             filepath=path, export_format="GLB", export_apply=True, export_yup=True,
             export_cameras=False, export_lights=False,
+            export_extras=True,  # custom properties (e.g. a part's motion) go into the node's extras
         )
         glb = base64.b64encode(open(path, "rb").read()).decode()
         return {"ok": True, "glb_base64": glb, "scene": scene_info()}

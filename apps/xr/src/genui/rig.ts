@@ -32,7 +32,9 @@ import {
 type UiHandle = { object3D: Object3D; set(id: string, props: { text?: string }): void };
 type UiFn = (markup: string, options: { width?: number; position?: [number, number, number]; rotationY?: number }) => UiHandle;
 
-export type RigPart = { id: string; name: string; object3D: Object3D; labelAnchor: Vector3; explodeDir: Vector3 };
+/** motion: how the part moves in the real object (rotate about its own origin, or slide), in the model's frame. */
+export type RigMotion = { type: 'rotate' | 'slide'; axis: Vector3; range: [number, number] };
+export type RigPart = { id: string; name: string; object3D: Object3D; labelAnchor: Vector3; explodeDir: Vector3; motion?: RigMotion };
 export type LabelHandle = { object3D: Object3D; set(text: string): void; setVisible(visible: boolean): void };
 
 const LABEL_WIDTH_M = 0.16; // panel width; 28px text in a 320px-wide panel reads at 1.4 cm
@@ -345,6 +347,31 @@ export class TeachingRig {
   }
 
   /** Back to the assembled, solid model, with pulled-out parts returned to their places. */
+  /**
+   * Move a part the way it moves in the real object (parts with motion only): rotate turns it about its
+   * pivot, t from 0 to 1 sweeping its angle range (and on past 1, so t = time keeps a gear turning);
+   * slide moves it along its axis, t clamped to 0..1. Call it every frame in update() to animate.
+   */
+  move(id: string, t: number) {
+    const part = this.find(id);
+    const motion = part.motion;
+    if (!motion) {
+      const moving = this.parts.filter((p) => p.motion).map((p) => p.id);
+      throw new Error(`Part '${id}' doesn't move. Moving parts: ${moving.join(', ') || 'none'}.`);
+    }
+    if (this.isGrabbed(part.object3D)) return;
+    const home = this.home.get(part.object3D)!;
+    const [from, to] = motion.range;
+    if (motion.type === 'rotate') {
+      this.q1.setFromAxisAngle(motion.axis, ((from + (to - from) * (Number(t) || 0)) * Math.PI) / 180);
+      part.object3D.quaternion.copy(this.q1).multiply(home.quaternion);
+    } else {
+      const s = Math.min(1, Math.max(0, Number(t) || 0));
+      this.v1.copy(motion.axis).multiplyScalar(from + (to - from) * s).add(home.position);
+      this.placePart(part, this.v1);
+    }
+  }
+
   reset() {
     this.cutaway(false);
     this.xray(false);

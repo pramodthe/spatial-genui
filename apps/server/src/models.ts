@@ -8,6 +8,8 @@ export type ModelEntry = LlmTarget & {
   apiKeyEnv: string;
   priceIn?: number;
   priceOut?: number;
+  /** USD per 1M input tokens served from the provider's prompt cache. */
+  priceCached?: number;
   enabled?: boolean;
 };
 

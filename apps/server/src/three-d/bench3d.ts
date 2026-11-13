@@ -144,7 +144,7 @@ async function runJob(obj: AssetRequest, pipeline: Pipeline, variant: 'base' | '
   await mkdir(jobDir, { recursive: true });
   const row: JobRow = {
     objectId: obj.id, category: obj.category, pipeline, variant, model: generator.id, criticModel: critic.id,
-    ok: false, rounds: [], finalRound: null, lastRound: null, usage: { calls: 0, promptTokens: 0, completionTokens: 0, llmMs: 0, toolCalls: 0 },
+    ok: false, rounds: [], finalRound: null, lastRound: null, usage: { calls: 0, promptTokens: 0, cachedTokens: 0, completionTokens: 0, llmMs: 0, toolCalls: 0 },
     criticUsage: { calls: 0, promptTokens: 0, completionTokens: 0, ms: 0 }, totalMs: 0,
   };
   const ref = variant === 'ref' ? await reference(obj) : undefined;
@@ -228,7 +228,7 @@ await Promise.all(Array.from({ length: concurrency }, async () => {
       // Provider or harness failure, not the pipeline's: recorded, and retried on the next run.
       row = {
         objectId: obj.id, category: obj.category, pipeline, variant, model: generator.id, criticModel: critic.id, ok: false,
-        rounds: [], finalRound: null, lastRound: null, usage: { calls: 0, promptTokens: 0, completionTokens: 0, llmMs: 0, toolCalls: 0 },
+        rounds: [], finalRound: null, lastRound: null, usage: { calls: 0, promptTokens: 0, cachedTokens: 0, completionTokens: 0, llmMs: 0, toolCalls: 0 },
         criticUsage: { calls: 0, promptTokens: 0, completionTokens: 0, ms: 0 }, totalMs: 0, apiError: String((err as Error).message ?? err).slice(0, 500),
       };
     }

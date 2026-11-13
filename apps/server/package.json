@@ -23,7 +23,8 @@
     "bench3d:segment": "tsx src/three-d/segment-parts.ts",
     "bench3d:judge-parts": "tsx src/three-d/judge-parts.ts",
     "bench3d:name-regions": "tsx src/three-d/name-regions.ts",
-    "bench3d:verify-parts": "tsx src/three-d/verify-parts.ts"
+    "bench3d:verify-parts": "tsx src/three-d/verify-parts.ts",
+    "bench3d:repair": "tsx src/three-d/repair.ts"
   },
   "engines": {
     "node": ">=22.12.0"

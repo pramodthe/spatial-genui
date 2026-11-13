@@ -19,6 +19,10 @@ export type LibraryPart = {
   labelAnchor: [number, number, number];
   explodeDir: [number, number, number];
   triangles: number;
+  /** A part that moves in the real object (rotate about its pivot, or slide along its axis). */
+  motion?: { type: 'rotate' | 'slide'; axis: [number, number, number]; range: [number, number]; unit?: string };
+  pivot?: [number, number, number];
+  teeth?: number;
 };
 
 export type LibraryEntry = {
@@ -72,11 +76,18 @@ export function librarySection(ids?: string[]): string {
   const list = entries.map((e) => {
     const size = e.sizeM.map((m) => Math.round(m * 100)).join(' x ');
     const notes = (e as LibraryEntry & { provenance?: { notes?: string[] } }).provenance?.notes ?? [];
-    return `- '${e.id}': ${e.title}, ${size} cm. Parts: ${e.parts.map((p) => p.node).join(', ')}.${notes.length ? ` Notes: ${notes.join(' ')}` : ''}`;
+    const moving = e.parts.filter((p) => p.motion).map((p) => `${p.node} (${p.motion!.type === 'rotate' ? 'turns' : 'slides'}${p.teeth ? `, ${p.teeth} teeth` : ''})`);
+    return `- '${e.id}': ${e.title}, ${size} cm. Parts: ${e.parts.map((p) => p.node).join(', ')}.${moving.length ? ` Moving parts: ${moving.join(', ')}.` : ''}${notes.length ? ` Notes: ${notes.join(' ')}` : ''}`;
   });
   // Several models (e.g. the molecules of a reaction): the host preloads only ids written as literals.
   const several = entries.length > 1
     ? `\nThis lesson has ${entries.length} models: get each one with its own call and its id written out (\`const second = assets.get('${entries[1].id}');\`), never in a loop over ids, and set them side by side along x with a gap between them.`
+    : '';
+  // Only models with moving parts get the move() lines: on any other model the call is an error.
+  const moveDocs = entries.some((e) => e.parts.some((p) => p.motion))
+    ? `
+engine.move('piston', (1 - Math.cos(time * 2)) / 2); // moving parts only (listed above): 0..1 sweeps the motion; call it in update(time)
+gears.move('drive_gear', time / 4);    // a turning part keeps turning as t grows past 1`
     : '';
   return `
 
@@ -95,7 +106,7 @@ heart.explode(0.6);                    // 0 = assembled, 1 = parts spread apart;
 heart.cutaway(true);                   // slice away the half facing the user to show the inside (follows the model as it turns); cutaway(false) closes it
 heart.xray(true, ['mitral_valve']);    // everything see-through except the listed parts; xray(false) makes it solid
 heart.highlight('left_ventricle');     // make one part glow; highlight(null) clears it
-heart.reset();                         // assembled, solid, no highlight, pulled-out parts back in place
+heart.reset();                         // assembled, solid, no highlight, pulled-out parts back in place${moveDocs}
 traits(heart.part('aortic_valve'), { grab: true }); // let the learner pull one part out by hand
 heart.parts;                           // [{ id, name, group, object3D, labelAnchor, explodeDir }] for every part
 heart.anchor('left_ventricle');        // THREE.Vector3 on the part's outside, in root's coordinates

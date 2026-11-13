@@ -1,0 +1,20 @@
+# Only what the Dockerfile copies; never secrets.
+**/node_modules
+**/.env
+**/.env.*
+.env
+.git
+.claude
+.iwsdk
+**/.iwsdk
+apps/server/runs
+apps/server/.sandbox*
+apps/worker3d
+apps/xr/src
+apps/xr/public
+apps/xr/tests
+bench/results
+bench/prompts
+data/*
+!data/library
+docs

@@ -36,8 +36,13 @@ def write_asset(out: Path, meta: dict, parts: list[dict]) -> dict:
              roughness?, metalness?, glow? (0-1 emissive), sharp? (keep edges over 30 degrees sharp, e.g. a
              flat ring, which smooth shading would round into a tube), extra?: dict merged into the part's
              catalogue record}]
+           A part from an existing model (retrieval) gives `meshes` (a list, each keeping its own textured
+           material) instead of `mesh`; `color` is then only its colour in catalogue listings.
     """
-    all_v = np.concatenate([np.asarray(p["mesh"].vertices) for p in parts])
+    def meshes_of(part: dict) -> list[trimesh.Trimesh]:
+        return part["meshes"] if "meshes" in part else [part["mesh"]]
+
+    all_v = np.concatenate([np.asarray(m.vertices) for p in parts for m in meshes_of(p)])
     lo, hi = all_v.min(axis=0), all_v.max(axis=0)
     shift = np.array([-(lo[0] + hi[0]) / 2, -lo[1], -(lo[2] + hi[2]) / 2])
     center = np.array([0.0, (hi[1] - lo[1]) / 2, 0.0])  # the asset's centre after the shift
@@ -45,28 +50,41 @@ def write_asset(out: Path, meta: dict, parts: list[dict]) -> dict:
     scene = trimesh.Scene()
     records = []
     for part in parts:
-        mesh = part["mesh"].copy()
-        mesh.apply_translation(shift)
-        mesh.fix_normals(multibody=True)  # each piece on its own (a part can be several bodies)
-        if part.get("sharp"):
-            mesh = trimesh.graph.smooth_shade(mesh, angle=np.radians(30), facet_minarea=None)
-        rgb = [int(part["color"][i:i + 2], 16) for i in (1, 3, 5)]
         node = snake(part["name"])
-        mesh.visual = trimesh.visual.TextureVisuals(material=trimesh.visual.material.PBRMaterial(
-            name=node, baseColorFactor=[*rgb, 255], roughnessFactor=part.get("roughness", 0.55),
-            metallicFactor=part.get("metalness", 0.0), doubleSided=False,
-            emissiveFactor=[c / 255 * part.get("glow", 0.0) for c in rgb]))  # e.g. the Sun
-        scene.add_geometry(mesh, node_name=node, geom_name=node)
+        if "meshes" in part:
+            # Existing materials and normals stay as the author made them; children of one part node.
+            scene.graph.update(frame_from=scene.graph.base_frame, frame_to=node)
+            pieces = []
+            for i, source in enumerate(part["meshes"]):
+                piece = source.copy()
+                piece.apply_translation(shift)
+                scene.add_geometry(piece, node_name=f"{node}_{i}", geom_name=f"{node}_{i}", parent_node_name=node)
+                pieces.append(piece)
+            vertices = np.concatenate([m.vertices for m in pieces])
+            triangles = sum(len(m.faces) for m in pieces)
+        else:
+            mesh = part["mesh"].copy()
+            mesh.apply_translation(shift)
+            mesh.fix_normals(multibody=True)  # each piece on its own (a part can be several bodies)
+            if part.get("sharp"):
+                mesh = trimesh.graph.smooth_shade(mesh, angle=np.radians(30), facet_minarea=None)
+            rgb = [int(part["color"][i:i + 2], 16) for i in (1, 3, 5)]
+            mesh.visual = trimesh.visual.TextureVisuals(material=trimesh.visual.material.PBRMaterial(
+                name=node, baseColorFactor=[*rgb, 255], roughnessFactor=part.get("roughness", 0.55),
+                metallicFactor=part.get("metalness", 0.0), doubleSided=False,
+                emissiveFactor=[c / 255 * part.get("glow", 0.0) for c in rgb]))  # e.g. the Sun
+            scene.add_geometry(mesh, node_name=node, geom_name=node)
+            vertices, triangles = mesh.vertices, len(mesh.faces)
         # Teaching rig: explode direction from the asset's centre through the part's centroid; label
         # anchor = the part's vertex farthest along that direction (a point on its outside).
-        centroid = mesh.vertices.mean(axis=0)
+        centroid = vertices.mean(axis=0)
         direction = centroid - center
         norm = float(np.linalg.norm(direction))
         direction = direction / norm if norm > 1e-6 else np.array([0.0, 1.0, 0.0])
-        anchor = mesh.vertices[int(np.argmax(mesh.vertices @ direction))]
+        anchor = vertices[int(np.argmax(vertices @ direction))]
         records.append({
             "node": node, "name": part["name"], "group": part.get("group"), "color": part["color"],
-            "triangles": int(len(mesh.faces)),
+            "triangles": int(triangles),
             "centroid": [round(float(x), 4) for x in centroid], "labelAnchor": [round(float(x), 4) for x in anchor],
             "explodeDir": [round(float(x), 4) for x in direction],
             **part.get("extra", {}),

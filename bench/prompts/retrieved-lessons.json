@@ -1,0 +1,8 @@
+[
+  { "id": "bicycle-parts", "tier": "T5", "domain": "mechanical", "prompt": "Teach me the parts of a bicycle and how pedalling makes it move.", "expectAssets": ["bicycle-objaverse"] },
+  { "id": "guitar-sound", "tier": "T5", "domain": "everyday", "prompt": "Teach me the parts of an acoustic guitar and how it makes sound.", "expectAssets": ["acoustic-guitar-objaverse"] },
+  { "id": "lunar-module", "tier": "T5", "domain": "astronomy", "prompt": "Teach me how the Apollo lunar module landed on the Moon and got back off.", "expectAssets": ["apollo-lunar-lander-objaverse"] },
+  { "id": "greek-temple", "tier": "T5", "domain": "architecture", "prompt": "Teach me the parts of a Greek temple like the Parthenon.", "expectAssets": ["parthenon-temple-objaverse"] },
+  { "id": "volcano-inside", "tier": "T5", "domain": "earth-science", "prompt": "Show me inside a volcano and how an eruption happens.", "expectAssets": ["volcano-objaverse"] },
+  { "id": "chair-ergonomics", "tier": "T5", "domain": "everyday", "prompt": "Teach me how an office chair adjusts to fit your body.", "expectAssets": ["office-chair-objaverse"] }
+]

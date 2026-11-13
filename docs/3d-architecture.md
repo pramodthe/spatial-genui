@@ -346,9 +346,38 @@ Rebuild the assets: download BodyParts3D into `data/bodyparts3d/` (see the build
   - DINOv3 needs `torchvision` and full precision.
   - Phrase searches matched no model titles.
   - Running retrieval alongside a benchmark starved the 15 s code sandbox. Don't run heavy jobs during a benchmark.
-- **Open:**
-  - Grab probes still miss small or internal parts (a valve inside the heart, a 1.2 cm Earth).
-  - Retrieved models are not yet ingested into the library with a teaching rig: that needs part grouping for generic node names, and decimation that keeps textures.
+- **Open:** grab probes still miss small or internal parts (a valve inside the heart, a 1.2 cm Earth).
+
+**Retrieved models in the library (Nov 13).** The six retrieval picks other than the heart (the BodyParts3D heart is better) are now library assets with named parts and a teaching rig:
+- **Ingestion** (`bench3d:ingest`, with `library/retrieved.py` doing the geometry):
+  1. Split the model into its physically separate pieces. Faces are joined through shared positions, so UV seams don't split a piece.
+  2. Drop stray pieces that no chain of near neighbours connects to the model (the lander file had two 4 cm specks 8 m away).
+  3. Merge small pieces into the nearest of at most 12 large ones.
+  4. Render each group in solid red with the rest faint, and ask Muse Ember to name every group, pick the view a learner should see first, and give the real size.
+  5. Write the asset with the author's own textured materials, one node per part, the CC BY credit (author, title, link) and provenance notes. Notes say "not real size, about 1:N" where the object is too big for a desk, and that no subject expert checked the model.
+- **Results:** bicycle (front wheel, rear wheel, frame, saddle, handlebar, pedal), office chair (seat, backrest, star base, armrest, gas lift), Apollo lunar module (descent stage, ascent stage, engine nozzle, ladder), Parthenon (temple building, cella), volcano (volcano, magma chamber), acoustic guitar (body, neck). Pieces the author modelled as one stay one part; real segmentation is M5.
+- **Lessons that use them** (6 requests × 2 runs, Muse Ember; the router picked the right model 12/12):
+
+  | | Fidelity | Correctness | Clarity | Hands-on | Panel buttons by hand | Median time | Cost / lesson |
+  |---|---|---|---|---|---|---|---|
+  | Built from shapes | 3.83 | 4.00 | 3.50 | 3.92 | 30/35 | 60 s | $0.016 |
+  | Retrieved models + teaching rig | 3.92 | 4.33 | 3.50 | 4.08 | 36/36 | 37 s | $0.009 |
+
+  Equal or better on every measure. Lessons are 40% faster and cheaper because the agent writes no geometry, and every button worked. The judge's main complaint is too few parts (the guitar and the temple have two) and a bicycle drivetrain shown only as "frame".
+- **Found and fixed on the way:**
+  - "Which view shows the front" was ambiguous: a bicycle's front is its handlebar end, but a learner should see its profile. Ember is now asked for the best view for a learner.
+  - Ember skipped groups, so it is now asked again for any it leaves out, and leftovers become "other" (no geometry is dropped).
+  - Colour-coded groups were confused under lighting (red against magenta), so each group now gets its own highlight render.
+  - Stray pieces inflated a model's size. Trimesh 4 / NumPy 2 removed `ndarray.ptp`.
+
+**Clarity fixes (Nov 13).**
+- The host now centres the main panel and the panels beside it together, so a quiz panel no longer runs off the edge of the view.
+- Labels scale with the framed distance (up to 1.8×), so text keeps the angular size it was designed for. That takes a second layout pass with the main panel kept.
+- On the same 16 M3 lessons, clarity is unchanged (3.06 against 3.12, within noise): the judge no longer mentions clipped panels, and the heart lessons improved, but bigger pin labels now pile up over the solar system, where labels at different depths overlap on screen.
+- Remaining:
+  - Screen-space label placement (the rig would need the eye position).
+  - Lesson text styling (mixed italics come from the agent's markup).
+  - First steps that don't yet explain the topic. That is a lesson-plan problem, not a layout one.
 
 ## 10. Sources
 

@@ -72,6 +72,8 @@ export class TeachingRig {
   private readonly corners = Array.from({ length: 8 }, () => new Vector3());
   private readonly column: Label[] = [];
   private readonly order: Label[] = [];
+  /** Label size factor: the host enlarges labels on a lesson framed farther away, so text keeps its angular size. */
+  private labelScale = 1;
 
   constructor(
     private readonly model: Object3D,
@@ -133,6 +135,7 @@ export class TeachingRig {
       return this.labelHandle(existing);
     }
     const ui = this.ui(labelMarkup(text ?? part.name.charAt(0).toUpperCase() + part.name.slice(1)), { width: LABEL_WIDTH_M, position: [0, 0, 0] });
+    ui.object3D.scale.setScalar(this.labelScale);
     parent.add(ui.object3D);
     const geometry = new BufferGeometry();
     geometry.setAttribute('position', new BufferAttribute(new Float32Array(6), 3));
@@ -164,7 +167,7 @@ export class TeachingRig {
         // Hidden is not enough: a hidden panel can still be hit by a hand ray, and lessons that make
         // a label for every part and show a few at a time would bury their buttons. Collapse it too.
         label.ui.object3D.visible = visible;
-        label.ui.object3D.scale.setScalar(visible ? 1 : 1e-4);
+        label.ui.object3D.scale.setScalar(visible ? this.labelScale : 1e-4);
         label.line.visible = visible;
       },
     };
@@ -197,7 +200,8 @@ export class TeachingRig {
       parent.worldToLocal(label.part.object3D.localToWorld(label.anchor));
       label.side = label.anchor.x < centerX ? -1 : 1;
     }
-    const step = LABEL_HEIGHT_M + LABEL_GAP_M;
+    const k = this.labelScale;
+    const step = (LABEL_HEIGHT_M + LABEL_GAP_M) * k;
     for (const side of [-1, 1]) {
       // Reused array: explode() runs this every frame while animating.
       const column = this.column;
@@ -213,8 +217,8 @@ export class TeachingRig {
       // Re-centre the column on the parts' heights so it doesn't drift below the model, but never
       // above the model's top: lessons put their panels above the model.
       shift = column.length ? shift / column.length : 0;
-      if (column.length) shift = Math.min(shift, this.box.max.y - LABEL_HEIGHT_M / 2 - column[0].y);
-      const x = side < 0 ? this.box.min.x - SIDE_MARGIN_M - LABEL_WIDTH_M / 2 : this.box.max.x + SIDE_MARGIN_M + LABEL_WIDTH_M / 2;
+      if (column.length) shift = Math.min(shift, this.box.max.y - (LABEL_HEIGHT_M * k) / 2 - column[0].y);
+      const x = side < 0 ? this.box.min.x - SIDE_MARGIN_M - (LABEL_WIDTH_M * k) / 2 : this.box.max.x + SIDE_MARGIN_M + (LABEL_WIDTH_M * k) / 2;
       // One depth for the whole column: stacked by height at different depths, labels collide on
       // screen when seen from above (a seated user looks down at the desk).
       const z = (this.box.min.z + frontZ) / 2 + 0.02;
@@ -229,7 +233,8 @@ export class TeachingRig {
    */
   private layoutPins() {
     const parent = this.model.parent!;
-    const step = LABEL_HEIGHT_M + LABEL_GAP_M;
+    const k = this.labelScale;
+    const step = (LABEL_HEIGHT_M + LABEL_GAP_M) * k;
     const placed = this.column;
     placed.length = 0;
     for (const label of this.labels) {
@@ -244,13 +249,13 @@ export class TeachingRig {
     order.push(...this.labels);
     order.sort((a, b) => a.anchor.z - b.anchor.z);
     for (const label of order) {
-      let y = this.box.max.y + PIN_RISE_M + LABEL_HEIGHT_M / 2;
+      let y = this.box.max.y + PIN_RISE_M + (LABEL_HEIGHT_M * k) / 2;
       // Raise past each label it would cover (a tolerance, since other.y + step - other.y can round
       // to just under step); at most one rise per label already placed.
       for (let rises = 0, clash = true; clash && rises <= placed.length; rises++) {
         clash = false;
         for (const other of placed) {
-          if (Math.abs(other.anchor.x - label.anchor.x) < LABEL_WIDTH_M + LABEL_GAP_M && Math.abs(other.anchor.z - label.anchor.z) < 0.15 && Math.abs(other.y - y) < step - 1e-6) {
+          if (Math.abs(other.anchor.x - label.anchor.x) < (LABEL_WIDTH_M + LABEL_GAP_M) * k && Math.abs(other.anchor.z - label.anchor.z) < 0.15 && Math.abs(other.y - y) < step - 1e-6) {
             y = other.y + step;
             clash = true;
           }
@@ -273,8 +278,8 @@ export class TeachingRig {
       // Lines live in the label holder's parent frame (root), like the holders themselves.
       const frame = holder.parent ?? parent;
       this.v1.copy(holder.position);
-      this.v1.x -= label.side * (LABEL_WIDTH_M / 2);
-      if (label.side === 0) this.v1.y -= LABEL_HEIGHT_M / 2;
+      this.v1.x -= label.side * ((LABEL_WIDTH_M * this.labelScale) / 2);
+      if (label.side === 0) this.v1.y -= (LABEL_HEIGHT_M * this.labelScale) / 2;
       this.v2.copy(label.anchorLocal);
       label.part.object3D.localToWorld(this.v2);
       frame.worldToLocal(this.v2);
@@ -366,6 +371,13 @@ export class TeachingRig {
   }
 
   /** The label panels, so the host can keep the lesson's own panels off them. */
+  /** Host only: enlarge labels by `scale` (1 = as designed) and lay them out again. */
+  setLabelScale(scale: number) {
+    this.labelScale = scale;
+    for (const label of this.labels) if (label.ui.object3D.visible) label.ui.object3D.scale.setScalar(scale);
+    this.layoutLabels();
+  }
+
   labelHolders(): Object3D[] {
     return this.labels.map((l) => l.ui.object3D);
   }

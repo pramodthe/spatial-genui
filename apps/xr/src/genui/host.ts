@@ -541,7 +541,7 @@ function guard(mounted: Mounted, fn: () => void): () => void {
  *   main panel when that would be too far to the side to see.
  * Nothing overlaps by construction, and no hand ray to a button has to cross the model.
  */
-function layoutLessonPanels(mounted: Mounted) {
+function layoutLessonPanels(mounted: Mounted, again?: { main: Object3D }) {
   const root = mounted.root;
   if (!root || mounted.rigs.length === 0) return;
   root.updateMatrixWorld(true);
@@ -589,8 +589,10 @@ function layoutLessonPanels(mounted: Mounted) {
     return bottom;
   };
 
-  // The main panel: the highest one the agent placed (lessons put their main panel on top).
+  // The main panel: the highest one the agent placed (lessons put their main panel on top). A second
+  // pass keeps the first pass's choice: panels beside the main one now share its top edge.
   panels.sort((a, b) => b.box.max.y - a.box.max.y);
+  if (again) panels.sort((a, b) => Number(b.holder === again.main) - Number(a.holder === again.main));
   const [main, ...others] = panels;
   const mainWidth = main.box.max.x - main.box.min.x;
   const mainHeight = main.box.max.y - main.box.min.y;
@@ -631,38 +633,55 @@ function layoutLessonPanels(mounted: Mounted) {
   }
   const eye = eyeNow();
   const mainBottom = clearBottom(eye, frontZ);
-  moveTo(main, modelCenterX - mainWidth / 2, mainBottom, frontZ);
   const r3 = (v: Vector3 | null) => v && [v.x, v.y, v.z].map((n) => Math.round(n * 1000) / 1000);
   mounted.layout = { eye: r3(eye), move, model: [r3(model.min), r3(model.max)], mainBottom, mainHeight };
 
   // The rest beside the label columns, on the side the agent chose, stacked downwards from the top;
-  // beside the main panel instead when the label columns would put them out of sight.
+  // beside the main panel instead when the label columns would put them out of sight. Then the main
+  // panel and the panels beside it are centred together over the model, so none runs off one side.
+  const size = (box: Box3) => ({ width: box.max.x - box.min.x, height: box.max.y - box.min.y });
+  const besideMain = { left: [] as typeof others, right: [] as typeof others };
   let rightTop = occupied.max.y;
   let leftTop = occupied.max.y;
-  let besideRightTop = mainBottom + mainHeight;
-  let besideLeftTop = mainBottom + mainHeight;
   for (const panel of others) {
-    const width = panel.box.max.x - panel.box.min.x;
-    const height = panel.box.max.y - panel.box.min.y;
+    const { width, height } = size(panel.box);
     const right = (panel.box.min.x + panel.box.max.x) / 2 >= modelCenterX;
     const outerX = right ? occupied.max.x + gap + width : occupied.min.x - gap - width;
-    if (!eye || Math.abs(outerX - eye.x) <= SIDE * (eye.z - frontZ)) {
-      if (right) {
-        moveTo(panel, occupied.max.x + gap, rightTop - height, frontZ);
-        rightTop -= height + gap;
-      } else {
-        moveTo(panel, occupied.min.x - gap - width, leftTop - height, frontZ);
-        leftTop -= height + gap;
-      }
+    if (eye && Math.abs(outerX - eye.x) > SIDE * (eye.z - frontZ)) {
+      besideMain[right ? 'right' : 'left'].push(panel);
     } else if (right) {
-      moveTo(panel, modelCenterX + mainWidth / 2 + gap, besideRightTop - height, frontZ);
-      besideRightTop -= height + gap;
+      moveTo(panel, occupied.max.x + gap, rightTop - height, frontZ);
+      rightTop -= height + gap;
     } else {
-      moveTo(panel, modelCenterX - mainWidth / 2 - gap - width, besideLeftTop - height, frontZ);
-      besideLeftTop -= height + gap;
+      moveTo(panel, occupied.min.x - gap - width, leftTop - height, frontZ);
+      leftTop -= height + gap;
+    }
+  }
+  const columnWidth = (panels: typeof others) => (panels.length ? Math.max(...panels.map((p) => size(p.box).width)) + gap : 0);
+  const leftWidth = columnWidth(besideMain.left);
+  const mainLeft = modelCenterX - (leftWidth + mainWidth + columnWidth(besideMain.right)) / 2 + leftWidth;
+  moveTo(main, mainLeft, mainBottom, frontZ);
+  for (const [side, panels] of Object.entries(besideMain)) {
+    let top = mainBottom + mainHeight;
+    for (const panel of panels) {
+      const { width, height } = size(panel.box);
+      moveTo(panel, side === 'right' ? mainLeft + mainWidth + gap : mainLeft - gap - width, top - height, frontZ);
+      top -= height + gap;
     }
   }
   root.updateMatrixWorld(true);
+
+  // Labels keep the angular size they were designed for (1.4 cm text read from 55 cm) wherever the
+  // framing put the lesson; if that changes their size, lay everything out again around them.
+  if (eye && !again) {
+    const labelScale = Math.min(1.8, Math.max(1, eye.distanceTo(model.getCenter(new Vector3())) / 0.55));
+    mounted.layout.labelScale = labelScale;
+    if (labelScale > 1.05) {
+      for (const rig of mounted.rigs) rig.setLabelScale(labelScale);
+      layoutLessonPanels(mounted, { main: main.holder });
+      if (mounted.layout) mounted.layout.labelScale = labelScale;
+    }
+  }
 }
 
 function describe(err: unknown): string {

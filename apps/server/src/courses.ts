@@ -80,6 +80,7 @@ const LEGACY_DIR = process.env.COURSES_DIR || fileURLToPath(new URL('../../../da
 const BUILD_ALL = process.env.COURSE_BUILD_ALL === '1';
 const MODELS = process.env.COURSE_MODELS !== '0';
 const MAX_COURSES = 200;
+const REMOVED_KIT = /\bkit\.(matchQuiz|flashcards)\b/;
 
 const PLANNER_PROMPT = `You plan a short hands-on course for a mixed-reality headset. Each lesson is one interactive 3D scene on the learner's desk: a detailed model they can pick up, turn and take apart, with one small panel of text and buttons. A lesson has no video, no long reading and no typing.
 
@@ -107,6 +108,14 @@ function load() {
       if (lesson.polish === 'running') delete lesson.polish;
     }
     if (course.status === 'planning') Object.assign(course, { status: 'failed', error: 'The server restarted while planning.' });
+    // Quiz and flash-card lessons were removed (Nov 14): saved ones call, or ask for, kit functions that no
+    // longer exist.
+    const runnable = course.lessons.filter((lesson) => !REMOVED_KIT.test(`${lesson.code ?? ''}\n${lesson.prompt}`));
+    if (runnable.length > 0 && runnable.length < course.lessons.length) {
+      course.lessons = runnable;
+      if (course.status === 'building' && runnable.every((l) => l.status === 'ready')) course.status = 'ready';
+      saveCourse(course);
+    }
     courses.set(course.id, course);
     // A model build carries on from the files it left (each stage keeps its result).
     if (course.model?.status === 'building') void buildModel(course);

@@ -1,7 +1,8 @@
 // The view pill, in the managed browser's emulated XR session:
 // - a lesson's 3D is fitted into the 0.5 m box and its card keeps its size;
 // - the pill offers the real size with the scale ("1:16" for an 8 m house shown 0.5 m tall);
-// - pressed, the house stands 8 m tall on the floor ahead while the card stays put; pressed again, back to fit;
+// - pressed, the house stands 8 m tall on the floor ahead while its cards stay put at their size, wherever the lesson
+//   attached them, and a name tag on the house keeps its size; pressed again, back to fit;
 // - a subject too small to see at its real size (a bacterium) only shows the scale.
 // Returns the measurements; fails (ok: false) listing any check that didn't hold.
 // Usage: npx @iwsdk/cli browser run tests/view-smoke.mjs --timeout 60000
@@ -14,6 +15,18 @@ const HOUSE = `export default function build({ THREE, kit, ui }) {
   root.add(house);
   const panel = kit.panel(ui, { width: 0.36, position: [0.4, 0.22, 0], title: 'A house', items: [{ buttons: [{ label: 'Next', onPress: () => {} }] }] });
   root.add(panel.object3D);
+  // A card the lesson keeps in a group of its own, and a name tag on the house (nothing to press).
+  const side = new THREE.Group();
+  side.name = 'side';
+  side.position.set(-0.4, 0.1, 0);
+  root.add(side);
+  const nested = kit.panel(ui, { width: 0.36, position: [0, 0.12, 0], title: 'Inside', items: [{ buttons: [{ label: 'Open', onPress: () => {} }] }] });
+  nested.object3D.name = 'nested card';
+  side.add(nested.object3D);
+  const tag = ui('<div style="padding: 8px; background-color: #222;"><span style="font-size: 24px; color: #fff;">Roof</span></div>', { width: 0.08 });
+  tag.object3D.name = 'tag';
+  tag.object3D.position.set(0, 0.25, 0.16);
+  house.add(tag.object3D);
   return { root, real: { size: 8 } };
 }`;
 const CELL = HOUSE.replace("real: { size: 8 }", 'real: undefined');
@@ -54,6 +67,11 @@ export default async function run({ frame, page }) {
 
       out.fitHeightM = extent().height;
       const cardFit = cardWorld();
+      const nested = find('nested card');
+      const tag = find('tag');
+      const worldOf = (o) => { const v = o.getWorldPosition(new V()); return { at: [v.x, v.y, v.z].map(round), scale: round(o.getWorldScale(new V()).x) }; };
+      const nestedFit = worldOf(nested);
+      const tagFit = worldOf(tag);
       out.cardScale = cardFit.scale;
       const pill = genui.inspectPill();
       out.pill = pill && `${pill.label} ${pill.detail}`;
@@ -68,11 +86,16 @@ export default async function run({ frame, page }) {
       out.cardStayedM = round(Math.hypot(...cardReal.at.map((v, i) => v - cardFit.at[i])));
       out.cardScaleReal = cardReal.scale;
       out.pillReal = `${genui.inspectPill().label} ${genui.inspectPill().detail}`;
+      const nestedReal = worldOf(nested);
+      out.nestedStayedM = round(Math.hypot(...nestedReal.at.map((v, i) => v - nestedFit.at[i])));
+      out.nestedScaleRatio = round(nestedReal.scale / nestedFit.scale);
+      out.tagScaleRatio = round(worldOf(tag).scale / tagFit.scale);
 
       genui.pressPill();
       await sleep(300);
       out.backToFitM = extent().height;
       out.cardBackM = round(Math.hypot(...cardWorld().at.map((v, i) => v - cardFit.at[i])));
+      out.nestedBackRatio = round(worldOf(nested).scale / nestedFit.scale);
 
       // A bacterium-sized subject: the pill only tells the scale.
       await genui.mount(cell);
@@ -97,6 +120,10 @@ export default async function run({ frame, page }) {
       pillReal: out.pillReal === 'Fit 1:1',
       backToFitM: Math.abs(out.backToFitM - 0.5) < 0.01,
       cardBackM: out.cardBackM < 0.005,
+      nestedStayedM: out.nestedStayedM < 0.005,
+      nestedScaleRatio: Math.abs(out.nestedScaleRatio - 1) < 0.01,
+      tagScaleRatio: Math.abs(out.tagScaleRatio - 1) < 0.01,
+      nestedBackRatio: Math.abs(out.nestedBackRatio - 1) < 0.01,
       pillSmall: out.pillSmall === 'Scale x250,000',
       pillSmallEnabled: out.pillSmallEnabled === false,
     };

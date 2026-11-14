@@ -412,6 +412,11 @@ export class TeachingRig {
 
   /** The label panels, so the host can keep the lesson's own panels off them. */
   /** Host only: enlarge labels by `scale` (1 = as designed) and lay them out again. */
+  /** The label size factor now (see setLabelScale). */
+  labelScaleNow(): number {
+    return this.labelScale;
+  }
+
   setLabelScale(scale: number) {
     this.labelScale = scale;
     for (const label of this.labels) if (label.ui.object3D.visible) label.ui.object3D.scale.setScalar(scale);

@@ -92,7 +92,7 @@ type Mounted = {
   realSizeM: number | null;
   view: 'fit' | 'real';
   /** The fitted view's root and card transforms, kept while the real-size view is shown. */
-  fitPose: { position: Vector3; scale: Vector3; cards: { holder: Object3D; position: Vector3; quaternion: Quaternion; scale: Vector3 }[] } | null;
+  fitPose: { position: Vector3; scale: Vector3; cards: { holder: Object3D; position: Vector3; quaternion: Quaternion; scale: Vector3 }[]; labelScales: number[] } | null;
   handleRest: { offset: Vector3; root: Vector3 } | null;
 };
 
@@ -984,12 +984,6 @@ function fitCards(mounted: Mounted) {
   }
 }
 
-/** Cards standing in the lesson (not labels or tags on parts), whose place the real-size view keeps. */
-function lessonCards(mounted: Mounted): Object3D[] {
-  const labels = new Set(mounted.rigs.flatMap((rig) => rig.labelHolders()));
-  return [...mounted.panels.values()].map((p) => p.holder).filter((holder) => holder.parent === mounted.root && !labels.has(holder));
-}
-
 function canShowRealSize(mounted: Mounted): boolean {
   return mounted.built !== null && mounted.realSizeM !== null && mounted.realSizeM >= REAL_SIZE_RANGE_M[0] && mounted.realSizeM <= REAL_SIZE_RANGE_M[1];
 }
@@ -1004,31 +998,38 @@ export function setLessonView(view: 'fit' | 'real') {
   const anchor = root?.parent;
   if (!mounted || !root || !anchor || !world || view === mounted.view) return;
   if (view === 'real' && (!canShowRealSize(mounted) || !mounted.built)) return;
-  const cards = lessonCards(mounted);
   if (view === 'real') {
     const built = mounted.built!;
+    // Every panel, wherever the lesson attached it: cards (something to press) stay where they are, the size they
+    // are; labels and tags keep their size but go with the parts they name. The teaching rig sizes its own labels.
+    const rigLabels = new Set(mounted.rigs.flatMap((rig) => rig.labelHolders()));
+    const panels = [...mounted.panels.values()].filter((p) => !rigLabels.has(p.holder));
+    const isCard = (p: PanelRecord) => p.handlers.length > 0 || p.valueIds.length > 0;
     mounted.fitPose = {
       position: root.position.clone(),
       scale: root.scale.clone(),
-      cards: cards.map((holder) => ({ holder, position: holder.position.clone(), quaternion: holder.quaternion.clone(), scale: holder.scale.clone() })),
+      cards: panels.map(({ holder }) => ({ holder, position: holder.position.clone(), quaternion: holder.quaternion.clone(), scale: holder.scale.clone() })),
+      labelScales: mounted.rigs.map((rig) => rig.labelScaleNow()),
     };
     root.updateMatrixWorld(true);
-    const placed = cards.map((holder) => ({ holder, position: holder.getWorldPosition(new Vector3()), quaternion: holder.getWorldQuaternion(new Quaternion()), scale: holder.getWorldScale(new Vector3()).x }));
-    // World metres per metre as built.
+    const placed = panels.filter(isCard).map(({ holder }) => ({ holder, position: holder.getWorldPosition(new Vector3()), quaternion: holder.getWorldQuaternion(new Quaternion()), scale: holder.getWorldScale(new Vector3()).x }));
+    // World metres per metre as built, and how much bigger than the fitted view.
     const k = mounted.realSizeM! / built.size;
+    const grow = (built.rootScale * k) / (root.scale.x || 1);
     const head = anchor.worldToLocal(world.camera.getWorldPosition(new Vector3()));
     const floor = floorIn(anchor);
     const box = built.box;
     root.scale.setScalar(built.rootScale * k);
     root.position.set(head.x - k * ((box.min.x + box.max.x) / 2), floor - k * box.min.y, head.z - REAL_VIEW_GAP_M - k * box.max.z);
     root.updateMatrixWorld(true);
-    const rootTurn = root.getWorldQuaternion(new Quaternion()).invert();
-    const rootScale = root.getWorldScale(new Vector3()).x || 1;
     for (const card of placed) {
-      card.holder.position.copy(root.worldToLocal(card.position));
-      card.holder.quaternion.copy(rootTurn).multiply(card.quaternion);
-      card.holder.scale.setScalar(card.scale / rootScale);
+      const parent = card.holder.parent!;
+      card.holder.position.copy(parent.worldToLocal(card.position));
+      card.holder.quaternion.copy(parent.getWorldQuaternion(new Quaternion()).invert()).multiply(card.quaternion);
+      card.holder.scale.setScalar(card.scale / (parent.getWorldScale(new Vector3()).x || 1));
     }
+    for (const p of panels) if (!isCard(p)) p.holder.scale.divideScalar(grow);
+    mounted.rigs.forEach((rig, i) => rig.setLabelScale(mounted.fitPose!.labelScales[i] / grow));
   } else if (mounted.fitPose) {
     root.position.copy(mounted.fitPose.position);
     root.scale.copy(mounted.fitPose.scale);
@@ -1037,6 +1038,7 @@ export function setLessonView(view: 'fit' | 'real') {
       card.holder.quaternion.copy(card.quaternion);
       card.holder.scale.copy(card.scale);
     }
+    mounted.rigs.forEach((rig, i) => rig.setLabelScale(mounted.fitPose!.labelScales[i]));
     mounted.fitPose = null;
   }
   mounted.view = view;

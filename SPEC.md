@@ -456,14 +456,37 @@ Triangles, meshes, time and cost are for the pipeline alone (medians; cost is th
 
 **Hand-interaction test matrix.** Run it in the emulator, automated where possible, then on the headset.
 
-| Interaction ↓ / Content source → | Hand-written | Arm A | Arm B | Arm C | P1 mesh | P2/P3 GLB | P4 GLB |
-|---|---|---|---|---|---|---|---|
-| Direct grab | | | | | | | |
-| Distance grab (pinch ray) | | | | | | | |
-| Poke button or panel | | | | | | | |
-| Two-hand scale/rotate | | | | | | | |
-| Explode / select part | | | | | | | |
-| Answer a quiz by poke | | | | | | | |
+**Emulator results (Nov 14).** `node apps/xr/scripts/interaction-matrix.mjs` mounts 65 lessons in the IWSDK emulator (Quest 3 profile, seated, emulated right hand) and tries every interaction each lesson offers: the 2 hand-written fixtures (`apps/xr/tests/fixtures/matrix-*.js`), every saved course lesson (23 code only, 12 written around the course's own model), the 4 ready-made library lessons, and RQ1's A2UI and template lessons (Sonnet, first repetition, 12 each). An interaction passes only when the app saw it land: a generated handler ran, an object was held and followed the hand at least 5 cm, or a model's parts spread at least 1 cm. About 35 minutes. Data: `bench/results/interaction-matrix/` (local until called final).
+
+The columns changed from the plan: Arm B (version A′, code against a helper library) was never built, the code-written lessons are both Arm A and P1 meshes, and the GLBs in use are the course models (TRELLIS.2 split by the Blender agent) and the library. The quiz row went with the quizzes (Phase 7). Cells are lessons where it worked / lessons that offer it; "-" means none offers it.
+
+| Interaction | Hand-written | Open code (course lessons) | Course model GLB | Library GLB | A2UI (C) | Templates (D) |
+|---|---|---|---|---|---|---|
+| Lessons mounted | 2 / 2 | 23 / 23 | 12 / 12 | 4 / 4 | 12 / 12 | 12 / 12 |
+| Direct grab (near pinch), carried | 2 / 2 | 11 / 11 | 3 / 7 | - | 4 / 4 | 1 / 2 |
+| Distance grab (pinch ray), carried | 1 / 1 | 4 / 8 | 0 / 1 | 3 / 3 | - | 1 / 1 |
+| Grab one part of a model | 1 / 1 | - | 1 / 1 | 3 / 3 | - | - |
+| Panel button, point and pinch (all of up to 3) | 2 / 2 | 20 / 23 | 9 / 12 | 4 / 4 | 10 / 11 | 9 / 11 |
+| Panel button, fingertip poke | 2 / 2 | 21 / 23 | 9 / 12 | 4 / 4 | 10 / 11 | 6 / 11 |
+| Panel toggle (`kit.panel`), point and pinch | 1 / 1 | 2 / 2 | - | - | - | - |
+| Panel slider (`kit.panel`), point, pinch, sweep | 1 / 1 | 1 / 1 | - | - | - | - |
+| 3D object press, point and pinch | 1 / 1 | 8 / 13 | 5 / 9 | 1 / 3 | 7 / 7 | 8 / 9 |
+| 3D object press, fingertip poke | 1 / 1 | 11 / 13 | 9 / 9 | 3 / 3 | 7 / 7 | 9 / 9 |
+| Explode a model | 1 / 1 | - | 1 / 1 | 3 / 3 | - | - |
+| Move bar: point, pinch, drag the lesson | 2 / 2 | 20 / 23 | 12 / 12 | 4 / 4 | 12 / 12 | 12 / 12 |
+| Two-hand scale or rotate | not built | not built | not built | not built | not built | not built |
+
+**Findings:**
+
+1. **Every interaction the host offers works on hand-written content**, which meets the emulator half of the exit gate. Generated lessons mostly work. The failures point to two host bugs, each confirmed with a small test lesson:
+   - **An object that can be both picked up and pressed ignores point-and-pinch presses.** A press-only box and two crowded ray-grab boxes pressed; a box that was also near-grabbable did not. A fingertip poke presses it. It is the likely cause of most of the 12 failed point-and-pinch presses: in 9 of them the ray reached the object first (library petals and gears, course-model parts). Not yet checked lesson by lesson.
+   - **Pressable parts are pulled out of a grabbable model.** The host makes every object given `traits()` a direct child of the lesson root. When a lesson makes the whole model grabbable and its parts pressable, the parts leave the model: in "Meet the Rocket" the rocket keeps no meshes and cannot be picked up, and in one "Meet the Microscope" it keeps 2. This explains 2 of the 4 failed whole-model grabs; the other 2 are not explained yet.
+2. **A fingertip poke clicks panels in the emulator** with its press gesture, unlike the Nov 13 note below.
+3. **The rest are single lessons:** a display tray in front of the Sun, a price card in front of a mug, and the template info panel, where the emulator reports the hand passing through the title on the way to the "Clear glow" button. In 3 lessons something at scene level stood between the hand and the move bar; not yet diagnosed.
+4. **Repeatability:** two full runs agreed on 228 of 238 shared probe results. 6 of the 10 flips were fingertip pokes on panels, so read each cell as ±1-2.
+5. **Two-hand scale and rotate is not built:** the host never adds a two-hand grab.
+
+**On the headset:** not yet (no headset connected on Nov 14). Session 1 runs the same rows by hand on lessons the picker opens: the ready-made microscope (library GLB, explode, parts), "Control the Splitting" (slider) and "Motion Becomes Electricity" (toggle) from *Atoms to the Grid*, "Meet the Rocket" (course model; the whole-rocket grab is expected to fail until the second bug is fixed), and the move bar on each.
 
 **Headset sessions:**
 
@@ -480,7 +503,7 @@ Triangles, meshes, time and cost are for the pipeline alone (medians; cost is th
 - **Voice:** Quest Browser has no SpeechRecognition (checked on the device) but can record. The page sends 16 kHz mono WAV to `/api/transcribe`, which uses Meta's Muse Voice Transcribe (`POST /v1/asr/transcribe`); a spoken request comes back word for word in about 2-3 s. "Ask your own" on the picker: pinch, speak, pinch. Not yet tried in the headset.
 - **Placement on the desk:** a detected horizontal plane 15-90 cm below the eyes, within reach and ahead, holds the lesson (a table or desk label wins a close call); otherwise it floats at seated height. In the emulator's room, seated at the desk, the lesson stands on the "table" plane at its exact height and the framing step no longer lowers it into the surface.
 - **Repair without a button:** a lesson that crashes while loading (e.g. a panel element the agent never created) is repaired once on its own; a later break shows "Fix it" on the picker.
-- **Hand input found so far:** point-and-pinch (hand ray) and controller rays click panel buttons; a fingertip poke registers as hover but does not click UIKit panels in the emulator (lesson panels included). To check on the device.
+- **Hand input found so far:** point-and-pinch (hand ray) and controller rays click panel buttons; a fingertip poke registers as hover but does not click UIKit panels in the emulator (lesson panels included). To check on the device. *(Nov 14: the emulator's press gesture does click panels; see the matrix above.)*
 - **Still to do:** the interaction matrix and fps on the headset, voice in XR, poke on the device.
 
 ### Phase 5: multi-agent parallelization

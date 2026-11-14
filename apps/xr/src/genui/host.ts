@@ -261,10 +261,16 @@ export function aimPoint(index: number, from: [number, number, number], kind: 'g
   };
   for (const point of candidates.slice(0, 400)) {
     ray.set(origin, point.clone().sub(origin).normalize());
-    const first = ray.intersectObject(world.scene, true).find((hit) => hit.object.visible);
+    const first = ray.intersectObject(world.scene, true).find((hit) => shown(hit.object));
     if (first && owns(first.object)) return first.point.toArray() as [number, number, number];
   }
   return null;
+}
+
+/** Whether `object` is drawn: it and every ancestor visible (a ray ignores a mesh inside a hidden group). */
+function shown(object: Object3D): boolean {
+  for (let o: Object3D | null = object; o; o = o.parent) if (!o.visible) return false;
+  return true;
 }
 
 /** What the host wired up for the current generation, for tests and the benchmark. */
@@ -471,9 +477,38 @@ export async function mountGenerated(code: string): Promise<MountReport> {
   mounted.handleRest = { offset: mounted.handle.offset.clone(), root: root.position.clone() };
   const rootEntity = track(mounted, world.createTransformEntity(root, { parent: anchorEntity }), root);
 
-  const crowded = findCrowdedGrabbables(traitRequests.filter((r) => r.grab).map((r) => r.object));
+  // Each object the lesson made interactive keeps its place in the lesson's own hierarchy: a planet stays in
+  // the orbit group that turns it, a part in the model that carries it. IWSDK wants an entity's object to be a
+  // direct child of its parent entity's, so the objects in between get plain transform entities.
+  const entityFor = (object: Object3D): Entity => {
+    const existing = mounted.objectEntities.get(object);
+    if (existing) return existing;
+    let inLesson = false;
+    for (let o = object.parent; o && !inLesson; o = o.parent) inLesson = o === root;
+    if (!inLesson) root.attach(object); // built but never added to the lesson: hang it on the root where it stands
+    return track(mounted, world!.createTransformEntity(object, { parent: entityFor(object.parent!) }), object);
+  };
+
+  const grabObjects = new Set(traitRequests.filter((r) => r.grab).map((r) => r.object));
+  const grabbableAncestor = (object: Object3D) => {
+    for (let o = object.parent; o && o !== root; o = o.parent) if (grabObjects.has(o)) return o;
+    return null;
+  };
+  // Pressable parts of a model the learner can pick up, by model. A part with an interactable entity of its own
+  // would stop the pinch that picks the model up (IWSDK ends a pointer event at the first interactable it
+  // reaches), so the model takes the event and presses the part that was hit.
+  const partPresses = new Map<Object3D, Map<Object3D, () => void>>();
+  const crowded = findCrowdedGrabbables([...grabObjects]);
   for (const request of traitRequests) {
-    const entity = adoptIntoRoot(mounted, request.object, root, rootEntity);
+    const model = request.grab ? null : grabbableAncestor(request.object);
+    if (model && request.onPress) {
+      const parts = partPresses.get(model) ?? new Map<Object3D, () => void>();
+      parts.set(request.object, guard(mounted, request.onPress));
+      partPresses.set(model, parts);
+      mounted.pressTargets.push(request.object);
+      continue;
+    }
+    const entity = entityFor(request.object);
     if (request.grab && crowded.has(request.object)) {
       // A near-hand pinch would take neighbours too; a ray picks exactly the object it hits.
       if (!entity.hasComponent(RayInteractable)) entity.addComponent(RayInteractable, {});
@@ -490,14 +525,39 @@ export async function mountGenerated(code: string): Promise<MountReport> {
       mounted.pressTargets.push(request.object);
     }
   }
+  for (const [model, parts] of partPresses) {
+    const entity = entityFor(model);
+    if (!entity.hasComponent(RayInteractable)) entity.addComponent(RayInteractable, {});
+    if (!entity.hasComponent(PokeInteractable)) entity.addComponent(PokeInteractable, {});
+    // The model's own press, if it has one, runs when the pinch or poke lands on none of the parts.
+    const own = mounted.pressHandlers.get(entity);
+    mounted.pressHandlers.delete(entity);
+    entity.object3D!.addEventListener('pointerdown', (event) => {
+      for (let o: Object3D | null = event.object; o && o !== model; o = o.parent) {
+        const press = parts.get(o);
+        if (press) return press();
+      }
+      own?.();
+    });
+  }
+  // IWSDK's near grab turns the hand ray away from the object ({ deny: 'ray' }), so a learner pointing and
+  // pinching could never press it or its parts. Let the ray in: a pointed pinch presses, and moving the hand
+  // then drags the object, as with crowded objects.
+  for (const [object, mode] of mounted.grabModes) {
+    const entity = mounted.objectEntities.get(object);
+    if (mode === 'touch' && entity && (partPresses.has(object) || mounted.pressHandlers.has(entity))) {
+      object.pointerEventsType = 'all';
+      pinchOnlyGrab(entity);
+    }
+  }
 
-  // Library labels are read-only: without interactables they can't catch a hand ray meant for a
-  // button behind them (labels move when a model explodes).
+  // Panels with nothing to press (library labels, name tags, captions) are read-only: without interactables they
+  // can't catch a hand ray meant for a button behind them (labels move when a model explodes).
   const labelHolders = new Set(mounted.rigs.flatMap((rig) => rig.labelHolders()));
   for (const panel of panels) {
-    const entity = adoptIntoRoot(mounted, panel.holder, root, rootEntity);
+    const entity = entityFor(panel.holder);
     entity.addComponent(PanelUI, { config: panel.url });
-    if (!labelHolders.has(panel.holder)) {
+    if (!labelHolders.has(panel.holder) && (panel.handlers.length > 0 || panel.valueIds.length > 0)) {
       entity.addComponent(RayInteractable, {});
       entity.addComponent(PokeInteractable, {});
     }
@@ -615,12 +675,18 @@ function applyProps(document: UIKitDocument, id: string, props: ElementProps) {
   element.setProperties(props as Record<string, unknown>);
 }
 
-/** Make `object` a direct child of root (keeping its world transform) and give it an entity. */
-function adoptIntoRoot(mounted: Mounted, object: Object3D, root: Object3D, rootEntity: Entity): Entity {
-  const existing = mounted.objectEntities.get(object);
-  if (existing) return existing;
-  if (object.parent !== root) root.attach(object);
-  return track(mounted, world!.createTransformEntity(object, { parent: rootEntity }), object);
+/**
+ * Only a pinch picks up a near-grabbable object that also takes pokes: IWSDK's grab handle would let a fingertip
+ * touch drag it too, and a hand reaching in to pinch touches the model with its fingertip first, so the model
+ * followed the finger and was dropped instead of being held. The handle lives in an IWSDK-internal component;
+ * if it isn't there (another IWSDK version), the object keeps IWSDK's behaviour.
+ */
+function pinchOnlyGrab(entity: Entity) {
+  const component = entity.getComponents().find((c) => c?.id === 'Handle');
+  const store = component ? (entity.getValue(component, 'instance' as never) as { getOptions?: () => object } | null) : null;
+  if (typeof store?.getOptions !== 'function') return;
+  const options = store.getOptions;
+  store.getOptions = () => ({ ...options(), filter: (event: { pointerType?: string }) => event.pointerType !== 'touch' });
 }
 
 function track(mounted: Mounted, entity: Entity, object: Object3D): Entity {

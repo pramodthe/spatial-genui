@@ -64,6 +64,7 @@ function installProbes(HEAD) {
   const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
   const calls = () => genui.inspect()?.handlerCalls ?? 0;
   const MOVED_M = 0.05;
+  const SETTLE_MS = 150;
 
   async function rest() {
     await r.dispatch('set_select_value', { device: hand, value: 0 });
@@ -80,43 +81,86 @@ function installProbes(HEAD) {
     return report;
   }
 
-  /** Point the hand ray at `c` from about 30 cm on the learner's side, as a seated learner would. */
-  async function aim(c) {
+  /**
+   * Where a seated learner's hand would be to point at `c`: up to 30 cm from it toward the eyes, but never more
+   * than 60% of the way (for things near the learner, 30 cm would put the hand at or behind the face).
+   */
+  function handFor(c, dx = 0.05, dy = -0.05) {
     const head = window.IWER_DEVICE.position;
     const d = [head.x - c[0], head.y - c[1], head.z - c[2]];
     const len = Math.hypot(...d) || 1;
-    const from = { x: c[0] + (d[0] / len) * 0.3 + 0.05, y: c[1] + (d[1] / len) * 0.3 - 0.05, z: c[2] + (d[2] / len) * 0.3 };
+    const back = Math.min(0.3, len * 0.6);
+    return { x: c[0] + (d[0] / len) * back + dx, y: c[1] + (d[1] / len) * back + dy, z: c[2] + (d[2] / len) * back };
+  }
+
+  /**
+   * Point the hand ray at `c`, as a seated learner would, and hold it there a moment: the pointer picks up a
+   * moved hand a few frames later, and a pinch before then lands on whatever the ray crossed on the way.
+   */
+  async function aim(c) {
+    const from = handFor(c);
     await r.dispatch('set_transform', { device: hand, position: from });
     await r.dispatch('look_at', { device: hand, target: at(c) });
+    await sleep(SETTLE_MS);
     return from;
   }
 
   /** The first things a ray from `from` toward `to` passes through, for failures (a panel or part in the way). */
   const firstHits = (from, to) => genui.debugRay([from.x, from.y, from.z], to).slice(0, 3).map((hit) => hit.chain);
 
+  /**
+   * Hand positions to point at `c` from, in order: the learner's usual side, straight on, the other side. The
+   * emulated hand's ray leaves a little off the direction the hand is turned to, so a small target seen at an
+   * angle can be missed; in the headset the learner sees the ray and re-aims, and the probes do the same.
+   */
+  function aimsFor(c) {
+    const near = handFor(c, 0, 0);
+    return [handFor(c), { x: c[0], y: c[1], z: c[2] + Math.hypot(near.x - c[0], near.y - c[1], near.z - c[2]) }, handFor(c, -0.08, 0.04)];
+  }
+
+  /** Point the hand from `from` at `c` and let the pointer settle. */
+  async function pointFrom(from, c) {
+    await r.dispatch('set_transform', { device: hand, position: from });
+    await r.dispatch('look_at', { device: hand, target: at(c) });
+    await sleep(SETTLE_MS);
+  }
+
   async function rayPress(c) {
     const before = calls();
-    const from = await aim(c);
-    await r.dispatch('select', { device: hand, duration: 0.2 });
-    await sleep(250);
-    await rest();
-    return calls() > before ? { worked: true } : { worked: false, firstHits: firstHits(from, c) };
+    const aims = aimsFor(c);
+    for (const [i, from] of aims.entries()) {
+      await pointFrom(from, c);
+      await r.dispatch('select', { device: hand, duration: 0.2 });
+      await sleep(250);
+      await rest();
+      if (calls() > before) return { worked: true, aims: i + 1 };
+    }
+    return { worked: false, aims: aims.length, firstHits: firstHits(aims[0], c) };
   }
 
   /** A point on pressable `index` that a learner's ray reaches first (not a centre hidden inside another part). */
   function pressPoint(index) {
     const c = genui.inspect().pressables[index].center;
-    return genui.aimPoint?.(index, [c[0] + 0.05, c[1] - 0.05, c[2] + 0.3], 'press') ?? c;
+    const from = handFor(c);
+    return genui.aimPoint?.(index, [from.x, from.y, from.z], 'press') ?? c;
   }
 
-  /** Press `c` with the index fingertip, coming in from the learner's side (panels and parts face the learner). */
-  async function poke(c) {
+  /**
+   * Press `c` with the index fingertip. A panel element the emulator can name (`name`, unique) is pressed straight
+   * on along its own surface normal; anything else is approached from the learner's side.
+   */
+  async function poke(c, name) {
     const before = calls();
-    const head = window.IWER_DEVICE.position;
-    const d = [head.x - c[0], head.y - c[1], head.z - c[2]];
-    const len = Math.hypot(...d) || 1;
-    const normal = { x: d[0] / len, y: d[1] / len, z: d[2] / len };
-    const result = await r.dispatch('run_sequence', { device: hand, steps: [{ position: { ...at(c), normal }, press: {} }] });
+    const targets = name ? (await r.dispatch('list_targets'))?.targets ?? [] : [];
+    let step;
+    if (name && targets.filter((t) => t.name === name).length === 1) step = { target: name, press: {} };
+    else {
+      const head = window.IWER_DEVICE.position;
+      const d = [head.x - c[0], head.y - c[1], head.z - c[2]];
+      const len = Math.hypot(...d) || 1;
+      step = { position: { ...at(c), normal: { x: d[0] / len, y: d[1] / len, z: d[2] / len } }, press: {} };
+    }
+    const result = await r.dispatch('run_sequence', { device: hand, steps: [step] });
     await sleep(250);
     await rest();
     return calls() > before ? { worked: true } : { worked: false, warnings: result?.warnings ?? [] };
@@ -126,24 +170,32 @@ function installProbes(HEAD) {
   async function grab(index) {
     const g = genui.inspect().grabbables[index];
     const before = g.center;
-    const from = [before[0] + 0.12, before[1] - 0.08, before[2] + 0.3];
+    const hand0 = handFor(before, 0.12, -0.08);
+    const from = [hand0.x, hand0.y, hand0.z];
     // A point on the object the hand can reach first: the centre of a ring or a hollow organ is not on the object.
     const point = genui.aimPoint?.(index, from) ?? before;
+    let aims = 0;
     if (g.mode === 'touch') {
       await r.dispatch('run_sequence', { device: hand, steps: [
         { anchor: 'grasp', position: at(point), pinch: { value: 1, at: 'arrival' } },
         { anchor: 'grasp', position: { x: point[0] + 0.08, y: point[1] + 0.06, z: point[2] + 0.04 } },
       ] });
     } else {
-      await r.dispatch('set_transform', { device: hand, position: at(from) });
-      await r.dispatch('look_at', { device: hand, target: at(point) });
-      await r.dispatch('set_select_value', { device: hand, value: 1, duration: 0.1 });
-      await sleep(150);
-      await r.dispatch('animate_to', { device: hand, position: { x: from[0] + 0.08, y: from[1] + 0.06, z: from[2] }, duration: 0.3 });
+      for (const [i, aimFrom] of aimsFor(point).entries()) {
+        await pointFrom(aimFrom, point);
+        await r.dispatch('set_select_value', { device: hand, value: 1, duration: 0.1 });
+        await sleep(150);
+        aims = i + 1;
+        if (genui.inspect().grabbables[index]?.held) {
+          await r.dispatch('animate_to', { device: hand, position: { x: aimFrom.x + 0.08, y: aimFrom.y + 0.06, z: aimFrom.z }, duration: 0.3 });
+          break;
+        }
+        await rest();
+      }
     }
     await sleep(150);
     const now = genui.inspect().grabbables[index];
-    const result = { name: g.name, mode: g.mode, held: now?.held ?? false, movedM: now ? Math.round(dist(before, now.center) * 1000) / 1000 : 0 };
+    const result = { name: g.name, mode: g.mode, held: now?.held ?? false, movedM: now ? Math.round(dist(before, now.center) * 1000) / 1000 : 0, ...(aims ? { aims } : {}) };
     result.worked = result.held && result.movedM >= MOVED_M;
     if (!result.held) result.firstHits = firstHits({ x: from[0], y: from[1], z: from[2] }, point);
     await rest();
@@ -159,6 +211,7 @@ function installProbes(HEAD) {
     const x1 = s.center[0] + s.size[0] * 0.4;
     await aim(s.center);
     await r.dispatch('look_at', { device: hand, target: { x: x0, y, z } });
+    await sleep(SETTLE_MS);
     await r.dispatch('set_select_value', { device: hand, value: 1, duration: 0.1 });
     await sleep(150);
     for (let k = 1; k <= 6; k++) {
@@ -176,19 +229,27 @@ function installProbes(HEAD) {
     const start = bar();
     if (!start?.visible) return { visible: Boolean(start?.visible) };
     const p = start.position;
-    const from = { x: p[0] + 0.05, y: p[1] + 0.1, z: p[2] + 0.3 };
-    await r.dispatch('set_transform', { device: hand, position: from });
-    await r.dispatch('look_at', { device: hand, target: at(p) });
-    await r.dispatch('set_select_value', { device: hand, value: 1, duration: 0.1 });
-    await sleep(150);
-    const held = bar().held;
-    const blocked = held ? undefined : firstHits(from, p);
-    await r.dispatch('animate_to', { device: hand, position: { x: from.x + dx, y: from.y, z: from.z }, duration: 0.3 });
+    let from = null;
+    let aims = 0;
+    for (const aimFrom of aimsFor(p)) {
+      await pointFrom(aimFrom, p);
+      await r.dispatch('set_select_value', { device: hand, value: 1, duration: 0.1 });
+      await sleep(150);
+      aims++;
+      if (bar().held) {
+        from = aimFrom;
+        break;
+      }
+      await rest();
+    }
+    const held = from !== null;
+    const blocked = held ? undefined : firstHits(aimsFor(p)[0], p);
+    if (held) await r.dispatch('animate_to', { device: hand, position: { x: from.x + dx, y: from.y, z: from.z }, duration: 0.3 });
     await sleep(150);
     await rest();
     await sleep(150);
     const movedM = Math.round(dist(start.targetPosition, bar().targetPosition) * 1000) / 1000;
-    return { visible: true, held, movedM, worked: held && movedM >= MOVED_M, ...(blocked ? { firstHits: blocked } : {}) };
+    return { visible: true, held, aims, movedM, worked: held && movedM >= MOVED_M, ...(blocked ? { firstHits: blocked } : {}) };
   }
 
   const EXPLODE_WORDS = /explod|apart|separat|split|pull|expand|open/i;
@@ -228,7 +289,7 @@ function installProbes(HEAD) {
     if (ids.length) {
       const id = ids[ids.length > 1 ? 1 : 0]; // not always the first: the ray test already pressed that one
       const b = buttonAt(id);
-      if (b) p.panelPoke = { id, ...(await poke(b.center)) };
+      if (b) p.panelPoke = { id, ...(await poke(b.center, id)) };
     }
     if (toggle) {
       const b = buttonAt(toggle);

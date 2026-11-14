@@ -416,7 +416,8 @@ async function mount(code: string) {
 /** Ask the size agent how big the lesson's subject really is, for the view pill (answers are cached per subject). */
 async function lookUpRealSize(request: string, mountedAt: number) {
   try {
-    const res = await fetch('/api/real-size', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ request }) });
+    // The subject comes first; course lesson prompts run past the 500 characters the server takes.
+    const res = await fetch('/api/real-size', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ request: request.slice(0, 480) }) });
     if (!res.ok) return;
     const answer = (await res.json()) as { sizeM?: number | null };
     // Only for the lesson still open.

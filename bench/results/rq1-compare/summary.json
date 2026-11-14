@@ -1,0 +1,224 @@
+{
+  "summary": [
+    {
+      "model": "Ember·A-code",
+      "family": "Meta",
+      "n": 24,
+      "apiErrors": 0,
+      "passAt1": 1,
+      "successWithRepair": 1,
+      "failedScenes": 0,
+      "meanAttempts": 1,
+      "mountedClean": 1,
+      "grabWorks": 1,
+      "pressWorks": 1,
+      "panelButtonsWork": 0.86,
+      "qualityPrimary": 4.3,
+      "quality1to5": null,
+      "qualityOtherJudges": null,
+      "qualityOtherJudgesAdjusted": null,
+      "medianFirstAttemptS": 27.6,
+      "medianTotalS": 27.6,
+      "meanOutputTokens": 17063,
+      "costUSD": null,
+      "costPerSuccessUSD": null,
+      "meanCrowdedGrabPairs": 0.29
+    },
+    {
+      "model": "Sonnet·A-code",
+      "family": "Anthropic",
+      "n": 24,
+      "apiErrors": 0,
+      "passAt1": 1,
+      "successWithRepair": 1,
+      "failedScenes": 0,
+      "meanAttempts": 1,
+      "mountedClean": 1,
+      "grabWorks": 1,
+      "pressWorks": 1,
+      "panelButtonsWork": 0.9230769230769231,
+      "qualityPrimary": 4.29,
+      "quality1to5": null,
+      "qualityOtherJudges": null,
+      "qualityOtherJudgesAdjusted": null,
+      "medianFirstAttemptS": 41.7,
+      "medianTotalS": 41.7,
+      "meanOutputTokens": 6399,
+      "costUSD": 1.682,
+      "costPerSuccessUSD": 0.0701,
+      "meanCrowdedGrabPairs": 0.08
+    },
+    {
+      "model": "Sonnet·C-a2ui",
+      "family": "Anthropic",
+      "n": 24,
+      "apiErrors": 0,
+      "passAt1": 0.7083333333333334,
+      "successWithRepair": 1,
+      "failedScenes": 0,
+      "meanAttempts": 1.29,
+      "mountedClean": 1,
+      "grabWorks": 0.9,
+      "pressWorks": 1,
+      "panelButtonsWork": 0.9622641509433962,
+      "qualityPrimary": 3.88,
+      "quality1to5": null,
+      "qualityOtherJudges": null,
+      "qualityOtherJudgesAdjusted": null,
+      "medianFirstAttemptS": 34.2,
+      "medianTotalS": 39.8,
+      "meanOutputTokens": 7653,
+      "costUSD": 2.097,
+      "costPerSuccessUSD": 0.0874,
+      "meanCrowdedGrabPairs": 0.04
+    },
+    {
+      "model": "Sonnet·D-template",
+      "family": "Anthropic",
+      "n": 24,
+      "apiErrors": 0,
+      "passAt1": 1,
+      "successWithRepair": 1,
+      "failedScenes": 0,
+      "meanAttempts": 1,
+      "mountedClean": 1,
+      "grabWorks": 0.6666666666666666,
+      "pressWorks": 1,
+      "panelButtonsWork": 0.9259259259259259,
+      "qualityPrimary": 3.01,
+      "quality1to5": null,
+      "qualityOtherJudges": null,
+      "qualityOtherJudgesAdjusted": null,
+      "medianFirstAttemptS": 9.3,
+      "medianTotalS": 10.7,
+      "meanOutputTokens": 1443,
+      "costUSD": 0.414,
+      "costPerSuccessUSD": 0.0172,
+      "meanCrowdedGrabPairs": 0.42
+    },
+    {
+      "model": "Ember·D-template",
+      "family": "Meta",
+      "n": 24,
+      "apiErrors": 0,
+      "passAt1": 1,
+      "successWithRepair": 1,
+      "failedScenes": 0,
+      "meanAttempts": 1,
+      "mountedClean": 1,
+      "grabWorks": 0.6666666666666666,
+      "pressWorks": 1,
+      "panelButtonsWork": 0.9347826086956522,
+      "qualityPrimary": 2.98,
+      "quality1to5": null,
+      "qualityOtherJudges": null,
+      "qualityOtherJudgesAdjusted": null,
+      "medianFirstAttemptS": 6.9,
+      "medianTotalS": 8.6,
+      "meanOutputTokens": 3796,
+      "costUSD": 0.048,
+      "costPerSuccessUSD": 0.002,
+      "meanCrowdedGrabPairs": 0
+    },
+    {
+      "model": "Ember·C-a2ui",
+      "family": "Meta",
+      "n": 24,
+      "apiErrors": 0,
+      "passAt1": 0.625,
+      "successWithRepair": 0.9166666666666666,
+      "failedScenes": 2,
+      "meanAttempts": 1.54,
+      "mountedClean": 1,
+      "grabWorks": 0.8461538461538461,
+      "pressWorks": 1,
+      "panelButtonsWork": 0.8695652173913043,
+      "qualityPrimary": 3.6,
+      "quality1to5": null,
+      "qualityOtherJudges": null,
+      "qualityOtherJudgesAdjusted": null,
+      "medianFirstAttemptS": 19.7,
+      "medianTotalS": 30.4,
+      "meanOutputTokens": 13610,
+      "costUSD": 0.176,
+      "costPerSuccessUSD": 0.008,
+      "meanCrowdedGrabPairs": 0.23
+    }
+  ],
+  "taxonomy": [
+    {
+      "model": "Sonnet·A-code",
+      "invalid-json": 0,
+      "other": 0,
+      "panel-text-size": 0
+    },
+    {
+      "model": "Sonnet·C-a2ui",
+      "invalid-json": 0,
+      "other": 0,
+      "panel-text-size": 7
+    },
+    {
+      "model": "Sonnet·D-template",
+      "invalid-json": 0,
+      "other": 0,
+      "panel-text-size": 0
+    },
+    {
+      "model": "Ember·A-code",
+      "invalid-json": 0,
+      "other": 0,
+      "panel-text-size": 0
+    },
+    {
+      "model": "Ember·C-a2ui",
+      "invalid-json": 2,
+      "other": 8,
+      "panel-text-size": 5
+    },
+    {
+      "model": "Ember·D-template",
+      "invalid-json": 0,
+      "other": 0,
+      "panel-text-size": 0
+    }
+  ],
+  "byTier": [
+    {
+      "model": "Sonnet·A-code",
+      "T1": "8/8",
+      "T2": "8/8",
+      "T3": "8/8"
+    },
+    {
+      "model": "Sonnet·C-a2ui",
+      "T1": "8/8",
+      "T2": "8/8",
+      "T3": "8/8"
+    },
+    {
+      "model": "Sonnet·D-template",
+      "T1": "8/8",
+      "T2": "8/8",
+      "T3": "8/8"
+    },
+    {
+      "model": "Ember·A-code",
+      "T1": "8/8",
+      "T2": "8/8",
+      "T3": "8/8"
+    },
+    {
+      "model": "Ember·C-a2ui",
+      "T1": "6/8",
+      "T2": "8/8",
+      "T3": "8/8"
+    },
+    {
+      "model": "Ember·D-template",
+      "T1": "8/8",
+      "T2": "8/8",
+      "T3": "8/8"
+    }
+  ]
+}

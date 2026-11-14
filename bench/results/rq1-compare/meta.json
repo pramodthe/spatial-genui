@@ -1,0 +1,20 @@
+{
+  "combinedFrom": [
+    "../../bench/results/run-4-fair:claude-sonnet-5-5=Sonnet·A-code",
+    "../../bench/results/rq1-a2ui-v3-sonnet:claude-sonnet-5-5=Sonnet·C-a2ui",
+    "../../bench/results/rq1-template-v2:claude-sonnet-5-5=Sonnet·D-template",
+    "../../bench/results/run-3-ember-max:muse-ember-1.0-max=Ember·A-code",
+    "../../bench/results/rq1-a2ui-v3-ember:muse-ember-1.0-max=Ember·C-a2ui",
+    "../../bench/results/rq1-template-v2:muse-ember-1.0-max=Ember·D-template"
+  ],
+  "promptsFile": "bench/prompts/test-12.json",
+  "note": "RQ1: open code (A, runs 3-4) vs A2UI JSON (C, checker v3) vs templates (D); same 12 prompts x 2, same host checks, emulator probes and judge (Claude Opus 5.5)",
+  "models": [
+    "Sonnet·A-code",
+    "Sonnet·C-a2ui",
+    "Sonnet·D-template",
+    "Ember·A-code",
+    "Ember·C-a2ui",
+    "Ember·D-template"
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "summary": [
+    {
+      "model": "claude-sonnet-5-5",
+      "family": "Anthropic",
+      "n": 24,
+      "apiErrors": 0,
+      "passAt1": 0.7083333333333334,
+      "successWithRepair": 1,
+      "failedScenes": 0,
+      "meanAttempts": 1.29,
+      "mountedClean": 1,
+      "grabWorks": 0.9,
+      "pressWorks": 1,
+      "panelButtonsWork": 0.9622641509433962,
+      "qualityPrimary": 3.88,
+      "quality1to5": null,
+      "qualityOtherJudges": null,
+      "qualityOtherJudgesAdjusted": null,
+      "medianFirstAttemptS": 34.2,
+      "medianTotalS": 39.8,
+      "meanOutputTokens": 7653,
+      "costUSD": 2.097,
+      "costPerSuccessUSD": 0.0874,
+      "meanCrowdedGrabPairs": 0.04
+    }
+  ],
+  "taxonomy": [
+    {
+      "model": "claude-sonnet-5-5",
+      "panel-text-size": 7
+    }
+  ],
+  "byTier": [
+    {
+      "model": "claude-sonnet-5-5",
+      "T1": "8/8",
+      "T2": "8/8",
+      "T3": "8/8"
+    }
+  ]
+}

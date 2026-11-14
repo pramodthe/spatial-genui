@@ -1,0 +1,74 @@
+{
+  "summary": [
+    {
+      "model": "claude-sonnet-5-5",
+      "family": "Anthropic",
+      "n": 24,
+      "apiErrors": 0,
+      "passAt1": 1,
+      "successWithRepair": 1,
+      "failedScenes": 0,
+      "meanAttempts": 1,
+      "mountedClean": 1,
+      "grabWorks": 0.6666666666666666,
+      "pressWorks": 1,
+      "panelButtonsWork": 0.9259259259259259,
+      "qualityPrimary": 3.01,
+      "quality1to5": null,
+      "qualityOtherJudges": null,
+      "qualityOtherJudgesAdjusted": null,
+      "medianFirstAttemptS": 9.3,
+      "medianTotalS": 10.7,
+      "meanOutputTokens": 1443,
+      "costUSD": 0.414,
+      "costPerSuccessUSD": 0.0172,
+      "meanCrowdedGrabPairs": 0.42
+    },
+    {
+      "model": "muse-ember-1.0-max",
+      "family": "Meta",
+      "n": 24,
+      "apiErrors": 0,
+      "passAt1": 1,
+      "successWithRepair": 1,
+      "failedScenes": 0,
+      "meanAttempts": 1,
+      "mountedClean": 1,
+      "grabWorks": 0.6666666666666666,
+      "pressWorks": 1,
+      "panelButtonsWork": 0.9347826086956522,
+      "qualityPrimary": 2.98,
+      "quality1to5": null,
+      "qualityOtherJudges": null,
+      "qualityOtherJudgesAdjusted": null,
+      "medianFirstAttemptS": 6.9,
+      "medianTotalS": 8.6,
+      "meanOutputTokens": 3796,
+      "costUSD": 0.048,
+      "costPerSuccessUSD": 0.002,
+      "meanCrowdedGrabPairs": 0
+    }
+  ],
+  "taxonomy": [
+    {
+      "model": "claude-sonnet-5-5"
+    },
+    {
+      "model": "muse-ember-1.0-max"
+    }
+  ],
+  "byTier": [
+    {
+      "model": "claude-sonnet-5-5",
+      "T1": "8/8",
+      "T2": "8/8",
+      "T3": "8/8"
+    },
+    {
+      "model": "muse-ember-1.0-max",
+      "T1": "8/8",
+      "T2": "8/8",
+      "T3": "8/8"
+    }
+  ]
+}

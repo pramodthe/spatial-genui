@@ -1,8 +1,9 @@
 // Phase 4 hand-interaction matrix in the emulator: gathers the lessons to test (cases.jsonl), runs
 // tests/interaction-matrix.mjs in batches until every lesson is done, and writes summary.md.
 // Usage: node scripts/interaction-matrix.mjs [--quick] [results dir, default ../../bench/results/interaction-matrix]
-// --quick tests the 22 lessons in QUICK (every source, and the lessons the host fixes touch): about 12 minutes
-// instead of 35.
+// --quick tests the 22 lessons in QUICK (every source, and the lessons the host fixes touch): about 16 minutes
+// instead of 35. A results directory holds one set: the first run writes its cases.jsonl, later runs resume it, and
+// a run whose --quick doesn't match the directory's set stops instead of testing the other set.
 // Sources (columns): the hand-written fixtures; saved course lessons (open code), split by whether the course has
 // its own 3D model; the ready-made library lessons; and RQ1's A2UI and template lessons (Sonnet, first repetition).
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -69,6 +70,11 @@ if (!existsSync(casesFile)) {
   writeFileSync(casesFile, cases.map((c) => JSON.stringify(c)).join('\n') + '\n');
   console.error(`${cases.length} lessons to test: ${SOURCES.map(([s]) => `${s} ${cases.filter((c) => c.source === s).length}`).join(', ')}`);
 }
+const quickSet = readJsonl(casesFile).every((c) => QUICK.has(c.id));
+if (quickSet !== quick) {
+  console.error(`${dir} holds a ${quickSet ? 'quick' : 'full'} run; give a ${quick ? 'quick' : 'full'} run its own directory.`);
+  process.exit(1);
+}
 
 let remaining = null;
 for (let batch = 1; batch <= 200; batch++) {
@@ -125,7 +131,7 @@ const INTERACTIONS = [
 const lines = [];
 const mounted = (s) => all.filter((r) => r.source === s && r.mounted);
 lines.push('# Hand-interaction matrix, emulator', '');
-lines.push(`Run ${new Date().toISOString().slice(0, 10)}: IWSDK emulator (Meta Quest 3 profile), emulated right hand, seated head pose. Each cell is lessons where it worked / lessons that offer it. "-" means no lesson of that source offers it.`, '');
+lines.push(`Run ${new Date().toISOString().slice(0, 10)}, ${quick ? 'quick set' : 'all lessons'} (${all.length}): IWSDK emulator (Meta Quest 3 profile), emulated right hand, seated head pose. Each cell is lessons where it worked / lessons that offer it. "-" means no lesson of that source offers it.`, '');
 lines.push(`| Interaction | ${SOURCES.map(([, label]) => label).join(' | ')} |`);
 lines.push(`|---|${SOURCES.map(() => '---').join('|')}|`);
 lines.push(`| Lessons mounted / tested | ${SOURCES.map(([s]) => `${mounted(s).length} / ${all.filter((r) => r.source === s).length}`).join(' | ')} |`);

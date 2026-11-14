@@ -511,7 +511,26 @@ The probes changed too: the hand stays in front of the face, panel pokes go stra
 
 Failures went from 14 to 11; nothing that passed before fails now. The ignored-touch change came after this run: a check on 5 lessons (both hand-written ones, "Meet the Rocket" and both "Meet the Microscope" lessons) then passed every probe except one microscope lesson's whole-model grab, which failed before the fixes too and is not explained. Also not explained: the guitar lesson's panel buttons (a fingertip poke works, point and pinch never does, on either host), the flower's petal press, two A2UI and template grabs, and template "Clear glow" pokes.
 
-**On the headset:** not yet (no headset connected on Nov 14). Session 1 runs the same rows by hand on lessons the picker opens: the ready-made microscope (library GLB, explode, parts), "Control the Splitting" (slider) and "Motion Becomes Electricity" (toggle) from *Atoms to the Grid*, "Meet the Rocket" (course model: pick the rocket up by pinching it, tap its parts), and the move bar on each.
+**On the headset:** Session 1 (below) was cut short; the checklist still runs the same rows by hand on lessons the picker opens: the ready-made microscope (library GLB, explode, parts), "Control the Splitting" (slider) and "Motion Becomes Electricity" (toggle) from *Atoms to the Grid*, "Meet the Rocket" (course model: pick the rocket up by pinching it, tap its parts), and the move bar on each.
+
+**Headset session 1 (Nov 15, Quest 3S over USB, the learner sitting on a bed).** The page was paired with the IWSDK runtime (`iwsdk runtime pair-headset`, `adb reverse tcp:8081 tcp:8081`, with a watcher that re-adds the route when the USB link resets). Before the checklist started, the learner reported four problems:
+
+1. Cards and 3D are not in the same place from one lesson to the next.
+2. Two hands can't zoom a model.
+3. A card can't be grabbed and moved.
+4. 3D shows below the floor.
+
+What we found: the app asked for WebXR anchors but never used them; the desk search took any horizontal surface 15-90 cm below the eyes, which for a learner sitting low includes the floor, so a lesson "stood on a desk" that was the floor and anything built below its origin went through it; a floating lesson had no floor limit; cards had no grab point; there was no two-hand grab.
+
+**Placement and hands (Nov 15).** In `apps/xr/src/genui/` (`host.ts`, `handle.ts`, `picker.ts`, new `hover.ts`):
+
+- **Anchored room.** Lessons and the picker stand in a room frame on IWSDK's `XRAnchor` (a WebXR anchor that IWSDK restores across sessions), so they stay where they are in the room when the headset recentres or re-localises. The lesson spot is kept in that frame and saved in the browser, so the next session opens lessons at the same place (or finds a new one if the learner is more than 1.5 m away). Move bars work for targets inside other frames.
+- **Floor.** The desk search skips the floor (a surface labelled floor, or within 15 cm of the floor's height). A floating lesson's lowest point stays 5 cm above the floor (the lowest surface labelled floor, else the lowest horizontal one at least 1 m below the eyes, else y = 0 of the floor-level space), and the library layout's framing step stops there too. A lesson on a desk that was built below y = 0 is lifted onto it.
+- **Cards.** A Horizon-style bar under every card with something to press moves that card on its own (the lesson's bar still moves everything); it hides while its card is hidden. Cards of drawn lessons stand at least 45 cm from the eyes.
+- **Two hands.** Grabbable objects use IWSDK's `TwoHandsGrabbable`: one hand moves and turns them, two hands scale them (0.4x to 3x) and turn them. A fingertip touch never drags.
+- **Hover glow.** A grabbable or pressable object, or the part of a model a pointer is over, glows while a hand ray or a hand is over it, as Meta's Interaction SDK does for every interactable. The glow is an additive copy of its meshes in a layer of its own outside the lesson, following them each frame: a first version put the copies inside the lesson's meshes, and although invisible and left out of raycasts they changed which part a pointer took (two lessons' ray grab and press failed every time, and passed with the copies moved out).
+
+`apps/xr/tests/hands-smoke.mjs` checks these in the emulator with the eyes 0.9 m above the floor: the lesson stands in the room frame and its spot is saved; a lesson built 0.5 m below its origin ends 5 cm above the floor; the glow is on while the ray points at a button and off after; a card's bar moves the card 10 cm and the lesson stays; two hands hold a box and pulling them apart scales it 1.88x. The 22-lesson quick run gives the same counts as the run on the Nov 15 morning host (11 failures each): the rocket's whole-model grab now passes, and Mercury's near grab fails, which that host also fails now (twice; the emulator, not the host, changed between runs). Not yet tried on the headset.
 
 **Headset sessions:**
 

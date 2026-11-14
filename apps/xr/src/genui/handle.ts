@@ -16,10 +16,11 @@ import {
 } from '@iwsdk/core';
 
 /**
- * Move handles: a small bar the learner points at, pinches and drags to move a whole lesson or panel.
- * The bar is its own entity beside its target, not the target's parent: a grabbable parent would take
- * every pinch meant for a part or a button inside it. While the bar is held the target follows it and
- * keeps facing the learner; otherwise the bar follows the target.
+ * Move handles: a small bar the learner points at, pinches and drags to move a whole lesson, the picker or one
+ * of a lesson's cards. The bar is its own entity in the scene, not the target's parent: a grabbable parent would
+ * take every pinch meant for a part or a button inside it. While the bar is held the target follows it and keeps
+ * facing the learner; otherwise the bar follows the target. Targets may sit inside other frames (a lesson in the
+ * room's anchored frame, a card inside a lesson): the bar works in world space and the target in its parent's.
  */
 
 export type MoveHandle = {
@@ -31,6 +32,7 @@ export type MoveHandle = {
 };
 
 type Options = {
+  /** Where the bar sits from the target's origin, in metres, turned with the target's facing. */
   offset: [number, number, number];
   /** Stand the bar upright (beside a panel) instead of lying flat (in front of a lesson). */
   upright?: boolean;
@@ -38,7 +40,19 @@ type Options = {
   onMoved?: () => void;
 };
 
-type Record = { entity: Entity; bar: Mesh; material: MeshBasicMaterial; target: Object3D; offset: Vector3; held: boolean; shown: boolean; look: number; onMoved?: () => void };
+type Record = {
+  entity: Entity;
+  bar: Mesh;
+  material: MeshBasicMaterial;
+  target: Object3D;
+  offset: Vector3;
+  held: boolean;
+  shown: boolean;
+  /** Whether the target itself is drawn (a lesson hides cards between steps; its bar goes with it). */
+  drawn: boolean;
+  look: number;
+  onMoved?: () => void;
+};
 
 const BAR_LENGTH_M = 0.16;
 const BAR_RADIUS_M = 0.014;
@@ -72,7 +86,7 @@ export function inspectMoveHandles() {
   }));
 }
 
-/** Give `target` (a group standing directly in the scene, turned only about the vertical) a move handle. */
+/** Give `target` (turned only about the vertical, inside frames that are too) a move handle. */
 export function createMoveHandle(world: World, target: Object3D, options: Options): MoveHandle {
   const geometry = new CapsuleGeometry(BAR_RADIUS_M, BAR_LENGTH_M - BAR_RADIUS_M * 2, 6, 16);
   if (!options.upright) geometry.rotateZ(Math.PI / 2);
@@ -81,7 +95,7 @@ export function createMoveHandle(world: World, target: Object3D, options: Option
   bar.name = `Move handle: ${target.name}`;
   const entity = world.createTransformEntity(bar);
   entity.addComponent(DistanceGrabbable, { movementMode: MovementMode.MoveAtSource, rotate: false, scale: false });
-  const record: Record = { entity, bar, material, target, offset: new Vector3(...options.offset), held: false, shown: false, look: 0, onMoved: options.onMoved };
+  const record: Record = { entity, bar, material, target, offset: new Vector3(...options.offset), held: false, shown: false, drawn: drawn(target), look: 0, onMoved: options.onMoved };
   records.add(record);
   follow(record);
   show(record);
@@ -98,8 +112,13 @@ export function createMoveHandle(world: World, target: Object3D, options: Option
   };
 }
 
+function drawn(object: Object3D): boolean {
+  for (let o: Object3D | null = object; o; o = o.parent) if (!o.visible) return false;
+  return true;
+}
+
 function show(record: Record) {
-  const visible = record.shown && inXR && !hiddenByHost;
+  const visible = record.shown && record.drawn && inXR && !hiddenByHost;
   record.bar.visible = visible;
   if (visible === record.entity.hasComponent(RayInteractable)) return;
   if (visible) record.entity.addComponent(RayInteractable, {});
@@ -107,13 +126,24 @@ function show(record: Record) {
 }
 
 const shift = new Vector3();
+const at = new Vector3();
+const facing = new Vector3();
+
+/** Which way `object` faces in the world, as a turn about the vertical (its +Z, as for lessons and panels). */
+export function worldYaw(object: Object3D | null): number {
+  if (!object) return 0;
+  object.updateWorldMatrix(true, false);
+  facing.set(0, 0, 1).transformDirection(object.matrixWorld);
+  return Math.atan2(facing.x, facing.z);
+}
 
 /** Put the bar at its place beside the target. */
 function follow(record: Record) {
   const { bar, target } = record;
-  shift.copy(record.offset).applyAxisAngle(UP, target.rotation.y);
-  bar.position.copy(target.position).add(shift);
-  bar.rotation.set(0, target.rotation.y, 0);
+  const yaw = worldYaw(target);
+  shift.copy(record.offset).applyAxisAngle(UP, yaw);
+  bar.position.copy(target.getWorldPosition(at)).add(shift);
+  bar.rotation.set(0, yaw, 0);
 }
 
 class MoveHandleSystem extends createSystem({}) {
@@ -131,14 +161,21 @@ class MoveHandleSystem extends createSystem({}) {
 
   update(): void {
     for (const record of records) {
+      const targetDrawn = drawn(record.target);
+      if (targetDrawn !== record.drawn) {
+        record.drawn = targetDrawn;
+        show(record);
+      }
       const held = record.entity.hasComponent(Grabbed);
       if (held) {
         // The target keeps its place beside the bar and turns to face the learner.
         const { bar, target } = record;
         this.world.camera.getWorldPosition(this.head);
-        shift.copy(record.offset).applyAxisAngle(UP, target.rotation.y);
-        target.position.copy(bar.position).sub(shift);
-        target.rotation.y = Math.atan2(this.head.x - target.position.x, this.head.z - target.position.z);
+        shift.copy(record.offset).applyAxisAngle(UP, worldYaw(target));
+        at.copy(bar.position).sub(shift);
+        const toHead = Math.atan2(this.head.x - at.x, this.head.z - at.z);
+        target.position.copy(target.parent ? target.parent.worldToLocal(at) : at);
+        target.rotation.y = toHead - worldYaw(target.parent);
       } else {
         follow(record);
       }

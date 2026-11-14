@@ -63,40 +63,37 @@ export default function build({ THREE, kit, traits, ui, isGrabbed }) {
   beamPivot.add(beam);
   lighthouse.add(halo, beamPivot);
 
-  // One panel in the lesson's theme: what it is, one fact at a time, clear buttons.
+  // One panel, built from the kit's parts: what it is, one fact at a time, clear buttons.
   const facts = [
     'A lighthouse marks dangerous coasts and safe harbour entrances for ships at night.',
     'Its lamp stays still. A turning lens gathers the light into beams that sweep the sea.',
     'Each lighthouse flashes in its own rhythm, so sailors can tell which one they see.',
   ];
-  const panel = ui(`
-    <style>${kit.theme({ accent })}</style>
-    <div class="panel">
-      <div class="bar"></div>
-      <span class="eyebrow">HOW IT WORKS</span>
-      <span class="title">Lighthouse</span>
-      <span class="body" id="fact">${facts[0]}</span>
-      <div class="row">
-        <button class="btn" id="next"><span class="btn-text">Next fact</span></button>
-        <button class="btn2" id="light"><span class="btn2-text" id="lightText">Lamp off</span></button>
-      </div>
-      <span class="small">Pinch the lighthouse to pick it up.</span>
-    </div>`, { width: 0.32, position: [0.36, 0.2, 0], rotationY: -0.35 });
-  root.add(panel.object3D);
-
   let factIndex = 0;
   let lit = true;
-  panel.on('next', 'click', () => {
-    factIndex = (factIndex + 1) % facts.length;
-    panel.set('fact', { text: facts[factIndex] });
+  const panel = kit.panel(ui, {
+    width: 0.36, position: [0.38, 0.22, 0], rotationY: -0.3,
+    eyebrow: 'HOW IT WORKS', title: 'Lighthouse',
+    items: [
+      { text: facts[0], id: 'fact' },
+      { progress: 1 / facts.length, label: 'Fact 1 of ' + facts.length, id: 'seen' },
+      { buttons: [
+        { label: 'Next fact', onPress() {
+          factIndex = (factIndex + 1) % facts.length;
+          panel.set('fact', facts[factIndex]);
+          panel.set('seen', (factIndex + 1) / facts.length, 'Fact ' + (factIndex + 1) + ' of ' + facts.length);
+        } },
+      ] },
+      { toggle: 'Lamp', on: true, onChange(on) {
+        lit = on;
+        beamPivot.visible = lit;
+        halo.visible = lit;
+        lampLight.emissiveIntensity = lit ? 2.5 : 0.1;
+      } },
+      { note: 'Pinch the lighthouse to pick it up.' },
+    ],
   });
-  panel.on('light', 'click', () => {
-    lit = !lit;
-    beamPivot.visible = lit;
-    halo.visible = lit;
-    lampLight.emissiveIntensity = lit ? 2.5 : 0.1;
-    panel.set('lightText', { text: lit ? 'Lamp off' : 'Lamp on' });
-  });
+  root.add(panel.object3D);
 
   traits(lighthouse, { grab: true });
   return {

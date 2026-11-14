@@ -1406,6 +1406,268 @@ export function createKit(THREE, options = {}) {
     `;
   }
 
+  // --- Panels from a fixed set of components ---------------------------------------------------------------
+  // Every lesson panel is assembled here from the same parts, drawn after the Meta Horizon OS UI Set (Reality
+  // Labs Design System, dark mode): its type ramp (Inter 20/14/12), spacing, pill buttons, grouped list cells
+  // and the Horizon kit's own Button, Toggle and Slider. Sizes are the set's design pixels, shown at about
+  // 1.15 mm per pixel so the smallest text is 1.4 cm tall in the headset.
+
+  const PANEL_PX_PER_M = 870;
+  const PANEL_PAD = 24;
+  const TONES = { neutral: '#8a8a8a', good: '#2ad116', poor: '#fc9435', bad: '#f7818c' };
+  const INK = 'rgba(255, 255, 255, 0.9)';
+  const INK2 = 'rgba(255, 255, 255, 0.7)';
+  const panelMarkups = new Set();
+
+  /** Was this markup made by kit.panel? (The server accepts lesson panels only from kit.panel.) */
+  function madePanel(markup) {
+    return panelMarkups.has(String(markup));
+  }
+
+  function panelCss(px) {
+    const pad = (v, h = v) => `padding-top: ${v}px; padding-bottom: ${v}px; padding-left: ${h}px; padding-right: ${h}px;`;
+    const type = (size, line, weight, color) => `color: ${color}; font-size: ${size}px; line-height: ${(line / size).toFixed(3)}; font-weight: ${weight};`;
+    return `
+      .panel { width: ${px}px; flex-direction: column; gap: 14px; ${pad(PANEL_PAD)} }
+      .kp-head { flex-direction: column; gap: 4px; }
+      .kp-eyebrow { ${type(12, 16, 500, INK2)} letter-spacing: 0.4px; }
+      .kp-title { ${type(20, 24, 700, INK)} letter-spacing: -0.5px; }
+      .kp-subtitle { ${type(14, 20, 500, INK2)} }
+      .kp-text { ${type(14, 20, 500, INK)} }
+      .kp-note { ${type(12, 16, 500, INK2)} }
+      .kp-stat { flex-direction: column; gap: 2px; }
+      .kp-stat-value { ${type(32, 36, 700, INK)} letter-spacing: -1px; }
+      .kp-row { flex-direction: row; flex-wrap: wrap; gap: 8px; }
+      .kp-pair { flex-direction: row; align-items: center; gap: 8px; }
+      .kp-seg { flex-direction: row; align-self: flex-start; gap: 4px; ${pad(4)} border-radius: 1000px; background-color: rgba(0, 0, 0, 0.14); }
+      .kp-seg-item { height: 32px; min-width: 44px; ${pad(0, 14)} border-radius: 1000px; align-items: center; justify-content: center; cursor: pointer; background-color: rgba(255, 255, 255, 0); }
+      .kp-seg-text { ${type(12, 16, 700, INK)} }
+      .kp-list { flex-direction: column; gap: 2px; ${pad(4)} border-radius: 16px; background-color: rgba(0, 0, 0, 0.14); }
+      .kp-cell { flex-direction: row; align-items: center; gap: 12px; min-height: 48px; ${pad(8, 10)} border-radius: 12px; background-color: rgba(255, 255, 255, 0); }
+      .kp-press { cursor: pointer; }
+      .kp-press:hover { background-color: rgba(255, 255, 255, 0.08); }
+      .kp-press:active { background-color: rgba(255, 255, 255, 0.14); }
+      .kp-cell-text { flex-direction: column; flex-grow: 1; flex-shrink: 1; gap: 2px; }
+      .kp-badge { width: 28px; height: 28px; border-radius: 14px; flex-shrink: 0; align-items: center; justify-content: center; background-color: rgba(255, 255, 255, 0.15); }
+      .kp-badge-text { ${type(13, 16, 700, INK)} }
+      .kp-field { flex-direction: column; gap: 8px; }
+      .kp-track { height: 8px; border-radius: 4px; background-color: rgba(255, 255, 255, 0.15); }
+      .kp-fill { height: 8px; border-radius: 4px; background-color: ${INK}; }
+      .kp-status { flex-direction: row; align-items: center; gap: 10px; min-height: 40px; ${pad(8, 14)} border-radius: 16px; background-color: rgba(0, 0, 0, 0.14); }
+      .kp-dot { width: 8px; height: 8px; border-radius: 4px; flex-shrink: 0; background-color: ${TONES.neutral}; }
+      .kp-grow { flex-grow: 1; flex-shrink: 1; }
+      .kp-line { height: 1px; background-color: rgba(255, 255, 255, 0.1); }
+    `;
+  }
+
+  /**
+   * A lesson panel, built from a fixed set of parts so every panel looks and behaves the same.
+   *   const panel = kit.panel(ui, {
+   *     width: 0.36, position: [0.42, 0.22, 0], rotationY: -0.25,
+   *     eyebrow: 'LESSON 2 OF 4', title: 'Follow an orbit', subtitle: 'optional',
+   *     items: [ ...parts, top to bottom... ],
+   *   });
+   *   root.add(panel.object3D);
+   * Parts (each may have an id, to change it later):
+   *   { text: '...' }  { note: '...' }  { stat: '408 N', label: 'force needed' }  { divider: true }
+   *   { status: 'Pick a part', tone: 'neutral' | 'good' | 'poor' | 'bad' }
+   *   { progress: 0.4, label: '2 of 5' }
+   *   { buttons: [{ label, primary?, id?, onPress }] }
+   *   { choices: ['Mercury', ...], columns: 2, selected: null, onSelect(index, label) }
+   *   { segmented: ['0.25x', '1x', '4x'], selected: 1, onSelect(index, label) }
+   *   { list: [{ title, sub?, badge?, onPress? }] }
+   *   { toggle: 'Show orbits', on: true, onChange(on) }
+   *   { slider: 'Speed', min: 0, max: 10, step: 1, value: 3, format: (v) => v + ' x', onChange(value) }
+   * panel.set(id, value, tone?) changes a part: new text for text, note, stat, status (with a tone), a button
+   * (its label) and title/eyebrow/subtitle (ids 'title', 'eyebrow', 'subtitle'); 0..1 for progress; the selected
+   * index (or null) for choices and segmented; true/false for a toggle; a number for a slider.
+   * panel.show(id, visible) hides or shows a part or a button.
+   */
+  function panel(ui, o = {}) {
+    if (typeof ui !== 'function') throw new Error('kit.panel(ui, options): pass the ui function from build() first.');
+    // Never narrower than 0.36 m: three buttons side by side need it.
+    const widthM = Math.min(0.6, Math.max(0.36, Number(o.width) || 0.36));
+    const px = Math.round(widthM * PANEL_PX_PER_M);
+    const inner = px - PANEL_PAD * 2;
+    const esc = (text) => String(text ?? '').replace(/[<>&`]/g, ' ').trim();
+    // Inside a double-quoted attribute a double quote would end the value.
+    const escAttr = (text) => esc(text).replace(/"/g, "'");
+    const parts = new Map(); // id -> { kind, ... } for set() and show()
+    const wiring = []; // run once the host panel exists
+    let auto = 0;
+    const taken = new Set(['eyebrow', 'title', 'subtitle']);
+    const idOf = (given) => {
+      // No hyphens in a module's id: the kit's own element ids are '<id>-<suffix>', so the two can't meet.
+      let id = typeof given === 'string' && /^[A-Za-z]\w*$/.test(given) && !taken.has(given) ? given : '';
+      while (!id || taken.has(id)) id = `kp${auto++}`;
+      taken.add(id);
+      return id;
+    };
+    const fail = (message) => {
+      throw new Error(`kit.panel: ${message}`);
+    };
+    const button = (b, id, variant, size, extra = '') =>
+      `<Button id="${id}" variant="${variant}" size="${size}"${extra}><ButtonLabel id="${id}-label">${esc(b)}</ButtonLabel></Button>`;
+
+    // The eyebrow and subtitle are always in the markup (hidden while empty), so panel.set can fill them later.
+    const optional = (text) => (esc(text) ? '' : ' style="display: none"');
+    const head = [
+      `<span id="eyebrow" class="kp-eyebrow"${optional(o.eyebrow)}>${esc(o.eyebrow) || '-'}</span>`,
+      `<span id="title" class="kp-title">${esc(o.title || 'Lesson')}</span>`,
+      `<span id="subtitle" class="kp-subtitle"${optional(o.subtitle)}>${esc(o.subtitle) || '-'}</span>`,
+    ].join('');
+    for (const id of ['eyebrow', 'title', 'subtitle']) parts.set(id, { kind: 'text', el: id, reveal: true });
+
+    const body = (Array.isArray(o.items) ? o.items : []).map((item) => {
+      if (!item || typeof item !== 'object') fail('each item is an object such as { text: "..." }.');
+      const id = idOf(item.id);
+      if ('text' in item || 'note' in item) {
+        const note = !('text' in item);
+        parts.set(id, { kind: 'text', el: id });
+        return `<span id="${id}" class="${note ? 'kp-note' : 'kp-text'}">${esc(note ? item.note : item.text)}</span>`;
+      }
+      if ('stat' in item) {
+        parts.set(id, { kind: 'text', el: `${id}-value`, box: id });
+        return `<div id="${id}" class="kp-stat"><span id="${id}-value" class="kp-stat-value">${esc(item.stat)}</span>${item.label ? `<span class="kp-note">${esc(item.label)}</span>` : ''}</div>`;
+      }
+      if ('status' in item) {
+        parts.set(id, { kind: 'status', el: `${id}-text`, box: id });
+        return `<div id="${id}" class="kp-status"><div id="${id}-dot" class="kp-dot" style="background-color: ${TONES[item.tone] ?? TONES.neutral}"></div><span id="${id}-text" class="kp-text kp-grow">${esc(item.status)}</span></div>`;
+      }
+      if ('progress' in item) {
+        const pct = Math.round(Math.min(1, Math.max(0, Number(item.progress) || 0)) * 100);
+        parts.set(id, { kind: 'progress', el: `${id}-fill`, label: `${id}-label`, box: id });
+        return `<div id="${id}" class="kp-field"><div class="kp-track"><div id="${id}-fill" class="kp-fill" style="width: ${pct}%"></div></div><span id="${id}-label" class="kp-note"${optional(item.label)}>${esc(item.label) || '-'}</span></div>`;
+      }
+      if (item.divider) {
+        parts.set(id, { kind: 'box', box: id });
+        return `<div id="${id}" class="kp-line"></div>`;
+      }
+      if (Array.isArray(item.buttons)) {
+        if (item.buttons.length === 0 || item.buttons.length > 4) fail('a buttons row holds 1 to 4 buttons.');
+        parts.set(id, { kind: 'box', box: id });
+        const row = item.buttons.map((b, i) => {
+          const bid = idOf(b.id);
+          parts.set(bid, { kind: 'text', el: `${bid}-label`, box: bid });
+          if (typeof b.onPress === 'function') wiring.push((handle) => handle.on(bid, 'click', b.onPress));
+          return button(b.label, bid, b.primary ?? i === 0 ? 'primary' : 'secondary', 'lg');
+        });
+        return `<div id="${id}" class="kp-row">${row.join('')}</div>`;
+      }
+      if (Array.isArray(item.choices) || Array.isArray(item.segmented)) {
+        const segmented = Array.isArray(item.segmented);
+        const labels = segmented ? item.segmented : item.choices;
+        if (labels.length < 2 || labels.length > (segmented ? 5 : 12)) fail(segmented ? 'segmented takes 2 to 5 options.' : 'choices takes 2 to 12 options.');
+        const part = { kind: segmented ? 'segmented' : 'choices', box: id, ids: labels.map((_, i) => `${id}-${i}`), selected: Number.isInteger(item.selected) ? item.selected : null };
+        parts.set(id, part);
+        labels.forEach((label, i) => wiring.push((handle) => handle.on(part.ids[i], 'click', () => {
+          select(part, i);
+          item.onSelect?.(i, String(label));
+        })));
+        wiring.push(() => select(part, part.selected));
+        if (segmented) {
+          return `<div id="${id}" class="kp-seg">${labels.map((label, i) => `<div id="${part.ids[i]}" class="kp-seg-item"><span id="${part.ids[i]}-label" class="kp-seg-text">${esc(label)}</span></div>`).join('')}</div>`;
+        }
+        const columns = Math.min(3, Math.max(1, Math.round(Number(item.columns) || 2)));
+        const cellWidth = Math.floor((inner - 8 * (columns - 1)) / columns);
+        return `<div id="${id}" class="kp-row">${labels.map((label, i) => button(label, part.ids[i], 'secondary', 'sm', ` style="width: ${cellWidth}px"`)).join('')}</div>`;
+      }
+      if (Array.isArray(item.list)) {
+        if (item.list.length === 0 || item.list.length > 8) fail('a list holds 1 to 8 rows.');
+        parts.set(id, { kind: 'box', box: id });
+        const rows = item.list.map((row, i) => {
+          const rid = `${id}-${i}`;
+          parts.set(rid, { kind: 'text', el: `${rid}-title`, box: rid });
+          if (typeof row.onPress === 'function') wiring.push((handle) => handle.on(rid, 'click', row.onPress));
+          return `<div id="${rid}" class="kp-cell${typeof row.onPress === 'function' ? ' kp-press' : ''}">${row.badge !== undefined ? `<div class="kp-badge"><span class="kp-badge-text">${esc(row.badge)}</span></div>` : ''}<div class="kp-cell-text"><span id="${rid}-title" class="kp-text">${esc(row.title)}</span>${row.sub ? `<span id="${rid}-sub" class="kp-note">${esc(row.sub)}</span>` : ''}</div></div>`;
+        });
+        return `<div id="${id}" class="kp-list">${rows.join('')}</div>`;
+      }
+      if ('toggle' in item) {
+        const part = { kind: 'toggle', el: `${id}-switch`, box: id, on: Boolean(item.on) };
+        parts.set(id, part);
+        wiring.push((handle) => {
+          handle.set(part.el, { checked: part.on });
+          handle.on(part.el, 'click', () => {
+            part.on = !part.on;
+            handle.set(part.el, { checked: part.on });
+            item.onChange?.(part.on);
+          });
+        });
+        return `<div id="${id}" class="kp-list"><div class="kp-cell"><span class="kp-text kp-grow">${esc(item.toggle)}</span><Toggle id="${id}-switch"></Toggle></div></div>`;
+      }
+      if ('slider' in item) {
+        const min = Number(item.min ?? 0);
+        const max = Number(item.max ?? 100);
+        if (!(max > min)) fail('a slider needs max greater than min.');
+        const step = Number(item.step) > 0 ? Number(item.step) : (max - min) / 100;
+        const format = typeof item.format === 'function' ? item.format : (v) => String(Math.round(v * 100) / 100);
+        const inRange = (value) => (Number.isFinite(Number(value)) ? Math.min(max, Math.max(min, Number(value))) : min);
+        const part = { kind: 'slider', el: `${id}-slider`, label: `${id}-value`, box: id, value: inRange(item.value), inRange, format };
+        parts.set(id, part);
+        wiring.push((handle) => handle.set(part.el, {
+          value: part.value,
+          onValueChange: (value) => {
+            if (value === part.value) return; // the slider reports every pointer move
+            part.value = value;
+            handle.set(part.el, { value });
+            handle.set(part.label, { text: esc(format(value)) });
+            item.onChange?.(value);
+          },
+        }));
+        return `<div id="${id}" class="kp-field"><div class="kp-pair"><span class="kp-text kp-grow">${esc(item.slider)}</span><span id="${id}-value" class="kp-text">${esc(format(part.value))}</span></div><Slider id="${id}-slider" size="md" min="${min}" max="${max}" step="${step}" left-label="${escAttr(format(min))}" right-label="${escAttr(format(max))}"></Slider></div>`;
+      }
+      return fail(`unknown item ${JSON.stringify(Object.keys(item))}. Use text, note, stat, status, progress, divider, buttons, choices, segmented, list, toggle or slider.`);
+    });
+
+    const markup = `<style>${panelCss(px)}</style>\n<div class="panel"><div class="kp-head">${head}</div>${body.join('')}</div>`;
+    panelMarkups.add(markup);
+    const handle = ui(markup, { width: widthM, position: o.position, rotationY: o.rotationY });
+
+    /** Show which option of a choices or segmented part is selected (null: none). */
+    function select(part, index) {
+      part.selected = Number.isInteger(index) && index >= 0 && index < part.ids.length ? index : null;
+      part.ids.forEach((id, i) => {
+        const on = i === part.selected;
+        if (part.kind === 'choices') handle.set(id, { variant: on ? 'primary' : 'secondary' });
+        else {
+          handle.set(id, { backgroundColor: on ? INK : 'rgba(255, 255, 255, 0)' });
+          handle.set(`${id}-label`, { color: on ? '#272727' : INK });
+        }
+      });
+    }
+    for (const wire of wiring) wire(handle);
+
+    return {
+      object3D: handle.object3D,
+      set(id, value, tone) {
+        const part = parts.get(id);
+        if (!part) throw new Error(`kit.panel: no part with id '${id}'. Give the item an id to change it later.`);
+        if (part.kind === 'text') handle.set(part.el, part.reveal ? { text: esc(value) || '-', display: esc(value) ? 'flex' : 'none' } : { text: esc(value) });
+        else if (part.kind === 'status') {
+          handle.set(part.el, { text: esc(value) });
+          if (tone !== undefined) handle.set(`${part.box}-dot`, { backgroundColor: TONES[tone] ?? TONES.neutral });
+        } else if (part.kind === 'progress') {
+          handle.set(part.el, { width: `${Math.round(Math.min(1, Math.max(0, Number(value) || 0)) * 100)}%` });
+          if (tone !== undefined) handle.set(part.label, { text: esc(tone) || '-', display: esc(tone) ? 'flex' : 'none' });
+        } else if (part.kind === 'choices' || part.kind === 'segmented') select(part, value);
+        else if (part.kind === 'toggle') {
+          part.on = Boolean(value);
+          handle.set(part.el, { checked: part.on });
+        } else if (part.kind === 'slider') {
+          part.value = part.inRange(value);
+          handle.set(part.el, { value: part.value });
+          handle.set(part.label, { text: esc(part.format(part.value)) });
+        }
+      },
+      show(id, visible = true) {
+        const part = parts.get(id);
+        if (!part) throw new Error(`kit.panel: no part with id '${id}'.`);
+        handle.set(part.box ?? part.el, { display: visible ? 'flex' : 'none' });
+      },
+    };
+  }
+
   // --- Host hooks -----------------------------------------------------------------------------------------
 
   /** Lay kit materials' textures onto a geometry at real-world scale (one tile per `tile` metres). */
@@ -1477,7 +1739,7 @@ export function createKit(THREE, options = {}) {
   }
 
   return {
-    material, texture, theme,
+    material, texture, theme, panel, madePanel,
     roundedBox, extrude, lathe, tube, gear, instances, along, merge,
     glow, particles, ring, shadow, stand, arrow,
     card, matchQuiz, flashcards,

@@ -639,6 +639,15 @@ Added on Nov 14, after a headset session:
   lesson's root panel is turned into a Horizon `Panel` when it opens and the shared theme (`kit.theme`)
   uses the set's colours and pill buttons, so saved lessons change too; cards, trays and move bars use the
   same palette. Checked in the emulator and a production build; not yet seen in the headset.
+- **Panels from a fixed set of parts** (`kit.panel`, Nov 14): the lesson agent no longer writes panel markup.
+  It lists parts (text, note, stat, status, progress, buttons, choices, segmented, list, toggle, slider) and
+  the kit builds the panel in the Meta Horizon OS style with the Horizon kit's own Button, Toggle and Slider,
+  at the Figma set's sizes (about 1.15 mm per design pixel). The dry run rejects hand-written panel markup in
+  lesson code (the A2UI and template formats are exempt). This is the hybrid RQ1 pointed at: a catalogue for
+  the 2D panel, open code for the 3D and the behaviour. Checked in the emulator: every part type renders,
+  and buttons, choices, segmented, toggle and slider respond to the controller ray; one lesson rewritten by
+  gpt-6.1-sol under the new rules passed first try (80 s). Not yet seen in the headset; saved lessons keep
+  their old panels until rewritten.
 - **Sizing fix:** a lesson is measured after its first `update()`, so parts sized there (a beam drawn by
   stretching a unit cylinder) no longer shrink the whole lesson.
 

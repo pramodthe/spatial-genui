@@ -324,7 +324,7 @@ export async function mountGenerated(code: string): Promise<MountReport> {
   try {
     build = (await import(/* @vite-ignore */ moduleUrl)).default;
   } catch (err) {
-    return { ok: false, error: `Module failed to load: ${(err as Error).message}` };
+    return ticket === mountTicket ? { ok: false, error: `Module failed to load: ${(err as Error).message}` } : SUPERSEDED;
   } finally {
     URL.revokeObjectURL(moduleUrl);
   }

@@ -25,6 +25,8 @@ export function systemPromptFor(format: GenUIFormat): string {
   return format === 'a2ui' || format === 'a2ui-parallel' ? A2UI_SYSTEM_PROMPT : format === 'template' ? TEMPLATE_SYSTEM_PROMPT : SYSTEM_PROMPT;
 }
 
+const HAND_MADE_PANEL = 'The module calls ui() with its own markup. Build every panel with kit.panel(ui, { title, items: [...] }) from the parts listed under "Panels" (text, note, stat, status, progress, buttons, choices, segmented, list, toggle, slider) and change them with panel.set(id, value); do not write markup, CSS or panel.on().';
+
 export type Attempt = {
   ms: number;
   promptTokens: number;
@@ -190,10 +192,12 @@ export async function generate(
     }
 
     const run = await dryRun(validation.transformed, assetStubs(validation.assets));
-    if (!run.ok) {
+    // Lesson code builds its panels from the kit's parts; the A2UI and template formats compile their own.
+    const failure = !run.ok ? run.error : format === 'code' && run.stats.rawPanels > 0 ? HAND_MADE_PANEL : null;
+    if (!run.ok || failure) {
       attempt.stage = 'dry-run';
-      attempt.error = run.error;
-      messages.push({ role: 'user', content: repair(run.error) });
+      attempt.error = failure ?? undefined;
+      messages.push({ role: 'user', content: repair(failure ?? '') });
       continue;
     }
 

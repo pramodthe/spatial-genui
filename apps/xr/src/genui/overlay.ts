@@ -346,7 +346,9 @@ async function mountPartial(code: string) {
   state.code = code;
   state.runtimeErrors = [];
   codeEl.textContent = code;
-  state.lastMount = await mountGenerated(code);
+  const report = await mountGenerated(code);
+  if (!report.ok && report.superseded) return; // a later part replaced it
+  state.lastMount = report;
 }
 
 /**
@@ -392,7 +394,10 @@ async function mount(code: string) {
   state.runtimeErrors = [];
   codeEl.textContent = code;
   state.mountedAt = performance.now();
-  state.lastMount = await mountGenerated(code);
+  const report = await mountGenerated(code);
+  // A later lesson replaced this one while it loaded: that one reports for itself.
+  if (!report.ok && report.superseded) return report;
+  state.lastMount = report;
   if (!state.lastMount.ok) reportRuntimeError(state.lastMount.error);
   // Any lesson in the scene docks the picker, however it was mounted (generate, tests, saved lessons).
   else setPhase('ready');

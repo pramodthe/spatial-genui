@@ -89,7 +89,14 @@ function loadKit() {
   return kitModule;
 }
 
-export type MountReport = { ok: true; warnings: string[]; credits: string[] } | { ok: false; error: string };
+/** `superseded`: another lesson was asked for while this one loaded; it was dropped and nothing changed. */
+export type MountReport = { ok: true; warnings: string[]; credits: string[] } | { ok: false; error: string; superseded?: boolean };
+
+// Mounting waits on the network (library models, the kit, the module). When a second lesson is asked for
+// meanwhile, only the latest one may reach the scene: an earlier one finishing later would add a lesson that
+// nothing removes, its panels never scaled to the desk.
+let mountTicket = 0;
+const SUPERSEDED: MountReport = { ok: false, error: 'Another lesson was opened while this one loaded.', superseded: true };
 
 // The panel font (Inter atlas in @pmndrs/msdfonts) has plain ASCII plus these; anything else renders
 // as an empty box. Keep in sync with apps/server/src/glyphs.ts, which makes the agent fix its text.
@@ -297,6 +304,7 @@ function isPressableNow(element: Object3D): boolean {
 /** Load an agent-written module and mount what it builds. Throws nothing; failures come back as a report. */
 export async function mountGenerated(code: string): Promise<MountReport> {
   if (!world) return { ok: false, error: 'GenUI host is not initialised.' };
+  const ticket = ++mountTicket;
   unmountGenerated();
 
   // Library models the module names in assets.get('…') load first, so build() can use them synchronously.
@@ -306,9 +314,10 @@ export async function mountGenerated(code: string): Promise<MountReport> {
     try {
       library = await preloadAssets(assetIds);
     } catch (err) {
-      return { ok: false, error: `Library asset failed to load: ${(err as Error).message}` };
+      return ticket === mountTicket ? { ok: false, error: `Library asset failed to load: ${(err as Error).message}` } : SUPERSEDED;
     }
   }
+  if (ticket !== mountTicket) return SUPERSEDED;
 
   const moduleUrl = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }));
   let build: unknown;
@@ -319,6 +328,7 @@ export async function mountGenerated(code: string): Promise<MountReport> {
   } finally {
     URL.revokeObjectURL(moduleUrl);
   }
+  if (ticket !== mountTicket) return SUPERSEDED;
   if (typeof build !== 'function') return { ok: false, error: 'The module has no default build function.' };
 
   const traitRequests: { object: Object3D; grab: boolean; onPress?: () => void }[] = [];
@@ -340,6 +350,11 @@ export async function mountGenerated(code: string): Promise<MountReport> {
     handle: null,
     handleRest: null,
   };
+  // The last wait: from here to the end, nothing else can run before this lesson is in the scene.
+  if (ticket !== mountTicket) {
+    mounted.kit?.dispose();
+    return SUPERSEDED;
+  }
 
   const api = {
     THREE: IWSDK,

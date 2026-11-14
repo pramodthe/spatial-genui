@@ -6,6 +6,7 @@ Each catalogue entry carries its full provenance; this table is made from them. 
 | Model | Title | Source and credit | Licence |
 |---|---|---|---|
 | `acoustic-guitar-objaverse` | acoustic guitar (3D model by LeonArt3d) | LeonArt3d (Sketchfab), "Acoustic Guitar Clean", https://sketchfab.com/3d-models/45ff76dcea9a4274a3c1e70856867101 | CC BY 4.0. Parts cut by P3-SAM (Tencent Hunyuan3D-Part, non-commercial licence). |
+| `acoustic-guitar-trellis` | Acoustic Guitar | Generated with TRELLIS.2 (Microsoft, MIT) from a Muse Image reference picture | generated (TRELLIS.2, MIT). |
 | `apollo-lunar-lander-objaverse` | Apollo Lunar Lander (3D model by Vector-3DModels) | Vector-3DModels (Sketchfab), "Nasa lunar module", https://sketchfab.com/3d-models/c7d5ae92d0ca41dfb3bec26552c5d1cb | CC BY 4.0. Parts cut by P3-SAM (Tencent Hunyuan3D-Part, non-commercial licence). |
 | `bicycle-objaverse` | Bicycle (3D model by Remik.Papaj) | Remik.Papaj (Sketchfab), "Bike", https://sketchfab.com/3d-models/3bde1ab67c6448169b604dedad6828d8 | CC BY 4.0. |
 | `brain-bp3d` | Human brain (lobes, cerebellum and brainstem) | BodyParts3D, © The Database Center for Life Science licensed under CC Attribution 4.0 International | CC BY 4.0. |

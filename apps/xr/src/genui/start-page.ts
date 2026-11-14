@@ -186,6 +186,8 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
   let courses: CourseSummary[] = [];
   const expanded = new Set<string>();
   let poll = 0;
+  // Declared before anything can call refresh(): the visibility subscription below runs at once.
+  let refreshing = false;
 
   const show = () => {
     const visible = !immersive && !hiddenByHost;
@@ -268,7 +270,6 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
   });
 
   // Saved courses: kept fresh while the page or its bar is on screen (in XR the picker polls instead).
-  let refreshing = false;
   async function refresh() {
     if (refreshing) return;
     refreshing = true;

@@ -35,7 +35,7 @@ import type { TeachingRig } from './rig';
  */
 
 type PanelOptions = { width?: number; position?: [number, number, number]; rotationY?: number };
-type ElementProps = { text?: string; color?: string; backgroundColor?: string; display?: string };
+type ElementProps = { text?: string; color?: string; backgroundColor?: string; display?: string; onValueChange?: (value: unknown) => void };
 
 type PanelRecord = {
   holder: Group;
@@ -47,6 +47,8 @@ type PanelRecord = {
   url: string;
   /** Elements that got a generated click handler, for tests that press panel buttons. */
   boundElements: { id: string; element: Object3D }[];
+  /** Elements given a value handler (sliders), for tests that drag them. */
+  valueIds: string[];
 };
 
 type Mounted = {
@@ -200,6 +202,10 @@ export type MountedInspection = {
   layout?: Record<string, unknown>;
   /** Panel elements with a generated click handler, with their world-space centers. */
   panelButtons: { id: string; center: [number, number, number]; size: [number, number, number] }[];
+  /** Panel elements with a value handler (sliders). */
+  sliders: { id: string; center: [number, number, number]; size: [number, number, number] }[];
+  /** Each teaching rig: its parts' names and how far apart they are (mean distance from their centre, m). */
+  rigs: { parts: number; names: string[]; spread: number }[];
 };
 
 /** A picture of the mounted lesson from a virtual camera (JPEG data URL), or null when there is none. */
@@ -229,12 +235,12 @@ export function debugRay(from: [number, number, number], to: [number, number, nu
 }
 
 /**
- * For tests: a point on grabbable `index` that a ray from `from` reaches before anything else, the way
- * a learner aims at a part they can see. Tries the centre first, then points on the object's surface
- * nearest the centre (the centre of a ring or a hollow organ is not on the object). Null if none.
+ * For tests: a point on grabbable (or, with kind 'press', pressable) `index` that a ray from `from` reaches
+ * before anything else, the way a learner aims at a part they can see. Tries the centre first, then points on
+ * the object's surface nearest the centre (the centre of a ring or a hollow organ is not on the object). Null if none.
  */
-export function aimPoint(index: number, from: [number, number, number]): [number, number, number] | null {
-  const object = current && [...current.grabModes.keys()][index];
+export function aimPoint(index: number, from: [number, number, number], kind: 'grab' | 'press' = 'grab'): [number, number, number] | null {
+  const object = current && (kind === 'press' ? current.pressTargets : [...current.grabModes.keys()])[index];
   if (!world || !object) return null;
   const center = new Box3().setFromObject(object).getCenter(new Vector3());
   const candidates = [center];
@@ -293,6 +299,21 @@ export function inspectMounted(): MountedInspection | null {
           return { id: b.id, center: box.getCenter(new Vector3()).toArray() as [number, number, number], size: box.getSize(new Vector3()).toArray() as [number, number, number] };
         }),
     ),
+    sliders: [...mounted.panels.values()].flatMap((p) =>
+      p.valueIds.flatMap((id) => {
+        const element = p.document?.getElementById(id) as unknown as Object3D | undefined;
+        if (!element || !isPressableNow(element)) return [];
+        element.updateWorldMatrix(true, false);
+        const box = new Box3().setFromObject(element);
+        return [{ id, center: box.getCenter(new Vector3()).toArray() as [number, number, number], size: box.getSize(new Vector3()).toArray() as [number, number, number] }];
+      }),
+    ),
+    rigs: mounted.rigs.map((rig) => {
+      const parts = rig.partObjects();
+      const centers = parts.map(center).map((c) => new Vector3(...c));
+      const mid = centers.reduce((sum, c) => sum.add(c), new Vector3()).divideScalar(centers.length || 1);
+      return { parts: parts.length, names: parts.map((part) => part.name), spread: centers.reduce((sum, c) => sum + c.distanceTo(mid), 0) / (centers.length || 1) };
+    }),
   };
 }
 
@@ -374,6 +395,12 @@ export async function mountGenerated(code: string): Promise<MountReport> {
           if (record.document) bindHandler(record, handler);
         },
         set(id: string, props: ElementProps) {
+          const onValueChange = props.onValueChange;
+          if (typeof onValueChange === 'function') {
+            // Counted like a click handler, so tests can tell a slider drag landed.
+            props = { ...props, onValueChange: (value) => (mounted.handlerCalls++, onValueChange(value)) };
+            if (!record.valueIds.includes(id)) record.valueIds.push(id);
+          }
           if (record.document) applyProps(record.document, id, props);
           else record.pendingProps.push({ id, props });
         },
@@ -564,6 +591,7 @@ function createPanelRecord(markup: string, options: PanelOptions): PanelRecord {
     document: null,
     url: URL.createObjectURL(new Blob([markup], { type: 'text/plain' })),
     boundElements: [],
+    valueIds: [],
   };
 }
 

@@ -31,12 +31,8 @@ export default function build({ THREE, kit, traits, ui, isGrabbed }) {
 - traits(object, { grab?: boolean, onPress?: () => void }): ask the host for hand interaction.
   grab: true lets the user pinch the object and move it. onPress runs when the user presses the object.
   Only use traits on objects that are DIRECT children of root (call root.add(object) first).
-- ui(markup, { width, position?, rotationY? }): a flat 2D panel (text, buttons, cards) in UIKitML.
-  width is the panel's width in meters (0.2-0.5 is typical); position is [x, y, z] in meters relative
-  to root; rotationY turns it in radians (panels face +Z, toward the user). It returns a handle:
-    handle.object3D - add it to root
-    handle.on(elementId, 'click', fn) - react to a press on an element with that id
-    handle.set(elementId, { text?, color?, backgroundColor?, display? }) - update an element
+- ui: the host's panel function. Pass it to kit.panel(ui, { ... }) to make the lesson's panel (see Panels).
+  Never call ui yourself and never write panel markup or CSS: panels not made by kit.panel are rejected.
 - isGrabbed(object): true while the user holds that object. Skip animating a held object.
 
 # kit: the paintbox
@@ -104,7 +100,7 @@ Cards and quizzes.
       items: [{ text: 'Left ventricle', at: [0.03, 0.12, 0.04] }, ...],  // at: the spot it names, in root space,
                                                                          // on the model's surface on the user's side (+z)
       tray: [0, 0.04, 0.2],                                              // centre of the row where cards wait, in front of the model
-      onChange({ right, total, misses, done, last }) { panel.set('score', { text: right + ' of ' + total }); },
+      onChange({ right, total, misses, done, last }) { panel.set('score', right + ' of ' + total); },
     });
   Use 3 to 6 items with targets at least 0.07 m apart. Do not make the model itself grabbable in a quiz
   (the targets must stay put). quiz.reset() starts over (wire it to a button).
@@ -116,16 +112,40 @@ Cards and quizzes.
       root, traits, isGrabbed,
       cards: [{ front: 'Turbine', back: 'Hot gas spins it; it drives the compressor.' }, ...],  // 4 to 8, plain ASCII
       at: [0, 0.14, 0.1],                                          // keep 0.25 m clear on both sides for the trays
-      onChange({ known, again, left, total, done, side }) { panel.set('state', { text: known + ' of ' + total + ' known' }); },
+      onChange({ known, again, left, total, done, side }) { panel.set('state', known + ' of ' + total + ' known'); },
     });
   deck.flip() turns the current card (wire it to a "Flip" button), deck.reset() starts over. Put the
   panel above or behind the trays, not beside the card.
-Panels.
-- kit.theme({ accent }) returns CSS for ui(), so all panels share one look. Use it as
-  <style>\${kit.theme({ accent: '#ffb347' })}</style><div class="panel">...</div> with ui width 0.3-0.36.
-  Classes: panel (the root, 500px wide), bar (accent line), eyebrow, title, subtitle, body, small, good,
-  bad, row, col, grow, card, btn + btn-text, btn2 + btn2-text (quiet button), chip + chip-text,
-  badge + badge-text (numbered circle), divider, stat (a big number). Add your own classes after it.
+Panels. Every panel is built by kit.panel from a fixed set of parts in the Meta Horizon OS style. You choose
+the parts and their words; the kit owns the look, the sizes and the layout.
+  const panel = kit.panel(ui, {
+    width: 0.36,                                    // metres, 0.36 to 0.45
+    position: [0.38, 0.22, 0], rotationY: -0.3,      // beside the model, turned toward the user
+    eyebrow: 'LESSON 2 OF 4', title: 'Follow an orbit', subtitle: 'optional second line',
+    items: [                                        // top to bottom; give a part an id to change it later
+      { text: 'One or two sentences.', id: 'info' },
+      { stat: '408 N', label: 'force needed', id: 'force' },      // one big number with a small label
+      { status: 'Pick a part', tone: 'neutral', id: 'state' },     // feedback line; tone: neutral, good, poor, bad
+      { progress: 0.4, label: '2 of 5', id: 'done' },              // a bar, 0 to 1
+      { buttons: [{ label: 'Next', onPress() { } }, { label: 'Reset', id: 'reset', onPress() { } }] },  // 1-4; the first is the main one
+      { choices: ['Mercury', 'Venus', 'Earth', 'Mars'], columns: 2, id: 'planet', onSelect(index, label) { } },  // pick one of 2-12
+      { segmented: ['0.25x', '1x', '4x'], selected: 1, id: 'speed', onSelect(index, label) { } },      // 2-5 short options
+      { list: [{ title: 'Fan', sub: 'Pulls air in', badge: 1, onPress() { } }] },                      // 1-8 rows
+      { toggle: 'Show orbits', on: true, id: 'orbits', onChange(on) { } },
+      { slider: 'Speed', min: 0, max: 10, step: 1, value: 3, id: 'v', format: (v) => v + ' x', onChange(value) { } },
+      { note: 'Small print: a hint, a credit.' },
+      { divider: true },
+    ],
+  });
+  root.add(panel.object3D);
+  Change a part later by its id:
+  panel.set('info', 'New text');            panel.set('force', '204 N');       panel.set('state', 'Correct!', 'good');
+  panel.set('done', 0.6, '3 of 5');         panel.set('planet', 2);            panel.set('speed', 0);
+  panel.set('orbits', false);               panel.set('v', 5);                 panel.set('reset', 'Start over');   // a button's label
+  panel.set('title', 'New title');          panel.show('reset', false);        // hide or show a part or a button
+  Callbacks run later, so they can use \`panel\` and anything else defined in build(). A choices or segmented
+  part marks the pressed option itself. Keep a panel short: a title, a line or two of text, and only the
+  controls the lesson needs (about 8 parts at most). One panel per lesson; a second only if it has its own job.
 
 # Craft: build it like a model maker
 Users judge the look first. Spend most of your effort on the main model.
@@ -151,36 +171,15 @@ Users judge the look first. Spend most of your effort on the main model.
 - Keep the whole module under about 350 lines: the user is waiting while you write. Loops, small helper
   functions and the kit give detail without length; do not list hundreds of parts one by one.
 
-# UIKitML rules (HTML/CSS-shaped, but not a browser)
-- Exactly one root element. Tags: div, span, button. Text must be inside a span.
-- Style with classes in one <style> block: kit.theme's classes first, then your own if needed. Supported
-  properties: display, flex-direction, align-items, justify-content, gap, margin-*, padding-*, width,
-  height, background-color, border-color, border-width, border-radius, font-size, font-weight, color,
-  text-align. Write padding/margin as four separate properties, never shorthand. Always set color
-  explicitly on text.
-- Use px values. Design the panel around 400-600px wide with font-size 20-32px; the host scales it to
-  the width you pass to ui().
-- Panels follow Meta Horizon OS (dark mode): the root <div class="panel"> from kit.theme is drawn as a
-  Horizon panel (a grey gradient, #414141 to #272727), so give it no background of your own. For anything
-  you style yourself use the same palette: text rgba(255, 255, 255, 0.9), secondary text
-  rgba(255, 255, 255, 0.7), recessed areas rgba(0, 0, 0, 0.14), raised areas rgba(255, 255, 255, 0.1),
-  pill-shaped buttons (border-radius 1000px). Colours may be rgba(...).
-
-# Readable panels (scenes are judged in a headset; tiny, tilted or crowded text is the most common failure)
+# Readable panels (scenes are judged in a headset)
 - Panel text must be plain ASCII. The panel font has no other glyphs except: ° § ä ö ü Ä Ö Ü ß.
   Write CO2 (not a subscript 2), x for multiply, - for every dash, ' and " for quotes, -> for
   arrows, ... for ellipsis, and use no emoji (build icons from 3D shapes instead). Any other
   character shows up as an empty box.
-- Give every panel's root element an explicit width in px (400-600px for panels with sentences;
-  smaller for short labels) so text wraps instead of stretching the panel.
-- Text must be at least 1.2 cm tall in the headset. Its height is ui_width_m * font_px / root_px:
-  e.g. a 500px-wide panel shown at 0.3 m with 22px text gives 1.3 cm. Body text 22-28px, titles
-  28-36px; panels with sentences need a ui() width of at least 0.25 m.
-- Keep panels upright and facing the user. Turn a panel only with rotationY, within -0.4..0.4 rad;
-  never rotate a panel around X or Z.
-- Never overlap: leave at least 2 cm between panels, and never put a panel or label in front of a 3D
-  object or another label. Put the main panel beside the model (x around 0.36, or -0.36), not above it.
-  Prefer one info panel whose text updates on press over many floating labels.
+- Keep rotationY within -0.4..0.4 rad so the text faces the user.
+- Never overlap: never put a panel or a label in front of a 3D object or another label. Put the panel
+  beside the model (x around 0.38, or -0.38), not above it, with its centre 0.2 to 0.25 above the desk.
+- Write short: button labels of one or two words, text parts of one or two sentences.
 
 # Space, comfort and performance
 - Units are meters. root's origin sits on the user's desk, about 0.5 m in front of them; +Y is up,

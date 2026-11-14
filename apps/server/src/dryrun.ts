@@ -1,6 +1,6 @@
 import vm from 'node:vm';
 import * as THREE from 'three';
-import { parse as parseUIKitML } from '@drawcall/uikitml';
+import { parse as parseUIKitML, resolveKitComponentSets } from '@drawcall/uikitml';
 import { createKit } from './kit/kit.js';
 
 export type SceneStats = {
@@ -11,6 +11,8 @@ export type SceneStats = {
   grabbables: number;
   /** Grabbable pairs closer than MIN_GRAB_GAP_M; the host switches those objects to ray grab. */
   crowdedGrabPairs: number;
+  /** Panels the module wrote as its own markup instead of building them with kit.panel. */
+  rawPanels: number;
   pressables: number;
   size: [number, number, number];
 };
@@ -32,6 +34,7 @@ const MIN_GRAB_GAP_M = 0.04;
 const MAX_PANEL_YAW = 0.4; // ~23°: at 40° judges already saw text as steeply angled
 // Smallest text height in the headset; ~1.2 cm reads comfortably at seated distance (~0.55 m).
 const MIN_TEXT_CM = 1.1;
+let horizonComponents: ReturnType<typeof resolveKitComponentSets> | null = null;
 
 /**
  * Execute a validated, transformed module in a VM context with real Three.js and stub host APIs,
@@ -42,6 +45,7 @@ const MIN_TEXT_CM = 1.1;
 export function dryRunUnsafe(transformed: string, assets: Record<string, AssetStub> = {}): DryRunResult {
   const traitTargets: { object: unknown; grab: boolean; press: boolean }[] = [];
   const panels: { markup: string; options: any; holder: THREE.Group }[] = [];
+  let rawPanels = 0;
 
   // The same paintbox the headset uses (kit/kit.js); dry mode builds real shapes but paints no pixels.
   const kit = createKit(THREE, { dry: true });
@@ -53,6 +57,23 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
       return object;
     },
     ui(markup: unknown, options: any = {}) {
+      if (!kit.madePanel(String(markup))) rawPanels++;
+      return hostUi(markup, options);
+    },
+    assets: {
+      get(id: string) {
+        const entry = assets[id];
+        if (!entry) throw new Error(`Unknown library asset '${id}'. Available: ${Object.keys(assets).join(', ') || 'none'}.`);
+        // The model's own labels are the host's panels, not the module's.
+        return stubAsset(entry, hostUi);
+      },
+    },
+    isGrabbed() {
+      return false;
+    },
+  };
+  function hostUi(markup: unknown, options: any = {}) {
+    {
       // Place the holder exactly like the browser host does, so placement checks see the same panel.
       const holder = new THREE.Group();
       const [x = 0, y = 0, z = 0] = Array.isArray(options?.position) ? options.position : [];
@@ -60,18 +81,8 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
       holder.rotation.y = typeof options?.rotationY === 'number' ? options.rotationY : 0;
       panels.push({ markup: String(markup), options, holder });
       return { object3D: holder, on() {}, set() {} };
-    },
-    assets: {
-      get(id: string) {
-        const entry = assets[id];
-        if (!entry) throw new Error(`Unknown library asset '${id}'. Available: ${Object.keys(assets).join(', ') || 'none'}.`);
-        return stubAsset(entry, api.ui);
-      },
-    },
-    isGrabbed() {
-      return false;
-    },
-  };
+    }
+  }
 
   const context = vm.createContext({ __exports: {}, __api: api, console: { log() {}, warn() {}, error() {} } });
   let result: any;
@@ -131,7 +142,8 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
         errors.push(`Panel ${i + 1}: its smallest text would be ${size.minTextCm.toFixed(1)} cm tall in the headset (font-size ${size.minFontPx}px in a ${size.rootPx}px-wide panel shown ${width} m wide); make it at least 1.2 cm: raise that font-size to ${needPx}px or the ui() width to ${needWidth.toFixed(2)} m.`);
       }
     }
-    const parsed = parseUIKitML(p.markup, {});
+    // The same component set the headset loads panels with (the Horizon kit's Button, Toggle, Slider...).
+    const parsed = parseUIKitML(p.markup, { componentSets: (horizonComponents ??= resolveKitComponentSets('horizon')) });
     if (!parsed.success) {
       const details = parsed.errors
         .map((e: any) => `${e.message}${e.range ? ` (markup line ${e.range.start.line + 1}, col ${e.range.start.column + 1})` : ''}`)
@@ -187,6 +199,7 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
       panels: panels.length,
       grabbables: traitTargets.filter((t) => t.grab).length,
       crowdedGrabPairs: crowdedPairs.length,
+      rawPanels,
       pressables: traitTargets.filter((t) => t.press).length,
       size: [round(size.x), round(size.y), round(size.z)],
     },

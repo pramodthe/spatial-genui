@@ -20,7 +20,10 @@ export type DryRunResult =
   | { ok: false; error: string };
 
 // Initial Quest budgets for one generated scene; tune on device in Phase 4.
+// The shapes a lesson builds itself. Library models (scans, generated models) are counted on their own: the
+// agent can't simplify them, and a generated model can have 150k triangles by itself.
 const MAX_TRIANGLES = 150_000;
+const MAX_TOTAL_TRIANGLES = 320_000;
 const MAX_DRAW_CALLS = 150;
 const COMFORT_SIZE_M = 1.0;
 const TIMEOUT_MS = 2000;
@@ -140,6 +143,7 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
   let meshes = 0;
   let drawCalls = 0;
   let triangles = 0;
+  let libraryTriangles = 0;
   root.updateMatrixWorld(true);
   root.traverse((o: any) => {
     if (!o.isMesh && !o.isLine && !o.isPoints) return;
@@ -148,6 +152,7 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
     // A library part's stand-in counts as the real mesh it replaces.
     if (o.userData?.stubTriangles) {
       triangles += o.userData.stubTriangles;
+      libraryTriangles += o.userData.stubTriangles;
       return;
     }
     const geometry = o.geometry as THREE.BufferGeometry | undefined;
@@ -158,7 +163,9 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
 
   const crowdedPairs = findCrowdedPairs(traitTargets.filter((t) => t.grab).map((t) => t.object as THREE.Object3D));
   if (meshes === 0 && panels.length === 0) errors.push('The scene is empty: root contains no meshes and no panels.');
-  if (triangles > MAX_TRIANGLES) errors.push(`Too many triangles (${triangles} > ${MAX_TRIANGLES}). Lower geometry segment counts or use InstancedMesh.`);
+  const ownTriangles = triangles - libraryTriangles;
+  if (ownTriangles > MAX_TRIANGLES) errors.push(`Too many triangles in the shapes you built (${ownTriangles} > ${MAX_TRIANGLES}, library models not counted). Lower geometry segment counts or use InstancedMesh.`);
+  else if (triangles > MAX_TOTAL_TRIANGLES) errors.push(`Too many triangles in all (${triangles} > ${MAX_TOTAL_TRIANGLES}, of which library models ${libraryTriangles}). Show fewer library models at once, or build simpler shapes around them.`);
   if (drawCalls > MAX_DRAW_CALLS) errors.push(`Too many draw calls (${drawCalls} > ${MAX_DRAW_CALLS}). Merge or instance repeated meshes.`);
 
   const box = new THREE.Box3().setFromObject(root);

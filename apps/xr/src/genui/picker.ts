@@ -50,6 +50,8 @@ const SETTLE_FRAMES = 20;
 // The move handle stands this far outside the panel's right edge.
 const HANDLE_GAP_M = 0.035;
 const SHELF_ROWS = 3;
+// The "See all" list: every saved course, newest first, up to this many.
+const ALL_ROWS = 10;
 const COURSE_STEPS = 5;
 // How often the shelf asks the server while a course is being planned or written.
 const COURSE_POLL_MS = 4000;
@@ -103,6 +105,7 @@ export function inspectPicker() {
 export const pickerCourses = {
   request: (subject: string) => picker?.requestCourse(subject),
   show: (id: string | null) => picker?.showCourse(id),
+  all: (on: boolean) => picker?.showAll(on),
   step: (index: number) => picker?.openStep(index),
   refresh: () => picker?.refreshCourses(),
 };
@@ -123,8 +126,10 @@ class LessonPickerSystem extends createSystem({
   private placeIn = -1;
   private ticker = 0;
   private courses: CourseSummary[] = [];
-  /** The course whose lessons are listed (null: the home view). */
+  /** The course whose lessons are listed (null: the home view, or the list of all courses). */
   private shown: string | null = null;
+  /** The list of every saved course is showing. */
+  private listingAll = false;
   private coursePoll = 0;
   /** Titles of course lessons opened here, by their request, for the status line. */
   private readonly titles = new Map<string, string>();
@@ -237,6 +242,9 @@ class LessonPickerSystem extends createSystem({
     document.getElementById('voice')?.addEventListener('click', () => void this.toggleVoice());
     if (!voiceAvailable()) this.setVoice('Voice input is not available in this browser.', 'off');
     for (let i = 0; i < SHELF_ROWS; i++) document.getElementById(`course-${i}`)?.addEventListener('click', () => this.showCourse(this.courses[i]?.id ?? null));
+    for (let i = 0; i < ALL_ROWS; i++) document.getElementById(`all-${i}`)?.addEventListener('click', () => this.showCourse(this.courses[i]?.id ?? null));
+    document.getElementById('see-all')?.addEventListener('click', () => this.showAll(true));
+    document.getElementById('all-back')?.addEventListener('click', () => this.showAll(false));
     for (let i = 0; i < COURSE_STEPS; i++) document.getElementById(`step-${i}`)?.addEventListener('click', () => void this.openStep(i));
     document.getElementById('back')?.addEventListener('click', () => this.showCourse(null));
     void this.refreshCourses();
@@ -256,6 +264,14 @@ class LessonPickerSystem extends createSystem({
 
   showCourse(id: string | null) {
     this.shown = id && this.courses.some((c) => c.id === id) ? id : null;
+    // Back from a course returns to where it was opened from (the home view or the list of all courses).
+    this.applySize();
+    this.renderCourses();
+  }
+
+  showAll(on: boolean) {
+    this.listingAll = on;
+    this.shown = null;
     this.applySize();
     this.renderCourses();
   }
@@ -316,18 +332,27 @@ class LessonPickerSystem extends createSystem({
     const document = this.document;
     if (!document) return;
     const course = this.courses.find((c) => c.id === this.shown);
-    document.getElementById('home')?.setProperties({ display: course ? 'none' : 'flex' });
+    const listing = !course && this.listingAll;
+    document.getElementById('home')?.setProperties({ display: course || listing ? 'none' : 'flex' });
+    document.getElementById('all')?.setProperties({ display: listing ? 'flex' : 'none' });
     document.getElementById('course')?.setProperties({ display: course ? 'flex' : 'none' });
     document.getElementById('shelf-label')?.setProperties({ display: this.courses.length ? 'flex' : 'none' });
-    for (let i = 0; i < SHELF_ROWS; i++) {
+    document.getElementById('see-all')?.setProperties({ display: this.courses.length > SHELF_ROWS ? 'flex' : 'none' });
+    document.getElementById('see-all-label')?.setProperties({ text: `See all ${this.courses.length}` });
+    document.getElementById('all-note')?.setProperties({
+      text: this.courses.length > ALL_ROWS ? `The ${ALL_ROWS} newest of ${this.courses.length} courses` : `${this.courses.length} saved courses, newest first`,
+    });
+    const fillRow = (prefix: string, i: number) => {
       const row = this.courses[i];
-      document.getElementById(`course-${i}`)?.setProperties({ display: row ? 'flex' : 'none' });
-      if (!row) continue;
-      document.getElementById(`course-${i}-title`)?.setProperties({ text: ascii(row.title) });
-      document.getElementById(`course-${i}-state`)?.setProperties({ text: courseProgress(row) });
+      document.getElementById(`${prefix}-${i}`)?.setProperties({ display: row ? 'flex' : 'none' });
+      if (!row) return;
+      document.getElementById(`${prefix}-${i}-title`)?.setProperties({ text: ascii(row.title) });
+      document.getElementById(`${prefix}-${i}-state`)?.setProperties({ text: courseProgress(row) });
       const ready = row.lessons.filter((l) => l.status === 'ready').length;
-      document.getElementById(`course-${i}-fill`)?.setProperties({ width: `${row.lessons.length ? Math.round((100 * ready) / row.lessons.length) : 0}%` });
-    }
+      document.getElementById(`${prefix}-${i}-fill`)?.setProperties({ width: `${row.lessons.length ? Math.round((100 * ready) / row.lessons.length) : 0}%` });
+    };
+    for (let i = 0; i < SHELF_ROWS; i++) fillRow('course', i);
+    if (listing) for (let i = 0; i < ALL_ROWS; i++) fillRow('all', i);
     if (!course) return;
     const modelling = course.model?.status === 'building';
     document.getElementById('course-sub')?.setProperties({
@@ -468,8 +493,11 @@ class LessonPickerSystem extends createSystem({
     // Height is generous so the width is what sets the scale (as the host does for lesson panels).
     this.document?.setTargetDimensions(width, width * 4);
     const course = this.courses.find((c) => c.id === this.shown);
-    this.document?.getElementById('hint')?.setProperties({ display: this.docked || course ? 'none' : 'flex' });
-    this.document?.getElementById('heading')?.setProperties({ text: course ? ascii(course.title) : this.docked ? 'Pick another lesson' : 'What do you want to learn?' });
+    const listing = !course && this.listingAll;
+    this.document?.getElementById('hint')?.setProperties({ display: this.docked || course || listing ? 'none' : 'flex' });
+    this.document?.getElementById('heading')?.setProperties({
+      text: course ? ascii(course.title) : listing ? 'My courses' : this.docked ? 'Pick another lesson' : 'What do you want to learn?',
+    });
     this.document?.getElementById('eyebrow')?.setProperties({ text: course ? 'COURSE' : 'LESSONS ON YOUR DESK' });
   }
 

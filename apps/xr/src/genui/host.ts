@@ -761,7 +761,7 @@ function layoutLessonPanels(mounted: Mounted, again?: { main: Object3D }) {
     return local;
   };
   const labels = new Set(mounted.rigs.flatMap((rig) => rig.labelHolders()));
-  // With no labels showing (a quiz hides them) there are no label columns to clear: the panels stay where
+  // With no labels showing there are no label columns to clear: the panels stay where
   // the agent put them, beside the model as in every drawn lesson.
   if (![...labels].some((label) => label.visible)) return keepPanelsInView(mounted);
   const model = new Box3();

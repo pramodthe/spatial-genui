@@ -27,8 +27,6 @@ export type LessonState = 'pending' | 'generating' | 'ready' | 'failed';
 
 export type CourseLesson = {
   title: string;
-  /** 'cards': a flash-card review of the course's words. 'quiz': a grab-and-drop check of the lessons before it. */
-  kind?: 'explore' | 'cards' | 'quiz';
   /** What the learner can do after it, one sentence. */
   objective: string;
   /** The request the lesson agent gets. */
@@ -85,21 +83,15 @@ const MAX_COURSES = 200;
 
 const PLANNER_PROMPT = `You plan a short hands-on course for a mixed-reality headset. Each lesson is one interactive 3D scene on the learner's desk: a detailed model they can pick up, turn and take apart, with one small panel of text and buttons. A lesson has no video, no long reading and no typing.
 
-Plan 4 to 5 lessons for the learner's request: 2 or 3 to explore, then a flash-card review, then a quiz.
+Plan 3 to 4 lessons for the learner's request:
 - One idea or mechanism per lesson, ordered so each builds on the one before. The first lesson shows the whole thing and names its main parts.
-- Every lesson must be something to SEE and HANDLE in 3D: a structure with parts, a process shown step by step, a cause and its effect the learner can change with a button or by moving something. No lesson that is only facts on a panel.
-- The lesson before the last is a flash-card review, "kind": "cards": 5 to 7 cards, each with a term or a short question from the earlier lessons on its front and a one-sentence answer on its back. Its prompt lists every card as front -> back. The learner turns each card over and sorts it onto a "Got it" or an "Again" tray.
-- The LAST lesson is a hands-on check of the lessons before it: the learner picks up name cards and drops each one on the part of the model it names (4 to 6 cards). Give it "kind": "quiz"; the lessons before the review have "kind": "explore". Its prompt names the model to show and the parts to match.
+- Every lesson must be something to SEE and HANDLE in 3D: a structure with parts, a process shown step by step, a cause and its effect the learner can change with a button or by moving something. No lesson that is only facts on a panel, and no quiz or flash-card lesson: the learner asks the voice tutor when they want to be tested or to know more.
 - "prompt" is the full request for the agent that builds that lesson. It knows nothing else, so name the subject, what the 3D model must show, and what the learner does with it (2 to 3 sentences).
-- "model": when the course is about ONE real physical object (a jet engine, a microscope, a guitar, a heart), describe it, and a realistic 3D model of its outside is built with separate parts. "name" is its everyday name (1 to 3 words), "describe" is one sentence on what it looks like from outside, "parts" are 4 to 7 outside parts a learner could take off and name. The first lesson and the quiz then use this model. Use null when the course is about a process, an idea or several things (the water cycle, photosynthesis, the solar system).
+- "model": when the course is about ONE real physical object (a jet engine, a microscope, a guitar, a heart), describe it, and a realistic 3D model of its outside is built with separate parts. "name" is its everyday name (1 to 3 words), "describe" is one sentence on what it looks like from outside, "parts" are 4 to 7 outside parts a learner could take off and name. The lessons then use this model. Use null when the course is about a process, an idea or several things (the water cycle, photosynthesis, the solar system).
 - If the request comes with a list of models already made and one of them is this course's object, use it instead of describing a new one: "model": {"use": "<its id>"}. Then plan the lessons around the parts it has.
 
 Reply with only this JSON:
-{"title": "2 to 5 words", "subtitle": "one short line", "model": {"name": "...", "describe": "...", "parts": ["..."]}, "lessons": [{"title": "2 to 4 words", "objective": "After this you can ...", "kind": "explore", "prompt": "..."}]}`;
-
-const QUIZ_NOTE = 'Build this lesson as a grab-and-drop matching quiz with kit.matchQuiz: the detailed model stands still on its stand, the name cards wait in a row in front of it, and one panel shows the score, the last result and a "Start over" button.';
-
-const CARDS_NOTE = 'Build this lesson as a flash-card review with kit.flashcards: the cards as listed (plain ASCII, each back under 90 characters), the current card standing in front of the learner with the two trays beside it, and one panel that shows how many cards are known and how many are left, with a "Flip" and a "Start over" button. If the course has a model, show it small behind the cards, standing still.';
+{"title": "2 to 5 words", "subtitle": "one short line", "model": {"name": "...", "describe": "...", "parts": ["..."]}, "lessons": [{"title": "2 to 4 words", "objective": "After this you can ...", "prompt": "..."}]}`;
 
 const courses = new Map<string, Course>();
 let loaded = false;
@@ -197,7 +189,7 @@ async function plan(course: Course) {
     await recordSpend([{ model: target.id, promptTokens: reply.promptTokens, completionTokens: reply.completionTokens }]);
     const outline = extractJson(reply.text) as { title?: unknown; subtitle?: unknown; model?: unknown; lessons?: unknown } | null;
     const lessons = (Array.isArray(outline?.lessons) ? outline.lessons : [])
-      .filter((l): l is { title: string; objective?: unknown; kind?: unknown; prompt: string } => typeof l?.title === 'string' && typeof l?.prompt === 'string' && l.prompt.trim().length > 0)
+      .filter((l): l is { title: string; objective?: unknown; prompt: string } => typeof l?.title === 'string' && typeof l?.prompt === 'string' && l.prompt.trim().length > 0)
       .slice(0, 5);
     if (lessons.length < 2) throw new Error('The planner returned no usable outline.');
     course.title = typeof outline?.title === 'string' && outline.title.trim() ? outline.title.trim().slice(0, 60) : course.title;
@@ -206,8 +198,7 @@ async function plan(course: Course) {
       title: l.title.trim().slice(0, 60),
       objective: typeof l.objective === 'string' ? l.objective.trim().slice(0, 200) : '',
       // The builder sees one lesson at a time: tell it where the lesson sits, so lessons don't repeat each other.
-      kind: l.kind === 'quiz' ? 'quiz' as const : l.kind === 'cards' ? 'cards' as const : 'explore' as const,
-      prompt: `${l.prompt.trim().slice(0, 1200)}${l.kind === 'quiz' ? `\n${QUIZ_NOTE}` : l.kind === 'cards' ? `\n${CARDS_NOTE}` : ''}\n(This is lesson ${i + 1} of ${lessons.length} in the course "${course.title}": ${lessons.map((x) => x.title).join(', ')}. Cover only this lesson's idea.)`,
+      prompt: `${l.prompt.trim().slice(0, 1200)}\n(This is lesson ${i + 1} of ${lessons.length} in the course "${course.title}": ${lessons.map((x) => x.title).join(', ')}. Cover only this lesson's idea.)`,
       status: 'pending',
     }));
     course.status = 'building';

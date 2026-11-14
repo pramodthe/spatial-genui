@@ -648,6 +648,11 @@ Added on Nov 14, after a headset session:
   and buttons, choices, segmented, toggle and slider respond to the controller ray; one lesson rewritten by
   gpt-6.1-sol under the new rules passed first try (80 s). Not yet seen in the headset; saved lessons keep
   their old panels until rewritten.
+- **Quizzes and flash cards removed** (Nov 14, after a headset session): both were text on cards that used
+  the 3D for nothing, and the flash card stood in front of the model. `kit.matchQuiz` and `kit.flashcards`,
+  the planner's review and quiz lessons, and the 13 saved lessons of those kinds are gone (database backed up
+  first). Courses are 3 to 4 lessons to explore; checking understanding is the voice tutor's job (it asks
+  questions aloud when asked). The earlier Phase 7 notes on the quiz and flash cards are history.
 - **Sizing fix:** a lesson is measured after its first `update()`, so parts sized there (a beam drawn by
   stretching a unit cylinder) no longer shrink the whole lesson.
 

@@ -95,7 +95,8 @@ const server = createServer(async (req, res) => {
       const refusal = admitVoice(visitorOf(req));
       if (refusal) return send(res, refusal.status, { ok: false, error: refusal.error, reason: refusal.reason });
       const result = await voiceAgentToken();
-      return send(res, result.ok ? 200 : 503, result);
+      // 501: no tutor on this server (the headset stops asking); 503: try again later.
+      return send(res, result.ok ? 200 : result.configured ? 503 : 501, result);
     }
     // Saved courses (courses.ts): planned at once, lessons written in the background and kept on disk.
     if (req.method === 'POST' && req.url === '/api/courses') {

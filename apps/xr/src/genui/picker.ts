@@ -62,8 +62,9 @@ const STEP_BADGES = {
   ready: { background: 'rgba(255, 255, 255, 0.9)', number: '#272727' },
   failed: { background: '#f7818c', number: '#272727' },
 } as const;
-// The voice row's microphone circle: ready, listening, working, unavailable.
-const VOICE_TONES = { ready: '#272727', listening: '#e5343e', working: '#fc9435', off: '#8a8a8a' } as const;
+// The voice row's microphone circle: ready, listening, working (understanding, planning), missed (try again),
+// unavailable.
+const VOICE_TONES = { ready: '#272727', listening: '#e5343e', working: '#31a8f3', missed: '#fc9435', off: '#8a8a8a' } as const;
 type VoiceTone = keyof typeof VOICE_TONES;
 
 // Status colours from the Reality Labs Design System: none, poor (working), good, bad.
@@ -360,7 +361,7 @@ class LessonPickerSystem extends createSystem({
     try {
       const text = await stopAndTranscribe();
       if (!text) {
-        this.setVoice("I didn't catch that. Pinch here and try again.", 'ready');
+        this.setVoice("I didn't catch that. Pinch here and try again.", 'missed');
       } else {
         this.setVoice(`Planning a course on: "${ascii(text)}"`, 'working');
         await this.requestCourse(text);

@@ -160,7 +160,11 @@ Users judge the look first. Spend most of your effort on the main model.
   explicitly on text.
 - Use px values. Design the panel around 400-600px wide with font-size 20-32px; the host scales it to
   the width you pass to ui().
-- Use dark panel backgrounds (#14171c - #2a2e35) with light text; passthrough backgrounds vary.
+- Panels follow Meta Horizon OS (dark mode): the root <div class="panel"> from kit.theme is drawn as a
+  Horizon panel (a grey gradient, #414141 to #272727), so give it no background of your own. For anything
+  you style yourself use the same palette: text rgba(255, 255, 255, 0.9), secondary text
+  rgba(255, 255, 255, 0.7), recessed areas rgba(0, 0, 0, 0.14), raised areas rgba(255, 255, 255, 0.1),
+  pill-shaped buttons (border-radius 1000px). Colours may be rgba(...).
 
 # Readable panels (scenes are judged in a headset; tiny, tilted or crowded text is the most common failure)
 - Panel text must be plain ASCII. The panel font has no other glyphs except: ° § ä ö ü Ä Ö Ü ß.

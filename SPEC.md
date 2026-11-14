@@ -188,7 +188,7 @@ If there's no time for these, the paper's claim narrows to the multi-model bench
 - **One renderer for C and D** (`runtime.js`): their JSON compiles into the same kind of module version A writes, so the host, the safety checks, the dry run, the emulator probes and the judge are identical for all three. Only what the agent writes differs.
 - Version A' (code restricted to a helper library) was not built.
 
-**Method:** the 12 held-out prompts (`test-12.json`) × 2 repetitions per model, the same agent loop (≤2 repairs), the emulator probes, and Claude Opus 5.5 as the single independent judge, as in runs 3-5. Version A is runs 4 (Sonnet) and 3 (Ember); its system prompt is byte-identical to today's. Data: `bench/results/_rq1-compare` (combined), `_rq1-a2ui-v3-*`, `_rq1-template-v2`.
+**Method:** the 12 held-out prompts (`test-12.json`) × 2 repetitions per model, the same agent loop (≤2 repairs), the emulator probes, and Claude Opus 5.5 as the single independent judge, as in runs 3-5. Version A is runs 4 (Sonnet) and 3 (Ember); its system prompt is byte-identical to today's. Data: [`rq1-compare`](bench/results/rq1-compare/summary.md) (combined), [`rq1-a2ui-v3-sonnet`](bench/results/rq1-a2ui-v3-sonnet/summary.md), [`rq1-a2ui-v3-ember`](bench/results/rq1-a2ui-v3-ember/summary.md), [`rq1-template-v2`](bench/results/rq1-template-v2/summary.md).
 
 | Version | Model | pass@1 | Success | Grab works | Quality (1-5) | Median time | Output tokens | Cost / success |
 |---|---|---|---|---|---|---|---|---|
@@ -525,7 +525,7 @@ Triangles, meshes, time and cost are for the pipeline alone (medians; cost is th
 
 `POST /api/generate-stream` serves it, and `/?parallel=1` streams lessons into the headset.
 
-**Method:** the same 12 prompts × 2 against one-shot version C with the same checker (v3), builder model, emulator and judge. `npm run bench:rq4`. Data: `bench/results/_rq4-parallel-v3-*` vs `_rq1-a2ui-v3-*`.
+**Method:** the same 12 prompts × 2 against one-shot version C with the same checker (v3), builder model, emulator and judge. `npm run bench:rq4` makes the table below ([`rq4-compare`](bench/results/rq4-compare/summary.md)). Data: `bench/results/rq4-parallel-v3-*` vs `rq1-a2ui-v3-*`.
 
 | | Model | Success | First try | Placeholders | First real content | Full lesson | Output tokens | Quality (1-5) |
 |---|---|---|---|---|---|---|---|---|

@@ -54,30 +54,6 @@
       }
     },
     {
-      "id": "welcome-panel",
-      "name": "Welcome Panel",
-      "content": {
-        "type": "asset",
-        "asset": "welcome-panel"
-      },
-      "transform": {
-        "position": [
-          0,
-          1.85,
-          -2.2
-        ],
-        "rotationDeg": [
-          -6,
-          0,
-          0
-        ],
-        "scale": 0.27
-      },
-      "components": {
-        "RayInteractable": {}
-      }
-    },
-    {
       "id": "key-light",
       "name": "Key Light",
       "transform": {

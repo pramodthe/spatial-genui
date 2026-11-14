@@ -37,13 +37,23 @@ the headset, and failures go back to the agent for repair.
 ## Layout
 
 ```
-apps/server/   agent server: LLM client, courses and database, safety check, dry run, repair loop, voice
-apps/xr/       IWSDK WebXR app: GenUI host and in-headset UI (src/genui/), start page, test scripts (tests/)
-apps/worker3d/ Python 3D backend: Blender agent (blender_build/), TRELLIS.2, part segmentation, Modal apps
-data/library/  the 3D model library (in git); the rest of data/ is local only (downloads, work files, app.db)
-bench/         benchmark prompts, model catalogue (models.json) and results
-docs/          architecture notes and the paper's related work
+apps/xr/                 the headset app (TypeScript, IWSDK WebXR): GenUI host, picker, start page, voice tutor
+                         (src/genui/); emulator test scripts (tests/)
+apps/server/src/         the agent server the app talks to (TypeScript): lesson agent, courses and database,
+                         safety check, dry run, kit.js, voice token, course 3D models (three-d/)
+apps/server/research/    benchmark and paper scripts (npm run bench*, review); not used by the running app
+apps/worker3d/           Python 3D worker for course models: TRELLIS.2 on Modal (fetch_trellis.py), the Blender
+                         part-splitting agent (blender_build/), model ingest, retrieval and segmentation (library/)
+apps/worker3d/research/  the Phase 3 experiments: CadQuery, the Blender MCP server and its Modal backend, repair kit
+data/library/            the 3D model library (in git); the rest of data/ is local only (downloads, work files, app.db)
+bench/                   benchmark prompts, model catalogue (models.json) and results
+docs/                    architecture notes and the paper's related work
 ```
+
+The backend is two languages on purpose: the server is TypeScript because it runs each lesson's JavaScript in a
+sandbox with the same three.js and kit.js as the headset before the learner sees it; the 3D worker is Python
+because Blender, TRELLIS.2 and the mesh tools only exist there. The server starts the Python programs and they
+exchange files (GLB, JSON).
 
 ## Setup
 
@@ -136,7 +146,7 @@ locally under a macOS sandbox profile.
 cd apps/worker3d && uv sync                                          # Python 3.12 env with CadQuery, MCP, Modal
 uv run modal setup                                                   # log in to Modal (once per machine)
 uv run modal secret create genui-worker3d WORKER3D_TOKEN=<from .env> # once per Modal workspace
-uv run modal deploy modal_app.py                                     # then set WORKER3D_URL in .env
+uv run modal deploy research/modal_app.py                            # then set WORKER3D_URL in .env
 cd ../server
 npm run bench3d -- --out ../../bench/results/3d-run-2                # build: 12 objects x 3 pipelines x 2 variants
 npm run bench3d:judge -- ../../bench/results/3d-run-2                # Opus 5.5 scores the renders

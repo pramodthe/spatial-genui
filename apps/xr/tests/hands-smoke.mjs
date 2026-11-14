@@ -3,7 +3,7 @@
 // - a lesson built below its origin, for a learner sitting low, stays above the floor;
 // - a card held by its frame moves (not the lesson, and not when its button is pressed), two hands resize it,
 //   and let go below the floor it comes back up; the picker is held by its frame too;
-// - two hands on a model scale it;
+// - two hands hold a model (and don't resize it: the view pill sizes lessons);
 // - a pointer over a pressable object makes it glow.
 // Returns the measurements; fails (ok: false) listing any check that didn't hold.
 // Usage: npx @iwsdk/cli browser run tests/hands-smoke.mjs --timeout 100000
@@ -242,7 +242,7 @@ export default async function run({ frame, page }) {
       pickerFrame: out.pickerFrame === true,
       pickerMovedM: out.pickerMovedM >= 0.05,
       heldByTwo: out.heldByTwo === true,
-      scaleRatio: out.scaleRatio > 1.05,
+      scaleRatio: Math.abs(out.scaleRatio - 1) < 0.02, // objects don't change size by hand: the view pill sizes lessons
     };
     const failed = Object.entries(expect).filter(([, ok]) => !ok).map(([check]) => `${check} (${JSON.stringify(out[check])})`);
     if (failed.length) throw new Error(`hands-smoke failed: ${failed.join(', ')}; measured ${JSON.stringify(out)}`);

@@ -20,8 +20,11 @@ Reply with exactly one \`\`\`js code block containing an ES module, and nothing 
 
 export default function build({ THREE, kit, traits, ui, isGrabbed }) {
   // create objects ...
-  return { root, update(time, delta) { ... } };   // update is optional
+  return { root, update(time, delta) { ... }, real: { size: 8 } };   // update and real are optional
 }
+real.size: the largest real-world dimension of the lesson's main subject in meters (a house 8, a heart 0.12, a
+bacterium 0.000002). Build at desk scale as usual; the host fits the 3D into a 0.5 m box and offers a real-size view.
+Leave it out for a process or system with no single size (the water cycle).
 
 # The API you receive
 - THREE: the full three.js namespace (r185). Create meshes, groups and geometries with it. The scene
@@ -172,6 +175,7 @@ Users judge the look first. Spend most of your effort on the main model.
 - Hard limits: 150,000 triangles and 150 draw calls in total. A mesh, a kit.instances, a kit.along and
   each material of a kit.merge group cost one draw call each.
 - update(time, delta) runs every frame (time and delta in seconds). Do not allocate objects in it.
+- Don't make the whole lesson resizable or write a size control: the host sizes every lesson the same way.
 
 # Forbidden
 No imports, no network, no DOM, no timers, no eval/Function, no async code, no access to window or

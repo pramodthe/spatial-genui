@@ -10,6 +10,7 @@ import {
   PanelUI,
   PokeInteractable,
   Pressed,
+  Quaternion,
   RayInteractable,
   TwoHandsGrabbable,
   Vector3,
@@ -22,9 +23,10 @@ import {
   type World,
 } from '@iwsdk/core';
 import { captureLesson, expandByMesh, type CaptureOptions } from './capture';
-import { createMoveHandle, MOVE_HANDLE_RADIUS_M, setFloorHeight, type MoveHandle } from './handle';
+import { boxAround, createMoveHandle, MOVE_HANDLE_RADIUS_M, setFloorHeight, type MoveHandle } from './handle';
 import { makeCardGrabbable, pinchAtFingertips, setGrabFilter, type CardGrab } from './grab';
 import { createGlow, glowOnHover, tickGlows, type Glow } from './hover';
+import { initViewPill, setPill } from './hud';
 import { assetHandle, assetIdsIn, creditsFor, preloadAssets } from './library';
 import type { TeachingRig } from './rig';
 
@@ -83,6 +85,14 @@ type Mounted = {
   cards: CardGrab[];
   /** Hover glows of the lesson's grabbable and pressable objects and parts, by target. */
   glows: Map<Object3D, Glow>;
+  /** The fitted view: the 3D's box as built (root's frame, before fitting) and the scale that fits it in the box. */
+  built: { box: Box3; size: number; rootScale: number } | null;
+  fitScale: number;
+  /** The subject's real largest dimension in metres (declared by the lesson, or from the size agent), or null. */
+  realSizeM: number | null;
+  view: 'fit' | 'real';
+  /** The fitted view's root and card transforms, kept while the real-size view is shown. */
+  fitPose: { position: Vector3; scale: Vector3; cards: { holder: Object3D; position: Vector3; quaternion: Quaternion; scale: Vector3 }[] } | null;
   handleRest: { offset: Vector3; root: Vector3 } | null;
 };
 
@@ -145,7 +155,14 @@ function toPanelText(text: string): string {
 // Seated placement: content sits this far in front of and below the viewer's eyes.
 const REACH_DISTANCE_M = 0.55;
 const BELOW_EYES_M = 0.35;
-const MAX_CONTENT_SIZE_M = 0.8;
+// The fitted view: a lesson's 3D is scaled so its largest side is this long (a house shrinks, a bacterium grows),
+// within these limits on the scale.
+const FIT_BOX_M = 0.5;
+const FIT_SCALE_RANGE = [0.2, 5] as const;
+// The real-size view is offered for subjects between these sizes (a grain of rice to a tall building); outside them
+// the pill only tells the scale. At real size the subject stands on the floor, its near side this far ahead.
+const REAL_SIZE_RANGE_M = [0.005, 150] as const;
+const REAL_VIEW_GAP_M = 1.2;
 // Nothing in a lesson starts nearer the eyes than this (measured along the floor): a lesson with cards or
 // parts laid out in front of its model is set further back to make room.
 const MIN_FRONT_GAP_M = 0.3;
@@ -163,9 +180,6 @@ const CARD_MIN_DISTANCE_M = 0.45;
 const CARD_START_SCALE = 0.8;
 // A panel's top edge stays within this slope above the eye line (10 degrees): no reading upwards.
 const PANEL_TOP_RISE = Math.tan((10 * Math.PI) / 180);
-// Two hands scale a grabbed object between these multiples of its size.
-const MIN_HAND_SCALE = 0.4;
-const MAX_HAND_SCALE = 3;
 // A near-hand pinch grabs everything within a few centimetres of the pinch point.
 const MIN_GRAB_GAP_M = 0.04;
 
@@ -193,6 +207,7 @@ export function initGenUIHost(w: World, handlers: { onRuntimeError: (message: st
   w.renderer.localClippingEnabled = true;
   // Nothing the learner drags goes below the floor.
   setFloorHeight(() => floorHeight(w.camera.getWorldPosition(new Vector3())));
+  initViewPill(w, () => current && setLessonView(current.view === 'real' ? 'fit' : 'real'));
   w.registerSystem(GenUISystem);
 }
 
@@ -248,6 +263,7 @@ export function unmountGenerated() {
   // Children before parents so each entity releases its own resources.
   for (const entity of [...current.entities].reverse()) entity.dispose();
   current = null;
+  updatePill();
 }
 
 export type MountedInspection = {
@@ -441,6 +457,11 @@ export async function mountGenerated(code: string): Promise<MountReport> {
     handle: null,
     cards: [],
     glows: new Map(),
+    built: null,
+    fitScale: 1,
+    realSizeM: null,
+    view: 'fit',
+    fitPose: null,
     handleRest: null,
   };
   // The last wait: from here to the end, nothing else can run before this lesson is in the scene.
@@ -489,7 +510,7 @@ export async function mountGenerated(code: string): Promise<MountReport> {
     },
   };
 
-  let result: { root?: unknown; update?: unknown };
+  let result: { root?: unknown; update?: unknown; real?: { size?: unknown } };
   try {
     result = (build as (a: typeof api) => typeof result)(api) ?? {};
   } catch (err) {
@@ -526,7 +547,9 @@ export async function mountGenerated(code: string): Promise<MountReport> {
   anchor.add(root);
   // Measured before the anchor is placed, so the box is in the lesson's own frame (+Z toward the learner).
   const panelHolders = new Set(panels.map((p) => p.holder));
-  fitToComfortSize(root, panelHolders, warnings);
+  fitToBox(mounted, root, panels);
+  const declared = Number(result.real?.size);
+  mounted.realSizeM = Number.isFinite(declared) && declared > 0 ? declared : null;
   const extent = contentBox(root, panelHolders);
   for (const panel of panels) extent.expandByPoint(panel.holder.getWorldPosition(new Vector3()));
   const front = extent.isEmpty() ? 0 : Math.max(0, extent.max.z);
@@ -581,13 +604,9 @@ export async function mountGenerated(code: string): Promise<MountReport> {
       entity.addComponent(DistanceGrabbable, { movementMode: MovementMode.MoveAtSource });
       mounted.grabModes.set(request.object, 'ray');
     } else if (request.grab) {
-      // One hand picks it up and carries it; with both hands on it, pulling them apart or together scales it
-      // (within 0.4x to 3x) and twisting turns it.
-      const size = request.object.scale;
-      entity.addComponent(TwoHandsGrabbable, {
-        scaleMin: [size.x * MIN_HAND_SCALE, size.y * MIN_HAND_SCALE, size.z * MIN_HAND_SCALE],
-        scaleMax: [size.x * MAX_HAND_SCALE, size.y * MAX_HAND_SCALE, size.z * MAX_HAND_SCALE],
-      });
+      // One hand picks it up and carries it; both hands turn it. Objects don't change size by hand: the view
+      // pill sizes the whole lesson, the same way in every lesson.
+      entity.addComponent(TwoHandsGrabbable, { scale: false });
       mounted.grabModes.set(request.object, 'touch');
     }
     if (request.onPress) {
@@ -654,6 +673,7 @@ export async function mountGenerated(code: string): Promise<MountReport> {
 
   mounted.update = typeof result.update === 'function' ? (result.update as Mounted['update']) : undefined;
   current = mounted;
+  updatePill();
   return { ok: true, warnings, credits: library ? creditsFor(library, assetIds) : [] };
 }
 
@@ -712,7 +732,10 @@ class GenUISystem extends createSystem({
       if (mounted.declutterIn-- <= 0) {
         mounted.declutterIn = null;
         if (mounted.rigs.length > 0) layoutLessonPanels(mounted);
-        else keepPanelsInView(mounted);
+        else {
+          fitCards(mounted);
+          keepPanelsInView(mounted);
+        }
         setUpCards(mounted);
       }
     }
@@ -924,19 +947,127 @@ function findCrowdedGrabbables(objects: Object3D[]): Set<Object3D> {
 }
 
 /**
- * Shrink oversized 3D content into the seated reach zone. Only meshes count: panels, labels and
- * leader lines are excluded, because shrinking them would push text below the readable size the
- * server checked. (Scaling root still scales panels, so this only triggers for genuinely huge models.)
+ * The fitted view: scale the lesson's 3D so its largest side is FIT_BOX_M (up or down), and keep its cards and
+ * labels the size they were drawn (they counter-scale; cards move out or in with the model's edges once they have
+ * laid out, in fitCards). Only meshes count: panels, labels and leader lines are left out of the box.
  */
-function fitToComfortSize(root: Object3D, panelHolders: Set<Object3D>, warnings: string[]) {
-  const box = contentBox(root, panelHolders);
+function fitToBox(mounted: Mounted, root: Object3D, panels: PanelRecord[]) {
+  const box = contentBox(root, new Set(panels.map((p) => p.holder)));
   if (box.isEmpty()) return;
   const size = box.getSize(new Vector3());
   const largest = Math.max(size.x, size.y, size.z);
-  if (largest > MAX_CONTENT_SIZE_M) {
-    root.scale.multiplyScalar(MAX_CONTENT_SIZE_M / largest);
-    warnings.push(`Scaled content down from ${largest.toFixed(2)} m to fit the seated reach zone.`);
+  mounted.built = { box: box.clone(), size: largest, rootScale: root.scale.x || 1 };
+  const scale = Math.min(FIT_SCALE_RANGE[1], Math.max(FIT_SCALE_RANGE[0], FIT_BOX_M / largest));
+  if (Math.abs(scale - 1) < 0.02) return;
+  mounted.fitScale = scale;
+  root.scale.multiplyScalar(scale);
+  for (const panel of panels) if (panel.holder.parent === root) panel.holder.scale.multiplyScalar(1 / scale);
+  for (const rig of mounted.rigs) rig.setLabelScale(1 / scale);
+}
+
+/**
+ * Drawn lessons put their cards beside or above the model as built; after fitting, keep each card's inner edge
+ * where the model's edge now is (scaled with it) while the card keeps its size.
+ */
+function fitCards(mounted: Mounted) {
+  const scale = mounted.fitScale;
+  if (!mounted.root || Math.abs(scale - 1) < 0.02) return;
+  for (const panel of mounted.panels.values()) {
+    if (panel.holder.parent !== mounted.root) continue;
+    const box = boxAround(panel.holder);
+    if (box.isEmpty()) continue;
+    const width = panel.width;
+    const height = box.max.y - box.min.y;
+    const at = panel.holder.position;
+    if (Math.abs(at.x) > width / 4) at.x += Math.sign(at.x) * (width / 2) * (1 / scale - 1);
+    if (at.y > 0) at.y += (height / 2) * (1 / scale - 1);
   }
+}
+
+/** Cards standing in the lesson (not labels or tags on parts), whose place the real-size view keeps. */
+function lessonCards(mounted: Mounted): Object3D[] {
+  const labels = new Set(mounted.rigs.flatMap((rig) => rig.labelHolders()));
+  return [...mounted.panels.values()].map((p) => p.holder).filter((holder) => holder.parent === mounted.root && !labels.has(holder));
+}
+
+function canShowRealSize(mounted: Mounted): boolean {
+  return mounted.built !== null && mounted.realSizeM !== null && mounted.realSizeM >= REAL_SIZE_RANGE_M[0] && mounted.realSizeM <= REAL_SIZE_RANGE_M[1];
+}
+
+/**
+ * Show the lesson's subject fitted in the box on the desk, or at its real size: standing on the floor, its near side
+ * REAL_VIEW_GAP_M ahead, while the cards stay where they were so the learner can still read and use them.
+ */
+export function setLessonView(view: 'fit' | 'real') {
+  const mounted = current;
+  const root = mounted?.root;
+  const anchor = root?.parent;
+  if (!mounted || !root || !anchor || !world || view === mounted.view) return;
+  if (view === 'real' && (!canShowRealSize(mounted) || !mounted.built)) return;
+  const cards = lessonCards(mounted);
+  if (view === 'real') {
+    const built = mounted.built!;
+    mounted.fitPose = {
+      position: root.position.clone(),
+      scale: root.scale.clone(),
+      cards: cards.map((holder) => ({ holder, position: holder.position.clone(), quaternion: holder.quaternion.clone(), scale: holder.scale.clone() })),
+    };
+    root.updateMatrixWorld(true);
+    const placed = cards.map((holder) => ({ holder, position: holder.getWorldPosition(new Vector3()), quaternion: holder.getWorldQuaternion(new Quaternion()), scale: holder.getWorldScale(new Vector3()).x }));
+    // World metres per metre as built.
+    const k = mounted.realSizeM! / built.size;
+    const head = anchor.worldToLocal(world.camera.getWorldPosition(new Vector3()));
+    const floor = floorIn(anchor);
+    const box = built.box;
+    root.scale.setScalar(built.rootScale * k);
+    root.position.set(head.x - k * ((box.min.x + box.max.x) / 2), floor - k * box.min.y, head.z - REAL_VIEW_GAP_M - k * box.max.z);
+    root.updateMatrixWorld(true);
+    const rootTurn = root.getWorldQuaternion(new Quaternion()).invert();
+    const rootScale = root.getWorldScale(new Vector3()).x || 1;
+    for (const card of placed) {
+      card.holder.position.copy(root.worldToLocal(card.position));
+      card.holder.quaternion.copy(rootTurn).multiply(card.quaternion);
+      card.holder.scale.setScalar(card.scale / rootScale);
+    }
+  } else if (mounted.fitPose) {
+    root.position.copy(mounted.fitPose.position);
+    root.scale.copy(mounted.fitPose.scale);
+    for (const card of mounted.fitPose.cards) {
+      card.holder.position.copy(card.position);
+      card.holder.quaternion.copy(card.quaternion);
+      card.holder.scale.copy(card.scale);
+    }
+    mounted.fitPose = null;
+  }
+  mounted.view = view;
+  updatePill();
+}
+
+/** The real size of the lesson open now (from the size agent, when the lesson didn't declare it). */
+export function setLessonRealSize(sizeM: number | null) {
+  if (!current || current.realSizeM !== null) return;
+  current.realSizeM = typeof sizeM === 'number' && Number.isFinite(sizeM) && sizeM > 0 ? sizeM : null;
+  updatePill();
+}
+
+/** Whether the lesson open now declared its real size (no need to ask the size agent). */
+export function lessonDeclaresRealSize(): boolean {
+  return current?.realSizeM != null;
+}
+
+/** "1:16" for a subject shown smaller than it is, "x250,000" for one shown larger. */
+function scaleText(ratio: number): string {
+  const round = (n: number) => (n >= 100 ? Number(n.toPrecision(2)) : Math.round(n * 10) / 10).toLocaleString('en-US');
+  return ratio >= 1 ? `1:${round(ratio)}` : `x${round(1 / ratio)}`;
+}
+
+function updatePill() {
+  const mounted = current;
+  if (!mounted?.built || mounted.realSizeM === null) return setPill({ shown: false, label: '', detail: '', enabled: false });
+  if (mounted.view === 'real') return setPill({ shown: true, label: 'Fit', detail: '1:1', enabled: true });
+  const ratio = mounted.realSizeM / (mounted.built.size * mounted.fitScale);
+  if (canShowRealSize(mounted)) return setPill({ shown: true, label: 'Real size', detail: scaleText(ratio), enabled: true });
+  setPill({ shown: true, label: 'Scale', detail: scaleText(ratio), enabled: false });
 }
 
 /** The box around a lesson's meshes (no panels, labels or leader lines), in world space. */
@@ -1118,7 +1249,7 @@ function layoutLessonPanels(mounted: Mounted, again?: { main: Object3D }) {
     const labelScale = Math.min(1.8, Math.max(1, eye.distanceTo(model.getCenter(new Vector3())) / 0.55));
     mounted.layout.labelScale = labelScale;
     if (labelScale > 1.05) {
-      for (const rig of mounted.rigs) rig.setLabelScale(labelScale);
+      for (const rig of mounted.rigs) rig.setLabelScale(labelScale / mounted.fitScale);
       layoutLessonPanels(mounted, { main: main.holder });
       if (mounted.layout) mounted.layout.labelScale = labelScale;
     }

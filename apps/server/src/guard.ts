@@ -134,6 +134,13 @@ export function admitVoice(visitor: string): Refusal | null {
   return null;
 }
 
+/** The rate and budget guards without the content screen, for small requests (a size lookup). */
+export function admitLight(visitor: string): Refusal | null {
+  const refusal = checkRate(visitor) ?? checkBudget();
+  if (!refusal) recent.get(visitor)!.push(Date.now());
+  return refusal;
+}
+
 /** Every guard, cheapest first. Null means go ahead (and the request counts toward the visitor's limit). */
 export async function admit(visitor: string, prompt: string): Promise<Refusal | null> {
   const rate = checkRate(visitor);

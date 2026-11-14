@@ -1,4 +1,5 @@
-import { aimPoint, capture, forgetLessonSpot, inspectMounted, debugRay, debugRoot, mountGenerated, unmountGenerated, type MountReport } from './host.js';
+import { aimPoint, capture, forgetLessonSpot, inspectMounted, debugRay, debugRoot, lessonDeclaresRealSize, mountGenerated, setLessonRealSize, setLessonView, unmountGenerated, type MountReport } from './host.js';
+import { inspectPill, pressPill, setPillHidden } from './hud.js';
 import { EXAMPLE_LESSONS, type SavedLesson } from './lessons.js';
 import { inspectPicker, pickerCourses, setPickerHidden } from './picker.js';
 import { inspectMoveHandles, setMoveHandlesHidden } from './handle.js';
@@ -174,6 +175,10 @@ export function createOverlay(): HTMLElement {
     inspect: inspectMounted,
     inspectPicker,
     inspectMoveHandles,
+    inspectPill,
+    pressPill,
+    setLessonView,
+    setLessonRealSize,
     courses: pickerCourses,
     debugRay,
     debugRoot,
@@ -184,6 +189,7 @@ export function createOverlay(): HTMLElement {
       for (const listener of chromeListeners) listener(hidden);
       setPickerHidden(hidden);
       setMoveHandlesHidden(hidden);
+      setPillHidden(hidden);
     },
   };
   return root;
@@ -400,8 +406,24 @@ async function mount(code: string) {
   state.lastMount = report;
   if (!state.lastMount.ok) reportRuntimeError(state.lastMount.error);
   // Any lesson in the scene docks the picker, however it was mounted (generate, tests, saved lessons).
-  else setPhase('ready');
+  else {
+    setPhase('ready');
+    if (state.prompt && !lessonDeclaresRealSize()) void lookUpRealSize(state.prompt, state.mountedAt);
+  }
   return state.lastMount;
+}
+
+/** Ask the size agent how big the lesson's subject really is, for the view pill (answers are cached per subject). */
+async function lookUpRealSize(request: string, mountedAt: number) {
+  try {
+    const res = await fetch('/api/real-size', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ request }) });
+    if (!res.ok) return;
+    const answer = (await res.json()) as { sizeM?: number | null };
+    // Only for the lesson still open.
+    if (state.mountedAt === mountedAt) setLessonRealSize(answer.sizeM ?? null);
+  } catch {
+    // No size: the pill stays hidden for this lesson.
+  }
 }
 
 /**

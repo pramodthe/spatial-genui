@@ -8,7 +8,8 @@ import { assetPath, libraryCatalog, shortCredit } from './library.js';
 import type { LlmTarget } from './llm.js';
 import { loadModel } from './models.js';
 import { EXAMPLE_MODULE } from './prompt.js';
-import { admit, admitVoice, recordSpend, spendToday, visitorOf } from './guard.js';
+import { admit, admitLight, admitVoice, recordSpend, spendToday, visitorOf } from './guard.js';
+import { realSizeOf } from './real-size.js';
 import { transcribe, voiceAgentToken } from './voice.js';
 import { getCourse, listCourses, openLesson, polishLesson, startCourse, summary } from './courses.js';
 
@@ -97,6 +98,19 @@ const server = createServer(async (req, res) => {
       const result = await voiceAgentToken();
       // 501: no tutor on this server (the headset stops asking); 503: try again later.
       return send(res, result.ok ? 200 : result.configured ? 503 : 501, result);
+    }
+    // The size agent (real-size.ts): how big a lesson's subject is in the real world, for the Real size view.
+    if (req.method === 'POST' && req.url === '/api/real-size') {
+      const body = await readJson(req);
+      const request = typeof body.request === 'string' ? body.request.trim() : '';
+      if (!request || request.length > 500) return send(res, 400, { error: 'Send { "request": "…" } (1–500 characters).' });
+      const refusal = admitLight(visitorOf(req));
+      if (refusal) return send(res, refusal.status, { ok: false, error: refusal.error, reason: refusal.reason });
+      try {
+        return send(res, 200, await realSizeOf(request));
+      } catch (err) {
+        return send(res, 502, { error: `Size agent failed: ${(err as Error).message}` });
+      }
     }
     // Saved courses (courses.ts): planned at once, lessons written in the background and kept on disk.
     if (req.method === 'POST' && req.url === '/api/courses') {

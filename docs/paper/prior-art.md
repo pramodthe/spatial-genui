@@ -15,15 +15,17 @@ There are still clear gaps that none of them covers:
 1. **Nobody compares output formats for spatial UI on the same runtime and tasks** (free code vs SDK-restricted code vs declarative JSON). LLMR (code) and LLMER (JSON) are separate Unity systems; XR Blocks tests only SDK code. *RQ1 now fills this: open code was both the most reliable and the best, against LLMER's argument for JSON (SPEC.md, "RQ1 results").*
 2. **No benchmark compares several providers on runtime spatial UI with interaction-aware scoring.** XR Blocks, the closest work, tested Gemini only. Its pass@1 counts only "no runtime errors", and the authors list the missing checks themselves: semantic correctness, spatial fidelity, and "ungrabbable rackets". Multimodal autoraters are on their future-work list. *RQ2 now fills this: five models from four companies, with grabs and button presses in the emulator.*
 3. **No real A2UI renderer exists for XR.** The only 3D A2UI renderer is a 7-star browser demo with no WebXR and no hands. *Version C is one, but A2UI came second of three in RQ1, so it is a side contribution.*
-4. **AI tutors with 3D models already exist on Quest; we found none that writes the lesson.** CuriosityXR appears to retrieve a matching model (its title says "1M+ 3D Models"), and Meta's own AI tooling (IWSDK 1.0, Oct 14, 2026) is for developers at build time, not end users at runtime. *Changed Nov 14: this gap used to read "No end-user GenUI product exists on Quest", which a judge who knows CuriosityXR would dispute.*
+4. **AI tutors with 3D models already exist on Quest; we found none that writes the lesson.** CuriosityXR's listing says its tutor "places a matching model", and its title says "1M+ 3D Models", which suggests a library; whether it generates anything is not verified yet (item 8 below). Meta's own AI tooling (IWSDK 1.0, Oct 14, 2026) is for developers at build time, not end users at runtime. *Changed Nov 14: this gap used to read "No end-user GenUI product exists on Quest", which a judge who knows CuriosityXR would dispute.*
 5. **None of the work above measures splitting a spatial UI across parallel agents.** Not searched specifically. *RQ4 measures it.*
 
 **Novelty claim (updated Nov 14):**
-> A WebXR system on Quest in which an agent writes each hands-on lesson (3D models, behaviour and panels) as code at runtime for any request, instead of retrieving pre-built content; plus the first controlled comparison we know of between open, declarative and controlled GenUI on one XR runtime, in which open code was both the most reliable and the best (Sonnet 5.5 and Muse Ember 1.0), and a five-model benchmark scored on rendering, real grabs and button presses in the emulator, and visual quality.
+> A WebXR system on Quest in which an agent writes each hands-on lesson for any request at runtime: its behaviour, its panels and the 3D it builds as code. Models it cannot build well in code come from image-to-3D generation (TRELLIS.2, split into named parts by an agent) and, where accuracy needs it, from a licensed library; plus the first controlled comparison we know of between open, declarative and controlled GenUI on one XR runtime, in which open code was both the most reliable and the best (Sonnet 5.5 and Muse Ember 1.0), and a five-model benchmark scored on rendering, real grabs and button presses in the emulator, and visual quality.
 
 The Nov 12 claim led with "an A2UI-compatible spatial GenUI runtime". RQ1 then put A2UI second of three, and the app ships open code with `kit.panel` for its panels, so the claim now leads with what the app does and what we measured.
 
-Drop "first Gen UI in VR". Don't call the product the first AI tutor or learning app on Quest either. Say "generated, not retrieved", and show it.
+What is generated and what is retrieved: the lesson itself (what it shows, how it behaves, its panels) is always written live. 3D comes from three places: geometry the lesson code builds; a course's own model, generated from a reference picture; and the model library, which `docs/3d-architecture.md` (Nov 12) put first ("ground truth first, generate last"). Since Nov 13 the product leads with live generation and the library is optional, used where code can't match it (the heart scan). State it that way, not as "nothing is retrieved".
+
+Drop "first Gen UI in VR". Don't call the product the first AI tutor or learning app on Quest either. Contrast it with CuriosityXR as "the lesson is written for the request" only once item 8 confirms what CuriosityXR does.
 
 ## Closest work
 
@@ -88,7 +90,7 @@ Added Nov 14:
 
 7. **Show the difference from CuriosityXR in the demo.** Don't open with the solar system or the heart, which are its own examples. Open with a request no model library answers, one with behaviour (a machine running, an experiment with sliders, a process to step through), so the lesson's interactions are visibly written for that topic.
 8. **Try CuriosityXR before the submission** with one request outside its examples, to confirm whether it generates anything, and update this review.
-9. **SPEC.md section 4 still states the Nov 12 claim.** Bring it in line with the one above.
+9. **SPEC.md section 4** now states the claim above (done Nov 14).
 
 ## Must read in full before writing the paper
 

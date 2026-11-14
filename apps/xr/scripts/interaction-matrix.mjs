@@ -1,6 +1,8 @@
 // Phase 4 hand-interaction matrix in the emulator: gathers the lessons to test (cases.jsonl), runs
 // tests/interaction-matrix.mjs in batches until every lesson is done, and writes summary.md.
-// Usage: node scripts/interaction-matrix.mjs [results dir, default ../../bench/results/interaction-matrix]
+// Usage: node scripts/interaction-matrix.mjs [--quick] [results dir, default ../../bench/results/interaction-matrix]
+// --quick tests the 22 lessons in QUICK (every source, and the lessons the host fixes touch): about 12 minutes
+// instead of 35.
 // Sources (columns): the hand-written fixtures; saved course lessons (open code), split by whether the course has
 // its own 3D model; the ready-made library lessons; and RQ1's A2UI and template lessons (Sonnet, first repetition).
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -10,7 +12,21 @@ import { fileURLToPath } from 'node:url';
 
 const app = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const repo = resolve(app, '../..');
-const dir = resolve(process.argv[2] ?? join(repo, 'bench/results/interaction-matrix'));
+const args = process.argv.slice(2);
+const quick = args.includes('--quick');
+const dir = resolve(args.find((a) => !a.startsWith('--')) ?? join(repo, 'bench/results/interaction-matrix'));
+
+// The quick set: both fixtures; open-code lessons with a slider, a toggle, a pressable planet in a turning
+// orbit, and panels over a model; the course-model lessons that grab a whole model with pressable parts; every
+// library lesson; three A2UI and three template lessons.
+const QUICK = new Set([
+  'hand-written/matrix-basic', 'hand-written/matrix-rig',
+  'course/8e592eab/1', 'course/8e592eab/2', 'course/7f5e0d77/0', 'course/e96339ea/0', 'course/0cae40d7/0', 'course/75fa0684/0',
+  'course/68e214ea/0', 'course/a0ea6fae/0', 'course/4fd5121c/0', 'course/f57fe40c/0',
+  'library/flower', 'library/gears', 'library/heart', 'library/microscope',
+  'a2ui/color-button', 'a2ui/fruit-basket', 'a2ui/earth-layers',
+  'templates/weather', 'templates/times-tables', 'templates/color-button',
+]);
 mkdirSync(dir, { recursive: true });
 
 const SOURCES = [
@@ -49,7 +65,7 @@ function gatherCases() {
 
 const casesFile = join(dir, 'cases.jsonl');
 if (!existsSync(casesFile)) {
-  const cases = gatherCases();
+  const cases = gatherCases().filter((c) => !quick || QUICK.has(c.id));
   writeFileSync(casesFile, cases.map((c) => JSON.stringify(c)).join('\n') + '\n');
   console.error(`${cases.length} lessons to test: ${SOURCES.map(([s]) => `${s} ${cases.filter((c) => c.source === s).length}`).join(', ')}`);
 }

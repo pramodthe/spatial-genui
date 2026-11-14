@@ -30,7 +30,9 @@ export default function build({ THREE, kit, traits, ui, isGrabbed }) {
   Use it instead of bare flat-colored materials and plain boxes.
 - traits(object, { grab?: boolean, onPress?: () => void }): ask the host for hand interaction.
   grab: true lets the user pinch the object and move it. onPress runs when the user presses the object.
-  Only use traits on objects that are DIRECT children of root (call root.add(object) first).
+  Use traits on objects inside root (add them first); they keep their place, so a planet in a turning orbit group
+  still orbits. Parts of a grabbable model can each have onPress: a pinch or poke on a part presses that part,
+  and a pinch also picks up the model.
 - ui: the host's panel function. Pass it to kit.panel(ui, { ... }) to make the lesson's panel (see Panels).
   Never call ui yourself and never write panel markup or CSS: panels not made by kit.panel are rejected.
 - isGrabbed(object): true while the user holds that object. Skip animating a held object.

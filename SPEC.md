@@ -486,7 +486,32 @@ The columns changed from the plan: Arm B (version A′, code against a helper li
 4. **Repeatability:** two full runs agreed on 228 of 238 shared probe results. 6 of the 10 flips were fingertip pokes on panels, so read each cell as ±1-2.
 5. **Two-hand scale and rotate is not built:** the host never adds a two-hand grab.
 
-**On the headset:** not yet (no headset connected on Nov 14). Session 1 runs the same rows by hand on lessons the picker opens: the ready-made microscope (library GLB, explode, parts), "Control the Splitting" (slider) and "Motion Becomes Electricity" (toggle) from *Atoms to the Grid*, "Meet the Rocket" (course model; the whole-rocket grab is expected to fail until the second bug is fixed), and the move bar on each.
+**Fixes (Nov 15).** In `apps/xr/src/genui/host.ts`:
+
+- **Objects keep their place.** An object given `traits()` is no longer moved to the lesson root: the objects between it and the root get plain transform entities, so a part stays in its model and a planet in the orbit group that turns it.
+- **Parts of a grabbable model are pressed through the model.** A part with its own interactable entity would stop the pinch that picks the model up, so the model listens for the pointer and presses the part that was hit.
+- **Point-and-pinch presses reach near-grabbable objects** (`pointerEventsType = 'all'` after IWSDK's `{ deny: 'ray' }`). Their grab handle now ignores fingertip touches: reaching in to pinch, the fingertip touched the model first, and the model followed the finger and was dropped instead of being held.
+- **Panels with nothing to press** (name tags, captions) get no interactable, like the library's labels, so they can't catch a ray meant for a button behind them.
+- The lesson prompt now allows `traits()` on any object inside root (it said direct children only, a workaround for the first bug that lessons broke anyway).
+
+The probes changed too: the hand stays in front of the face, panel pokes go straight on, the pointer settles 150 ms after aiming, and a point-and-pinch tries up to three hand positions, as a learner re-aims when the ray misses (the emulated hand's ray leaves slightly off the direction the hand is turned to). Before and after, the same probes on the same 22 lessons (`interaction-matrix.mjs --quick`, about 16 minutes):
+
+| Interaction (all sources) | Old host | Fixed host |
+|---|---|---|
+| Direct grab (near pinch), carried | 5 / 10 | 6 / 10 |
+| Distance grab (pinch ray), carried | 7 / 9 | 7 / 9 |
+| Grab one part of a model | 4 / 5 | 4 / 5 |
+| Panel button, point and pinch | 20 / 21 | 20 / 21 |
+| Panel button, fingertip poke | 19 / 21 | 19 / 21 |
+| Panel toggle; slider | 4 / 4 | 4 / 4 |
+| 3D object press, point and pinch | 15 / 18 | 17 / 18 |
+| 3D object press, fingertip poke | 18 / 18 | 18 / 18 |
+| Explode a model | 5 / 5 | 5 / 5 |
+| Move bar | 22 / 22 | 22 / 22 |
+
+Failures went from 14 to 11; nothing that passed before fails now. The ignored-touch change came after this run: a check on 5 lessons (both hand-written ones, "Meet the Rocket" and both "Meet the Microscope" lessons) then passed every probe except one microscope lesson's whole-model grab, which failed before the fixes too and is not explained. Also not explained: the guitar lesson's panel buttons (a fingertip poke works, point and pinch never does, on either host), the flower's petal press, two A2UI and template grabs, and template "Clear glow" pokes.
+
+**On the headset:** not yet (no headset connected on Nov 14). Session 1 runs the same rows by hand on lessons the picker opens: the ready-made microscope (library GLB, explode, parts), "Control the Splitting" (slider) and "Motion Becomes Electricity" (toggle) from *Atoms to the Grid*, "Meet the Rocket" (course model: pick the rocket up by pinching it, tap its parts), and the move bar on each.
 
 **Headset sessions:**
 

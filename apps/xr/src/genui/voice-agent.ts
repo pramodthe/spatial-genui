@@ -20,6 +20,13 @@ export type TutorActions = {
   currentLesson(): Record<string, unknown>;
 };
 
+/** The tutor could not start. `permanent`: this server has no tutor, so there is no point retrying. */
+export class TutorUnavailable extends Error {
+  constructor(message: string, readonly permanent: boolean) {
+    super(message);
+  }
+}
+
 export type TutorEvents = {
   /** A line of the conversation, as it is said. */
   onText(role: 'user' | 'assistant', text: string): void;
@@ -88,6 +95,9 @@ export class VoiceTutor {
   private playing: AudioBufferSourceNode[] = [];
   private playAt = 0;
   private keepAlive = 0;
+  private starting = false;
+  /** Bumped by stop(): a start() still waiting on the network or the microphone sees it and gives up. */
+  private generation = 0;
 
   constructor(private readonly actions: TutorActions, private readonly events: TutorEvents) {}
 
@@ -96,14 +106,40 @@ export class VoiceTutor {
   }
 
   async start(context: string) {
-    if (this.socket) return;
+    if (this.socket || this.starting) return;
+    this.starting = true;
+    const run = ++this.generation;
+    try {
+      await this.connect(context, run);
+    } finally {
+      this.starting = false;
+    }
+  }
+
+  private async connect(context: string, run: number) {
     this.events.onState('connecting');
     const res = await fetch('/api/voice-agent/token', { method: 'POST' });
     const grant = (await res.json().catch(() => ({}))) as { token?: string; error?: string };
-    if (!res.ok || !grant.token) throw new Error(grant.error ?? `The voice tutor is not available (HTTP ${res.status}).`);
+    // 501: the server has no tutor (no Deepgram key). Anything else may work next time.
+    if (!res.ok || !grant.token) throw new TutorUnavailable(grant.error ?? `The voice tutor is not available (HTTP ${res.status}).`, res.status === 501);
+    if (run !== this.generation) return;
 
-    this.audio = new AudioContext();
-    this.stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    const audio = new AudioContext();
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    } catch (err) {
+      void audio.close();
+      throw err;
+    }
+    if (run !== this.generation) {
+      // Stopped while the microphone was starting.
+      stream.getTracks().forEach((track) => track.stop());
+      void audio.close();
+      return;
+    }
+    this.audio = audio;
+    this.stream = stream;
     const socket = new WebSocket(AGENT_URL, ['bearer', grant.token]);
     socket.binaryType = 'arraybuffer';
     this.socket = socket;
@@ -116,7 +152,7 @@ export class VoiceTutor {
           socket.send(JSON.stringify(this.settings(context)));
           break;
         case 'SettingsApplied':
-          void this.listen();
+          this.listen().catch((err) => this.stop(`The microphone could not start: ${(err as Error).message}`));
           break;
         case 'ConversationText':
           if (message.role && message.content) this.events.onText(message.role, message.content);
@@ -138,23 +174,21 @@ export class VoiceTutor {
           for (const call of message.functions ?? []) if (call.client_side) void this.call(call);
           break;
         case 'Error':
-          this.events.onState('stopped', message.description ?? message.message ?? 'The voice tutor stopped.');
-          this.stop();
+          this.stop(message.description ?? message.message ?? 'The voice tutor stopped.');
           break;
       }
     });
-    socket.addEventListener('close', () => {
-      if (this.socket === socket) this.stop();
+    socket.addEventListener('close', (event) => {
+      if (this.socket === socket) this.stop(event.code === 1000 ? undefined : 'The voice tutor hung up.');
     });
     socket.addEventListener('error', () => {
-      if (this.socket === socket) {
-        this.events.onState('stopped', 'Lost the connection to the voice tutor.');
-        this.stop();
-      }
+      if (this.socket === socket) this.stop('Lost the connection to the voice tutor.');
     });
   }
 
-  stop() {
+  /** End the session; `reason` is shown to the learner when it ended on its own. */
+  stop(reason?: string) {
+    this.generation++;
     const socket = this.socket;
     this.socket = null;
     clearInterval(this.keepAlive);
@@ -164,7 +198,7 @@ export class VoiceTutor {
     this.interrupt();
     void this.audio?.close();
     this.audio = null;
-    this.events.onState('stopped');
+    this.events.onState('stopped', reason);
   }
 
   private settings(context: string) {

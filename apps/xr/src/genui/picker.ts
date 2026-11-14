@@ -13,7 +13,7 @@ import {
 } from '@iwsdk/core';
 import { EXAMPLE_LESSONS } from './lessons';
 import { cancelListening, isListening, microphoneState, startListening, stopAndTranscribe, voiceAvailable } from './voice';
-import { VoiceTutor } from './voice-agent';
+import { TutorUnavailable, VoiceTutor } from './voice-agent';
 import type { LessonStatus } from './overlay';
 import { courseProgress, createCourse, fetchCourseLesson, listCourses, polishCourseLesson, type CourseSummary } from './courses';
 import { capture, lessonPosition } from './host';
@@ -446,13 +446,18 @@ class LessonPickerSystem extends createSystem({
         return;
       }
       if (!this.tutorOff) {
+        // Busy while the tutor connects, so a second pinch can't start a second session.
+        this.voiceBusy = true;
         try {
           await this.tutor.start(await this.tutorContext());
           return;
-        } catch {
-          // No tutor on this server (or it can't be reached): one-shot voice requests instead.
+        } catch (err) {
           this.tutor.stop();
-          this.tutorOff = true;
+          // No tutor on this server: one-shot voice requests from now on. Anything else (the network, a busy
+          // server): a one-shot request this time, and the tutor again on the next pinch.
+          if (err instanceof TutorUnavailable && err.permanent) this.tutorOff = true;
+        } finally {
+          this.voiceBusy = false;
         }
       }
       try {

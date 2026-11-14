@@ -59,6 +59,10 @@ export async function startListening(onTimeout: () => void): Promise<void> {
   });
   try {
     stream = await Promise.race([asked, gaveUp]);
+  } catch (err) {
+    // If the microphone starts after we gave up, turn it straight off again.
+    void asked.then((late) => late.getTracks().forEach((track) => track.stop()), () => {});
+    throw err;
   } finally {
     clearTimeout(waited);
   }

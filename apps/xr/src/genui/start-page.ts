@@ -195,10 +195,13 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
   world.visibilityState.subscribe((state) => {
     immersive = state !== VisibilityState.NonImmersive;
     show();
+    // Back from XR: lessons may have been written meanwhile.
+    if (!immersive) void refresh();
   });
   onChromeHidden((hidden) => {
     hiddenByHost = hidden;
     show();
+    if (!hidden) void refresh();
   });
   const preview = (on: boolean) => {
     previewing = on;
@@ -264,17 +267,24 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
     find('tiles').appendChild(tile);
   });
 
-  // Saved courses.
+  // Saved courses: kept fresh while the page or its bar is on screen (in XR the picker polls instead).
+  let refreshing = false;
   async function refresh() {
+    if (refreshing) return;
+    refreshing = true;
+    clearTimeout(poll);
+    let wait = 20000;
     try {
       courses = await listCourses();
+      renderCourses();
+      const active = courses.some((c) => c.status === 'planning' || c.model?.status === 'building' || c.lessons.some((l) => l.status === 'generating'));
+      if (active) wait = 4000;
     } catch {
-      return;
+      wait = 8000; // the server may be restarting
+    } finally {
+      refreshing = false;
+      if (!immersive && !hiddenByHost) poll = window.setTimeout(() => void refresh(), wait);
     }
-    renderCourses();
-    clearTimeout(poll);
-    const active = courses.some((c) => c.status === 'planning' || c.model?.status === 'building' || c.lessons.some((l) => l.status === 'generating'));
-    if (page.style.display !== 'none') poll = window.setTimeout(() => void refresh(), active ? 4000 : 20000);
   }
 
   function renderCourses() {

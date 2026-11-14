@@ -1,4 +1,4 @@
-import { Grabbed, Mesh, MeshBasicMaterial, Shape, ShapeGeometry, TwoHandsGrabbable, Vector3, type Entity, type Object3D } from '@iwsdk/core';
+import { Box3, Grabbed, Mesh, MeshBasicMaterial, Shape, ShapeGeometry, TwoHandsGrabbable, Vector3, type Entity, type Object3D } from '@iwsdk/core';
 import { boxAround, worldYaw } from './handle';
 
 /**
@@ -44,11 +44,14 @@ export function makeCardGrabbable(holder: Object3D, entity: Entity, onMoved?: ()
   frame.name = 'Card frame';
   let size = { width: 0, height: 0, centreY: 0 };
 
-  /** The card's size in its own frame (panels face +Z), from its world box with the turn taken out. */
+  /**
+   * The card's size in its own frame (panels face +Z), from its world box with the turn taken out. The frame is
+   * left out by measuring the card's other parts: taking it off the card, even for a moment, cancels a pinch in
+   * progress, and a button pressed then never clicks.
+   */
   function measure() {
-    frame.removeFromParent(); // the frame is not part of the card
-    const box = boxAround(holder);
-    holder.add(frame);
+    const box = new Box3();
+    for (const child of holder.children) if (child !== frame) box.union(boxAround(child));
     const origin = holder.getWorldPosition(new Vector3());
     const unit = holder.getWorldScale(new Vector3()).x || 1;
     const yaw = worldYaw(holder);
@@ -67,6 +70,7 @@ export function makeCardGrabbable(holder: Object3D, entity: Entity, onMoved?: ()
     frame.geometry = roundedRect(size.width + FRAME_MARGIN_M * 2, size.height + FRAME_MARGIN_M * 2, FRAME_RADIUS_M);
     frame.position.set(0, size.centreY, -0.004);
   }
+  holder.add(frame);
   refit();
 
   let enabled = false;

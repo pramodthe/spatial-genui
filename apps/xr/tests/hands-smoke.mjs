@@ -160,9 +160,24 @@ export default async function run({ frame, page }) {
         frame.updateWorldMatrix(true, false);
         out.cardLowestM = round(frame.localToWorld(fb.min.clone()).y);
       }
-      // The picker (in the room frame beside the lesson) is held by its frame too.
+      // The picker (in the room frame beside the lesson): its course rows still open with a pointed pinch, and it is
+      // held by its frame too.
       genui.setOverlayHidden(false);
       await sleep(600);
+      const row = (await r.dispatch('list_targets')).targets.find((x) => x.name === 'course-0');
+      if (row) {
+        const shownBefore = genui.inspectPicker()?.shown ?? null;
+        const p = row.position;
+        await r.dispatch('set_transform', { device: 'hand-right', position: { x: p.x + 0.05, y: p.y - 0.05, z: p.z + 0.35 } });
+        await r.dispatch('look_at', { device: 'hand-right', target: p });
+        await sleep(250);
+        await r.dispatch('select', { device: 'hand-right', duration: 0.2 });
+        await sleep(800);
+        out.pickerCourseOpens = (genui.inspectPicker()?.shown ?? null) !== shownBefore;
+        genui.courses.show(null);
+        await r.dispatch('set_transform', { device: 'hand-right', position: { x: 0.35, y: 0.6, z: 0.1 } });
+        await sleep(400);
+      }
       const picker = anchor.parent.children.find((o) => o.name === 'Lesson Picker');
       let pickerFrame = null;
       picker?.traverse((o) => { if (!pickerFrame && o.name === 'Card frame') pickerFrame = o; });
@@ -223,6 +238,7 @@ export default async function run({ frame, page }) {
       cardStillOnPress: out.cardStillOnPress === true,
       cardScaleRatio: out.cardScaleRatio > 1.1,
       cardLowestM: out.cardLowestM >= 0,
+      pickerCourseOpens: out.pickerCourseOpens === true,
       pickerFrame: out.pickerFrame === true,
       pickerMovedM: out.pickerMovedM >= 0.05,
       heldByTwo: out.heldByTwo === true,

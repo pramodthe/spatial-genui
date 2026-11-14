@@ -59,7 +59,7 @@ type Label = { part: RigPart; ui: UiHandle; line: Line; anchorLocal: Vector3; an
 
 export class TeachingRig {
   private readonly home = new Map<Object3D, { position: Vector3; quaternion: Quaternion; scale: Vector3 }>();
-  private readonly materials = new Map<Mesh, { working: MeshStandardMaterial; opacity: number; transparent: boolean; depthWrite: boolean; emissive: number; emissiveIntensity: number }>();
+  private readonly materials = new Map<Mesh, { working: MeshStandardMaterial; opacity: number; transparent: boolean; depthWrite: boolean; emissive: number; emissiveIntensity: number; emissiveMap: MeshStandardMaterial['emissiveMap'] }>();
   private readonly labels: Label[] = [];
   private readonly centerLocal = new Vector3();
   private readonly maxSize: number;
@@ -98,7 +98,7 @@ export class TeachingRig {
         mesh.material = working;
         this.materials.set(mesh, {
           working, opacity: working.opacity, transparent: working.transparent, depthWrite: working.depthWrite,
-          emissive: working.emissive?.getHex() ?? 0, emissiveIntensity: working.emissiveIntensity ?? 1,
+          emissive: working.emissive?.getHex() ?? 0, emissiveIntensity: working.emissiveIntensity ?? 1, emissiveMap: working.emissiveMap ?? null,
         });
       });
     }
@@ -340,9 +340,21 @@ export class TeachingRig {
       part.object3D.traverse((child) => {
         const entry = this.materials.get(child as Mesh);
         if (!entry?.working.emissive) return;
-        if (on) entry.working.emissive.copy(entry.working.color).multiplyScalar(0.55);
-        else entry.working.emissive.setHex(entry.emissive);
-        entry.working.emissiveIntensity = on ? 1 : entry.emissiveIntensity;
+        const { working } = entry;
+        const map = working.emissiveMap;
+        if (on && working.map) {
+          // A textured part (generated models): its colours are in the texture and the material's own colour is
+          // white, so a glow made from that colour washed the part out to solid white. Light the texture instead.
+          working.emissiveMap = working.map;
+          working.emissive.setScalar(0.35);
+        } else if (on) {
+          working.emissive.copy(working.color).multiplyScalar(0.55);
+        } else {
+          working.emissive.setHex(entry.emissive);
+          working.emissiveMap = entry.emissiveMap;
+        }
+        working.emissiveIntensity = on ? 1 : entry.emissiveIntensity;
+        if (working.emissiveMap !== map) working.needsUpdate = true;
       });
     }
   }

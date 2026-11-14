@@ -23,7 +23,7 @@ import {
 } from '@iwsdk/core';
 import { captureLesson, expandByMesh, type CaptureOptions } from './capture';
 import { createMoveHandle, MOVE_HANDLE_RADIUS_M, setFloorHeight, type MoveHandle } from './handle';
-import { makeCardGrabbable, setGrabFilter, type CardGrab } from './grab';
+import { makeCardGrabbable, pinchAtFingertips, setGrabFilter, type CardGrab } from './grab';
 import { createGlow, glowOnHover, tickGlows, type Glow } from './hover';
 import { assetHandle, assetIdsIn, creditsFor, preloadAssets } from './library';
 import type { TeachingRig } from './rig';
@@ -692,7 +692,11 @@ class GenUISystem extends createSystem({
     });
   }
 
+  private fingertips = false;
+
   update(delta: number): void {
+    // Once the hands' pointers exist: a near pinch takes only what is at the fingertips.
+    if (!this.fingertips) this.fingertips = pinchAtFingertips(this.world.input);
     const mounted = current;
     if (!mounted) return;
     // Textures are painted a few milliseconds per frame, so a lesson never stalls the headset.

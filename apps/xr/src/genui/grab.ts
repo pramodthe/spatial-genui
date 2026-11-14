@@ -13,6 +13,31 @@ export function setGrabFilter(entity: Entity, accept: (event: { pointerType?: st
   store.getOptions = () => ({ ...options(), filter: accept });
 }
 
+// A near pinch takes what is within this distance of the index fingertip, where the fingers meet.
+const PINCH_GRAB_RADIUS_M = 0.03;
+
+/**
+ * Make a near pinch take only what is at the fingertips. IWSDK's grab pointer is pmndrs's default: a 7 cm sphere
+ * around the hand's grip point (the palm), so pinching a few centimetres beside an object, fingers clearly
+ * outside it, still took it. The sphere now sits on the index fingertip with a 3 cm radius. Reaches into IWSDK's
+ * input internals; returns false (change nothing) until they exist, or if they are shaped differently.
+ */
+export function pinchAtFingertips(input: unknown): boolean {
+  const pointers = (input as { xr?: { multiPointers?: Record<string, unknown> } } | null)?.xr?.multiPointers;
+  if (!pointers) return false;
+  let done = false;
+  for (const hand of ['left', 'right']) {
+    const multi = pointers[hand] as { grab?: { pointer?: { intersector?: { space?: unknown; getSphereRadius?: () => number } } }; xrOrigin?: { indexTipSpaces?: Record<string, Object3D> } } | undefined;
+    const intersector = multi?.grab?.pointer?.intersector;
+    const tip = multi?.xrOrigin?.indexTipSpaces?.[hand];
+    if (!intersector || typeof intersector.getSphereRadius !== 'function' || !tip) continue;
+    intersector.space = { current: tip };
+    intersector.getSphereRadius = () => PINCH_GRAB_RADIUS_M;
+    done = true;
+  }
+  return done;
+}
+
 // The frame: a faint rounded border just around the card, behind it, that the learner pinches to hold the card.
 const FRAME_MARGIN_M = 0.025;
 const FRAME_RADIUS_M = 0.03;

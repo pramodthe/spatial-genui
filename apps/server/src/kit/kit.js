@@ -1490,22 +1490,33 @@ export function createKit(THREE, options = {}) {
     const px = Math.round(widthM * PANEL_PX_PER_M);
     const inner = px - PANEL_PAD * 2;
     const esc = (text) => String(text ?? '').replace(/[<>&`]/g, ' ').trim();
+    // Inside a double-quoted attribute a double quote would end the value.
+    const escAttr = (text) => esc(text).replace(/"/g, "'");
     const parts = new Map(); // id -> { kind, ... } for set() and show()
     const wiring = []; // run once the host panel exists
     let auto = 0;
-    const idOf = (given) => (typeof given === 'string' && /^[A-Za-z][\w-]*$/.test(given) && !parts.has(given) ? given : `kp${auto++}`);
+    const taken = new Set(['eyebrow', 'title', 'subtitle']);
+    const idOf = (given) => {
+      // No hyphens in a module's id: the kit's own element ids are '<id>-<suffix>', so the two can't meet.
+      let id = typeof given === 'string' && /^[A-Za-z]\w*$/.test(given) && !taken.has(given) ? given : '';
+      while (!id || taken.has(id)) id = `kp${auto++}`;
+      taken.add(id);
+      return id;
+    };
     const fail = (message) => {
       throw new Error(`kit.panel: ${message}`);
     };
     const button = (b, id, variant, size, extra = '') =>
       `<Button id="${id}" variant="${variant}" size="${size}"${extra}><ButtonLabel id="${id}-label">${esc(b)}</ButtonLabel></Button>`;
 
+    // The eyebrow and subtitle are always in the markup (hidden while empty), so panel.set can fill them later.
+    const optional = (text) => (esc(text) ? '' : ' style="display: none"');
     const head = [
-      o.eyebrow ? `<span id="eyebrow" class="kp-eyebrow">${esc(o.eyebrow)}</span>` : '',
+      `<span id="eyebrow" class="kp-eyebrow"${optional(o.eyebrow)}>${esc(o.eyebrow) || '-'}</span>`,
       `<span id="title" class="kp-title">${esc(o.title || 'Lesson')}</span>`,
-      o.subtitle ? `<span id="subtitle" class="kp-subtitle">${esc(o.subtitle)}</span>` : '',
+      `<span id="subtitle" class="kp-subtitle"${optional(o.subtitle)}>${esc(o.subtitle) || '-'}</span>`,
     ].join('');
-    for (const id of ['eyebrow', 'title', 'subtitle']) parts.set(id, { kind: 'text', el: id });
+    for (const id of ['eyebrow', 'title', 'subtitle']) parts.set(id, { kind: 'text', el: id, reveal: true });
 
     const body = (Array.isArray(o.items) ? o.items : []).map((item) => {
       if (!item || typeof item !== 'object') fail('each item is an object such as { text: "..." }.');
@@ -1526,7 +1537,7 @@ export function createKit(THREE, options = {}) {
       if ('progress' in item) {
         const pct = Math.round(Math.min(1, Math.max(0, Number(item.progress) || 0)) * 100);
         parts.set(id, { kind: 'progress', el: `${id}-fill`, label: `${id}-label`, box: id });
-        return `<div id="${id}" class="kp-field"><div class="kp-track"><div id="${id}-fill" class="kp-fill" style="width: ${pct}%"></div></div>${item.label !== undefined ? `<span id="${id}-label" class="kp-note">${esc(item.label)}</span>` : ''}</div>`;
+        return `<div id="${id}" class="kp-field"><div class="kp-track"><div id="${id}-fill" class="kp-fill" style="width: ${pct}%"></div></div><span id="${id}-label" class="kp-note"${optional(item.label)}>${esc(item.label) || '-'}</span></div>`;
       }
       if (item.divider) {
         parts.set(id, { kind: 'box', box: id });
@@ -1591,7 +1602,8 @@ export function createKit(THREE, options = {}) {
         if (!(max > min)) fail('a slider needs max greater than min.');
         const step = Number(item.step) > 0 ? Number(item.step) : (max - min) / 100;
         const format = typeof item.format === 'function' ? item.format : (v) => String(Math.round(v * 100) / 100);
-        const part = { kind: 'slider', el: `${id}-slider`, label: `${id}-value`, box: id, value: Math.min(max, Math.max(min, Number(item.value ?? min))), format };
+        const inRange = (value) => (Number.isFinite(Number(value)) ? Math.min(max, Math.max(min, Number(value))) : min);
+        const part = { kind: 'slider', el: `${id}-slider`, label: `${id}-value`, box: id, value: inRange(item.value), inRange, format };
         parts.set(id, part);
         wiring.push((handle) => handle.set(part.el, {
           value: part.value,
@@ -1603,7 +1615,7 @@ export function createKit(THREE, options = {}) {
             item.onChange?.(value);
           },
         }));
-        return `<div id="${id}" class="kp-field"><div class="kp-pair"><span class="kp-text kp-grow">${esc(item.slider)}</span><span id="${id}-value" class="kp-text">${esc(format(part.value))}</span></div><Slider id="${id}-slider" size="md" min="${min}" max="${max}" step="${step}" left-label="${esc(format(min))}" right-label="${esc(format(max))}"></Slider></div>`;
+        return `<div id="${id}" class="kp-field"><div class="kp-pair"><span class="kp-text kp-grow">${esc(item.slider)}</span><span id="${id}-value" class="kp-text">${esc(format(part.value))}</span></div><Slider id="${id}-slider" size="md" min="${min}" max="${max}" step="${step}" left-label="${escAttr(format(min))}" right-label="${escAttr(format(max))}"></Slider></div>`;
       }
       return fail(`unknown item ${JSON.stringify(Object.keys(item))}. Use text, note, stat, status, progress, divider, buttons, choices, segmented, list, toggle or slider.`);
     });
@@ -1631,19 +1643,19 @@ export function createKit(THREE, options = {}) {
       set(id, value, tone) {
         const part = parts.get(id);
         if (!part) throw new Error(`kit.panel: no part with id '${id}'. Give the item an id to change it later.`);
-        if (part.kind === 'text') handle.set(part.el, { text: esc(value) });
+        if (part.kind === 'text') handle.set(part.el, part.reveal ? { text: esc(value) || '-', display: esc(value) ? 'flex' : 'none' } : { text: esc(value) });
         else if (part.kind === 'status') {
           handle.set(part.el, { text: esc(value) });
           if (tone !== undefined) handle.set(`${part.box}-dot`, { backgroundColor: TONES[tone] ?? TONES.neutral });
         } else if (part.kind === 'progress') {
           handle.set(part.el, { width: `${Math.round(Math.min(1, Math.max(0, Number(value) || 0)) * 100)}%` });
-          if (tone !== undefined) handle.set(part.label, { text: esc(tone) });
+          if (tone !== undefined) handle.set(part.label, { text: esc(tone) || '-', display: esc(tone) ? 'flex' : 'none' });
         } else if (part.kind === 'choices' || part.kind === 'segmented') select(part, value);
         else if (part.kind === 'toggle') {
           part.on = Boolean(value);
           handle.set(part.el, { checked: part.on });
         } else if (part.kind === 'slider') {
-          part.value = Number(value) || 0;
+          part.value = part.inRange(value);
           handle.set(part.el, { value: part.value });
           handle.set(part.label, { text: esc(part.format(part.value)) });
         }

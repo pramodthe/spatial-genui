@@ -9,8 +9,8 @@ import { existsSync } from 'node:fs';
 import { appendFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { parseCli } from '../args.js';
-import { closeRenderer, renderGlb } from './render.js';
-import { repoRoot, verifyParts, type PartVerdict } from './stages.js';
+import { closeRenderer, renderGlb } from '../../src/three-d/render.js';
+import { repoRoot, verifyParts, type PartVerdict } from '../../src/three-d/stages.js';
 
 const cli = parseCli(process.argv.slice(2), {
   values: ['glbs', 'tag', 'out', 'only'],

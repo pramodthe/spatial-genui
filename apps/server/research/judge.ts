@@ -5,9 +5,9 @@
 import { existsSync } from 'node:fs';
 import { appendFile, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { config } from './config.js';
+import { config } from '../src/config.js';
 import { parseCli } from './args.js';
-import { complete, type LlmTarget } from './llm.js';
+import { complete, type LlmTarget } from '../src/llm.js';
 
 type ModelEntry = LlmTarget & { family: string; apiKeyEnv: string; priceIn?: number; priceOut?: number; enabled?: boolean };
 type BrowserRow = { model: string; promptId: string; rep: number; mounted: boolean; shot?: string };

@@ -10,11 +10,11 @@ import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseCli } from '../args.js';
-import { loadModel } from '../models.js';
-import { PIPELINES, missingParts, requestText, revisionText, type AssetRequest, type Pipeline } from './prompts.js';
+import { loadModel } from '../../src/models.js';
+import { PIPELINES, missingParts, requestText, revisionText, type AssetRequest, type Pipeline } from '../../src/three-d/prompts.js';
 import { defaultBackend, openSession, type Backend, type StepResult, type Usage } from './pipelines.js';
-import { closeRenderer, renderGlb, type RenderStats } from './render.js';
-import { critique, dataUrl, referenceImage, type Critique } from './review.js';
+import { closeRenderer, renderGlb, type RenderStats } from '../../src/three-d/render.js';
+import { critique, dataUrl, referenceImage, type Critique } from '../../src/three-d/review.js';
 
 const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 const cli = parseCli(process.argv.slice(2), {

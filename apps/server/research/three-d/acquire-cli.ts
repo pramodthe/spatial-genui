@@ -3,8 +3,8 @@
 // Usage: npm run assets:acquire -- --name microscope --describe "A compound light microscope on a desk" [--parts eyepiece,stage] [--top 6] [--no-search]
 // --no-search skips the Objaverse search and generates the model with TRELLIS.2.
 import { parseCli } from '../args.js';
-import { acquireAsset } from './acquire.js';
-import { closeRenderer } from './render.js';
+import { acquireAsset } from '../../src/three-d/acquire.js';
+import { closeRenderer } from '../../src/three-d/render.js';
 
 const cli = parseCli(process.argv.slice(2), {
   values: ['name', 'describe', 'parts', 'top'],

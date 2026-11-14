@@ -5,8 +5,8 @@
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { parseCli } from '../args.js';
-import type { AssetRequest } from './prompts.js';
-import { briefReference, checkReference, repoRoot } from './stages.js';
+import type { AssetRequest } from '../../src/three-d/prompts.js';
+import { briefReference, checkReference, repoRoot } from '../../src/three-d/stages.js';
 
 const cli = parseCli(process.argv.slice(2), { values: ['objects', 'refs', 'out'], usage: 'npm run bench3d:check-refs -- [--objects file] [--refs dir] [--out dir]' });
 const objects = JSON.parse(await readFile(resolve(repoRoot, cli.flags.objects ?? 'bench/prompts/objects-12.json'), 'utf8')) as AssetRequest[];

@@ -9,14 +9,14 @@
 import { existsSync } from 'node:fs';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
-import { generate, systemPromptFor, type GenUIFormat, type GenerationResult } from './agent.js';
-import { loadModel } from './models.js';
-import { config } from './config.js';
-import type { LlmTarget } from './llm.js';
+import { generate, systemPromptFor, type GenUIFormat, type GenerationResult } from '../src/agent.js';
+import { loadModel } from '../src/models.js';
+import { config } from '../src/config.js';
+import type { LlmTarget } from '../src/llm.js';
 import { parseCli } from './args.js';
-import { librarySection } from './library.js';
-import type { Route } from './router.js';
-import { SYSTEM_PROMPT } from './prompt.js';
+import { librarySection } from '../src/library.js';
+import type { Route } from '../src/router.js';
+import { SYSTEM_PROMPT } from '../src/prompt.js';
 
 type ModelEntry = LlmTarget & {
   family: string;

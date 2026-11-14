@@ -1,8 +1,8 @@
 // Run a prompt set through the agent and summarize. Every run is also logged to runs/*.jsonl.
 // Usage: npm run batch -- ../../bench/prompts/dev-10.json [concurrency]
 import { readFile } from 'node:fs/promises';
-import { generate, type GenerationResult } from './agent.js';
-import { config } from './config.js';
+import { generate, type GenerationResult } from '../src/agent.js';
+import { config } from '../src/config.js';
 
 type PromptCase = { id: string; tier?: string; domain?: string; prompt: string };
 

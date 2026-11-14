@@ -10,7 +10,7 @@
 // - each segmentation region is its own mesh piece under its part (retrieved.py --split-regions), so
 //   most fixes are moving a whole piece to another part, not cutting meshes;
 // - the first message carries every piece's measurements;
-// - helpers for the routine steps are preloaded (apps/worker3d/repair_kit.py);
+// - helpers for the routine steps are preloaded (apps/worker3d/research/repair_kit.py);
 // - a `look` tool shows it the model as the critic sees it.
 //
 // Usage: npm run bench3d:repair -- [--cases bench/prompts/repair-pilot.json] [--out bench/results/_repair]
@@ -22,12 +22,12 @@ import { appendFile, copyFile, mkdir, readFile, writeFile } from 'node:fs/promis
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseCli } from '../args.js';
-import { complete, type ContentPart } from '../llm.js';
-import { loadModel } from '../models.js';
+import { complete, type ContentPart } from '../../src/llm.js';
+import { loadModel } from '../../src/models.js';
 import { BlenderSession } from './pipelines.js';
-import type { AssetRequest } from './prompts.js';
-import { closeRenderer, renderGlb } from './render.js';
-import { dataUrl } from './review.js';
+import type { AssetRequest } from '../../src/three-d/prompts.js';
+import { closeRenderer, renderGlb } from '../../src/three-d/render.js';
+import { dataUrl } from '../../src/three-d/review.js';
 
 const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 const WORKER = join(repoRoot, 'apps/worker3d');
@@ -48,7 +48,7 @@ const rounds = Number(cli.flags.rounds ?? 3);
 const agent = await loadModel(cli.flags.agent ?? 'muse-spark-1.3-contributor');
 const critic = await loadModel('muse-ember-1.0-max');
 const requests = new Map((JSON.parse(await readFile(join(repoRoot, 'bench/prompts/objects-12.json'), 'utf8')) as AssetRequest[]).map((o) => [o.id, o]));
-const kit = await readFile(join(WORKER, 'repair_kit.py'), 'utf8');
+const kit = await readFile(join(WORKER, 'research/repair_kit.py'), 'utf8');
 const COLOUR_NAMES = ['red', 'green', 'blue', 'yellow', 'orange', 'purple', 'cyan', 'magenta', 'lime', 'pink'];
 const MAX_TURNS = 24;
 const TURN_TIMEOUT_MS = 6 * 60_000;

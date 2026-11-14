@@ -3,7 +3,7 @@
 // Pictures come from the lesson camera (apps/xr/tests/capture-module.mjs).
 import { readFile, writeFile } from 'node:fs/promises';
 import { extname } from 'node:path';
-import { generate } from './agent.js';
+import { generate } from '../src/agent.js';
 import { parseCli } from './args.js';
 
 const cli = parseCli(process.argv.slice(2), {

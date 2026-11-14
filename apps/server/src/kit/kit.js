@@ -994,71 +994,169 @@ export function createKit(THREE, options = {}) {
 
   // --- Name tags ------------------------------------------------------------------------------------------
 
-  const CARD = { width: 0.1, height: 0.044, depth: 0.007 };
+  const CARD = { width: 0.1, height: 0.044, depth: 0.004 };
+  // Dark glass, as the Horizon OS labels: a translucent dark pill with a light rim and white text.
+  const GLASS = { color: '#15171b', opacity: 0.8, text: 'rgba(255, 255, 255, 0.94)', rim: 'rgba(255, 255, 255, 0.24)' };
+  const PX_PER_M = 4000;
+  // A one-line tag is a pill sized to its text: text TAG.text of the height, ends and dot taking TAG.ends heights.
+  const TAG = { minHeight: 0.022, height: 0.028, minWidth: 0.045, maxWidth: 0.16, text: 0.42, ends: 1.1 };
 
-  /** Text drawn on a canvas, wrapped and shrunk to fit: the face of a card. Dry runs have no canvas. */
-  function textFace(text, width, height, color) {
+  /** The text's width in font sizes (an estimate, so the dry run and the headset make the same shape). */
+  const ems = (text) => [...String(text)].reduce((sum, ch) => sum + (ch === ' ' ? 0.28 : /[A-Z]/.test(ch) ? 0.68 : /[a-z]/.test(ch) ? 0.55 : 0.58), 0);
+
+  /** A colour light enough to show as a dot on dark glass; a darker one tints the glass instead. */
+  const isLight = (hex) => {
+    const [r, g, b] = colorBytes(hex);
+    return 0.299 * r + 0.587 * g + 0.114 * b >= 90;
+  };
+
+  /**
+   * The face of a name tag on a canvas: rim, sheen, an optional colour dot and the text, wrapped and shrunk to
+   * fit. draw(dot) paints it again with another dot colour (or none). Dry runs have no canvas.
+   */
+  function tagFace(text, width, height, radius) {
     if (dry || typeof document === 'undefined') return null;
     const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = Math.round((512 * height) / width);
+    canvas.width = Math.round(Math.min(1024, Math.max(256, width * PX_PER_M)));
+    canvas.height = Math.round((canvas.width * height) / width);
     const context = canvas.getContext('2d');
     if (!context) return null;
+    const W = canvas.width;
+    const H = canvas.height;
+    const R = (radius / width) * W;
+    const font = (size) => `600 ${size}px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif`;
     const words = String(text).split(/\s+/).filter(Boolean);
-    let size = 76;
-    let lines = [];
-    for (; size >= 26; size -= 6) {
-      context.font = `700 ${size}px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif`;
-      lines = [];
-      let line = '';
-      for (const word of words) {
-        const next = line ? `${line} ${word}` : word;
-        if (line && context.measureText(next).width > canvas.width - 48) {
-          lines.push(line);
-          line = word;
-        } else {
-          line = next;
+    const lineHeight = 1.18;
+
+    function layout(room) {
+      let size = Math.round(H * 0.44);
+      let lines = [];
+      for (; size >= Math.max(12, Math.round(H * 0.16)); size -= 2) {
+        context.font = font(size);
+        lines = [];
+        let line = '';
+        for (const word of words) {
+          const next = line ? `${line} ${word}` : word;
+          if (line && context.measureText(next).width > room) {
+            lines.push(line);
+            line = word;
+          } else {
+            line = next;
+          }
         }
+        if (line) lines.push(line);
+        const widest = Math.max(0, ...lines.map((l) => context.measureText(l).width));
+        if (lines.length * size * lineHeight <= H * 0.8 && widest <= room) break;
       }
-      if (line) lines.push(line);
-      const widest = Math.max(...lines.map((l) => context.measureText(l).width));
-      if (lines.length * size * 1.18 <= canvas.height - 28 && widest <= canvas.width - 40) break;
+      return { size, lines, widest: Math.max(0, ...lines.map((l) => context.measureText(l).width)) };
     }
-    context.fillStyle = color;
-    context.textAlign = 'center';
-    context.textBaseline = 'middle';
-    lines.forEach((l, i) => context.fillText(l, canvas.width / 2, canvas.height / 2 + (i - (lines.length - 1) / 2) * size * 1.18));
+
+    function roundRect(x, y, w, h, r) {
+      context.beginPath();
+      context.moveTo(x + r, y);
+      context.arcTo(x + w, y, x + w, y + h, r);
+      context.arcTo(x + w, y + h, x, y + h, r);
+      context.arcTo(x, y + h, x, y, r);
+      context.arcTo(x, y, x + w, y, r);
+      context.closePath();
+    }
+
     const tex = own(new THREE.CanvasTexture(canvas));
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 4;
-    return tex;
+
+    function draw(dot) {
+      context.clearRect(0, 0, W, H);
+      // Sheen on the upper half, then the rim.
+      const sheen = context.createLinearGradient(0, 0, 0, H);
+      sheen.addColorStop(0, 'rgba(255, 255, 255, 0.12)');
+      sheen.addColorStop(0.55, 'rgba(255, 255, 255, 0)');
+      roundRect(0, 0, W, H, R);
+      context.fillStyle = sheen;
+      context.fill();
+      const rim = Math.max(2, H * 0.03);
+      roundRect(rim / 2, rim / 2, W - rim, H - rim, Math.max(0, R - rim / 2));
+      context.lineWidth = rim;
+      context.strokeStyle = GLASS.rim;
+      context.stroke();
+
+      const pad = Math.max(R * 0.76, H * 0.2);
+      const dotSize = dot && W > H * 1.6 ? H * 0.2 : 0;
+      const gap = dotSize ? H * 0.14 : 0;
+      const { size, lines, widest } = layout(W - pad * 2 - dotSize - gap);
+      const left = (W - (dotSize + gap + widest)) / 2;
+      if (dotSize) {
+        context.beginPath();
+        context.arc(left + dotSize / 2, H / 2, dotSize / 2, 0, Math.PI * 2);
+        context.fillStyle = dot;
+        context.fill();
+      }
+      context.font = font(size);
+      context.fillStyle = GLASS.text;
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      const x = left + dotSize + gap + widest / 2;
+      lines.forEach((l, i) => context.fillText(l, x, H / 2 + (i - (lines.length - 1) / 2) * size * lineHeight));
+      tex.needsUpdate = true;
+    }
+    return { tex, draw };
   }
 
   /**
-   * A small card with a word or short phrase on it, facing +z: a name tag.
-   * Returns a group (add it to root; pass it to traits to make it grabbable). Options: width, height,
-   * color, textColor. card.userData.setColor(color) recolors it.
+   * A name tag: a word or short phrase on dark glass, facing +z, readable from both sides.
+   * Returns a group (add it to root; pass it to traits to make it grabbable). Options: width, height, color.
+   * A light color shows as a dot before the text, a dark one tints the glass; the text is always white.
+   * card.userData.setColor(color) changes it.
    */
   function card(text, o = {}) {
-    const width = o.width ?? CARD.width;
-    const height = o.height ?? CARD.height;
-    const body = own(new THREE.MeshStandardMaterial({ color: o.color ?? '#414141', roughness: 0.6 }));
+    // Without a height the tag is as tall as one line of its text needs at that width (longer text wraps).
+    const em = ems(text);
+    const width = o.width ?? Math.min(TAG.maxWidth, Math.max(TAG.minWidth, (o.height ?? TAG.height) * (TAG.text * em + TAG.ends)));
+    const height = o.height ?? Math.min(CARD.height, Math.max(TAG.minHeight, width / (TAG.text * em + TAG.ends)));
+    const radius = Math.min(width / 2, height / 2, 0.017);
+    const body = own(new THREE.MeshStandardMaterial({ color: GLASS.color, roughness: 0.25, metalness: 0, transparent: true, opacity: GLASS.opacity }));
     const group = new THREE.Group();
     group.name = `card: ${text}`;
-    group.add(new THREE.Mesh(roundedBox(width, height, CARD.depth, 0.004), body));
-    const face = textFace(text, width, height, o.textColor ?? '#fafaf7');
+
+    const outline = new THREE.Shape();
+    const hw = width / 2;
+    const hh = height / 2;
+    outline.moveTo(-hw + radius, -hh);
+    outline.lineTo(hw - radius, -hh);
+    outline.absarc(hw - radius, -hh + radius, radius, -Math.PI / 2, 0, false);
+    outline.lineTo(hw, hh - radius);
+    outline.absarc(hw - radius, hh - radius, radius, 0, Math.PI / 2, false);
+    outline.lineTo(-hw + radius, hh);
+    outline.absarc(-hw + radius, hh - radius, radius, Math.PI / 2, Math.PI, false);
+    outline.lineTo(-hw, -hh + radius);
+    outline.absarc(-hw + radius, -hh + radius, radius, Math.PI, Math.PI * 1.5, false);
+    const slab = own(new THREE.ExtrudeGeometry(outline, { depth: CARD.depth, bevelEnabled: false, curveSegments: 10 }));
+    slab.translate(0, 0, -CARD.depth / 2);
+    group.add(new THREE.Mesh(slab, body));
+
+    const face = tagFace(text, width, height, radius);
+    const paint = (color) => {
+      // Any colour three.js reads ("#rrggbb", a name, a number), as sRGB hex.
+      const hex = color == null ? null : `#${new THREE.Color(color).getHexString()}`;
+      const light = hex !== null && isLight(hex);
+      body.color.set(hex !== null && !light ? hex : GLASS.color);
+      face?.draw(light ? hex : null);
+    };
     if (face) {
-      // The same text on both sides, so a card turned in the hand still reads.
+      // The same face on both sides, so a tag turned in the hand still reads.
+      const plane = own(new THREE.PlaneGeometry(width, height));
+      const material = own(new THREE.MeshBasicMaterial({ map: face.tex, transparent: true, depthWrite: false }));
       for (const side of [1, -1]) {
-        const label = new THREE.Mesh(own(new THREE.PlaneGeometry(width * 0.94, height * 0.94)), own(new THREE.MeshBasicMaterial({ map: face, transparent: true, depthWrite: false })));
+        const label = new THREE.Mesh(plane, material);
         label.position.z = side * (CARD.depth / 2 + 0.0004);
         if (side < 0) label.rotation.y = Math.PI;
         label.raycast = noHit;
         group.add(label);
       }
     }
+    paint(o.color);
     group.userData.text = String(text);
-    group.userData.setColor = (color) => body.color.set(color);
+    group.userData.setColor = paint;
     return group;
   }
 

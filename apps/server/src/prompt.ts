@@ -89,8 +89,10 @@ Effects. Each returns an object to add.
 - kit.stand(radius, { accent, color, height }): a low display base with a soft shadow. Put the model on
   it: model.position.y = stand.userData.top.
 Name tags.
-- kit.card(text, { width?, color? }): a small card with a word or short phrase on it (plain ASCII), facing
-  +z. Returns a group. Use at most a few, for names that must stand next to a part.
+- kit.card(text, { width?, color? }): a name tag with a word or short phrase on it (plain ASCII), facing +z:
+  dark glass with white text, as tall as its text needs. A light color shows as a dot before the text (use it
+  to match the part's color); the text is always white. Returns a group. Use at most a few, for names that
+  must stand next to a part.
 Panels. Every panel is built by kit.panel from a fixed set of parts in the Meta Horizon OS style. You choose
 the parts and their words; the kit owns the look, the sizes and the layout.
   const panel = kit.panel(ui, {

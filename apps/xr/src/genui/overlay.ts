@@ -107,7 +107,7 @@ export function createOverlay(): HTMLElement {
   root.style.cssText = 'display:flex;flex-direction:column;gap:10px;font-size:14px;line-height:20px;';
   root.innerHTML = `
     <div class="sp-title" style="margin:0">Write a lesson live</div>
-    <textarea rows="2" placeholder="e.g. Teach me the solar system with a short quiz" class="sp-input"
+    <textarea rows="2" placeholder="e.g. Show me how a lever lifts a heavy box" class="sp-input"
       style="resize:vertical;padding:12px 16px;min-height:72px"></textarea>
     <div data-role="examples" style="display:flex;gap:6px;flex-wrap:wrap">
       ${EXAMPLE_LESSONS.map((lesson) => `<button data-prompt="${lesson.prompt}">${lesson.title}</button>`).join('')}

@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS lessons (
   course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
   idx INTEGER NOT NULL,
   title TEXT NOT NULL,
-  kind TEXT,
+  kind TEXT,                       -- unused: there was a time lessons had kinds (kept so existing databases load)
   objective TEXT NOT NULL DEFAULT '',
   prompt TEXT NOT NULL,
   status TEXT NOT NULL,
@@ -65,7 +65,7 @@ function open(): DatabaseSync {
 
 type CourseRow = { id: string; request: string; title: string; subtitle: string; status: Course['status']; error: string | null; created_at: string; model: string | null };
 type LessonRow = {
-  course_id: string; idx: number; title: string; kind: CourseLesson['kind'] | null; objective: string; prompt: string; status: CourseLesson['status']; error: string | null;
+  course_id: string; idx: number; title: string; objective: string; prompt: string; status: CourseLesson['status']; error: string | null;
   code: string | null; model: string | null; seconds: number | null; generated_at: string | null; polish: CourseLesson['polish'] | null; first_code: string | null; critique: string | null;
 };
 
@@ -82,7 +82,7 @@ export function loadCourses(): Course[] {
     lessons.set(row.course_id, list);
     list.push({
       title: row.title, objective: row.objective, prompt: row.prompt, status: row.status,
-      ...set<CourseLesson>({ kind: row.kind, error: row.error, code: row.code, model: row.model, seconds: row.seconds, generatedAt: row.generated_at, polish: row.polish, firstCode: row.first_code, critique: row.critique }),
+      ...set<CourseLesson>({ error: row.error, code: row.code, model: row.model, seconds: row.seconds, generatedAt: row.generated_at, polish: row.polish, firstCode: row.first_code, critique: row.critique }),
     });
   }
   return (d.prepare('SELECT * FROM courses').all() as CourseRow[]).map((row) => ({
@@ -103,7 +103,7 @@ export function saveCourse(course: Course) {
     d.prepare('DELETE FROM lessons WHERE course_id = ?').run(course.id);
     const insert = d.prepare(`INSERT INTO lessons (course_id, idx, title, kind, objective, prompt, status, error, code, model, seconds, generated_at, polish, first_code, critique)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-    course.lessons.forEach((l, i) => insert.run(course.id, i, l.title, l.kind ?? null, l.objective, l.prompt, l.status, l.error ?? null, l.code ?? null, l.model ?? null,
+    course.lessons.forEach((l, i) => insert.run(course.id, i, l.title, null, l.objective, l.prompt, l.status, l.error ?? null, l.code ?? null, l.model ?? null,
       l.seconds ?? null, l.generatedAt ?? null, l.polish ?? null, l.firstCode ?? null, l.critique ?? null));
     d.exec('COMMIT');
   } catch (err) {

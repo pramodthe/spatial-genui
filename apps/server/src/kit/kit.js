@@ -992,372 +992,172 @@ export function createKit(THREE, options = {}) {
     return group;
   }
 
-  // --- Cards and quizzes ----------------------------------------------------------------------------------
+  // --- Name tags ------------------------------------------------------------------------------------------
 
-  const CARD = { width: 0.1, height: 0.044, depth: 0.007 };
-  // Meta Horizon OS (Reality Labs Design System) tones, dark enough for white text: neutral, positive, negative.
-  const CARD_COLORS = { idle: '#414141', right: '#0f7a2a', wrong: '#c22f42' };
+  const CARD = { width: 0.1, height: 0.044, depth: 0.004 };
+  // Dark glass, as the Horizon OS labels: a translucent dark pill with a light rim and white text.
+  const GLASS = { color: '#15171b', opacity: 0.8, text: 'rgba(255, 255, 255, 0.94)', rim: 'rgba(255, 255, 255, 0.24)' };
+  const PX_PER_M = 4000;
+  // A one-line tag is a pill sized to its text: text TAG.text of the height, ends and dot taking TAG.ends heights.
+  const TAG = { minHeight: 0.022, height: 0.028, minWidth: 0.045, maxWidth: 0.16, text: 0.42, ends: 1.1 };
 
-  /** Text drawn on a canvas, wrapped and shrunk to fit: the face of a card. Dry runs have no canvas. */
-  function textFace(text, width, height, color) {
+  /** The text's width in font sizes (an estimate, so the dry run and the headset make the same shape). */
+  const ems = (text) => [...String(text)].reduce((sum, ch) => sum + (ch === ' ' ? 0.28 : /[A-Z]/.test(ch) ? 0.68 : /[a-z]/.test(ch) ? 0.55 : 0.58), 0);
+
+  /** A colour light enough to show as a dot on dark glass; a darker one tints the glass instead. */
+  const isLight = (hex) => {
+    const [r, g, b] = colorBytes(hex);
+    return 0.299 * r + 0.587 * g + 0.114 * b >= 90;
+  };
+
+  /**
+   * The face of a name tag on a canvas: rim, sheen, an optional colour dot and the text, wrapped and shrunk to
+   * fit. draw(dot) paints it again with another dot colour (or none). Dry runs have no canvas.
+   */
+  function tagFace(text, width, height, radius) {
     if (dry || typeof document === 'undefined') return null;
     const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = Math.round((512 * height) / width);
+    canvas.width = Math.round(Math.min(1024, Math.max(256, width * PX_PER_M)));
+    canvas.height = Math.round((canvas.width * height) / width);
     const context = canvas.getContext('2d');
     if (!context) return null;
+    const W = canvas.width;
+    const H = canvas.height;
+    const R = (radius / width) * W;
+    const font = (size) => `600 ${size}px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif`;
     const words = String(text).split(/\s+/).filter(Boolean);
-    let size = 76;
-    let lines = [];
-    for (; size >= 26; size -= 6) {
-      context.font = `700 ${size}px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif`;
-      lines = [];
-      let line = '';
-      for (const word of words) {
-        const next = line ? `${line} ${word}` : word;
-        if (line && context.measureText(next).width > canvas.width - 48) {
-          lines.push(line);
-          line = word;
-        } else {
-          line = next;
+    const lineHeight = 1.18;
+
+    function layout(room) {
+      let size = Math.round(H * 0.44);
+      let lines = [];
+      for (; size >= Math.max(12, Math.round(H * 0.16)); size -= 2) {
+        context.font = font(size);
+        lines = [];
+        let line = '';
+        for (const word of words) {
+          const next = line ? `${line} ${word}` : word;
+          if (line && context.measureText(next).width > room) {
+            lines.push(line);
+            line = word;
+          } else {
+            line = next;
+          }
         }
+        if (line) lines.push(line);
+        const widest = Math.max(0, ...lines.map((l) => context.measureText(l).width));
+        if (lines.length * size * lineHeight <= H * 0.8 && widest <= room) break;
       }
-      if (line) lines.push(line);
-      const widest = Math.max(...lines.map((l) => context.measureText(l).width));
-      if (lines.length * size * 1.18 <= canvas.height - 28 && widest <= canvas.width - 40) break;
+      return { size, lines, widest: Math.max(0, ...lines.map((l) => context.measureText(l).width)) };
     }
-    context.fillStyle = color;
-    context.textAlign = 'center';
-    context.textBaseline = 'middle';
-    lines.forEach((l, i) => context.fillText(l, canvas.width / 2, canvas.height / 2 + (i - (lines.length - 1) / 2) * size * 1.18));
+
+    function roundRect(x, y, w, h, r) {
+      context.beginPath();
+      context.moveTo(x + r, y);
+      context.arcTo(x + w, y, x + w, y + h, r);
+      context.arcTo(x + w, y + h, x, y + h, r);
+      context.arcTo(x, y + h, x, y, r);
+      context.arcTo(x, y, x + w, y, r);
+      context.closePath();
+    }
+
     const tex = own(new THREE.CanvasTexture(canvas));
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 4;
-    return tex;
+
+    function draw(dot) {
+      context.clearRect(0, 0, W, H);
+      // Sheen on the upper half, then the rim.
+      const sheen = context.createLinearGradient(0, 0, 0, H);
+      sheen.addColorStop(0, 'rgba(255, 255, 255, 0.12)');
+      sheen.addColorStop(0.55, 'rgba(255, 255, 255, 0)');
+      roundRect(0, 0, W, H, R);
+      context.fillStyle = sheen;
+      context.fill();
+      const rim = Math.max(2, H * 0.03);
+      roundRect(rim / 2, rim / 2, W - rim, H - rim, Math.max(0, R - rim / 2));
+      context.lineWidth = rim;
+      context.strokeStyle = GLASS.rim;
+      context.stroke();
+
+      const pad = Math.max(R * 0.76, H * 0.2);
+      const dotSize = dot && W > H * 1.6 ? H * 0.2 : 0;
+      const gap = dotSize ? H * 0.14 : 0;
+      const { size, lines, widest } = layout(W - pad * 2 - dotSize - gap);
+      const left = (W - (dotSize + gap + widest)) / 2;
+      if (dotSize) {
+        context.beginPath();
+        context.arc(left + dotSize / 2, H / 2, dotSize / 2, 0, Math.PI * 2);
+        context.fillStyle = dot;
+        context.fill();
+      }
+      context.font = font(size);
+      context.fillStyle = GLASS.text;
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      const x = left + dotSize + gap + widest / 2;
+      lines.forEach((l, i) => context.fillText(l, x, H / 2 + (i - (lines.length - 1) / 2) * size * lineHeight));
+      tex.needsUpdate = true;
+    }
+    return { tex, draw };
   }
 
   /**
-   * A small card with a word or short phrase on it, facing +z: name tags, flashcards, answers to sort.
-   * Returns a group (add it to root; pass it to traits to make it grabbable). Options: width, height,
-   * color, textColor. card.userData.setColor(color) recolors it.
+   * A name tag: a word or short phrase on dark glass, facing +z, readable from both sides.
+   * Returns a group (add it to root; pass it to traits to make it grabbable). Options: width, height, color.
+   * A light color shows as a dot before the text, a dark one tints the glass; the text is always white.
+   * card.userData.setColor(color) changes it.
    */
   function card(text, o = {}) {
-    const width = o.width ?? CARD.width;
-    const height = o.height ?? CARD.height;
-    const body = own(new THREE.MeshStandardMaterial({ color: o.color ?? CARD_COLORS.idle, roughness: 0.6 }));
+    // Without a height the tag is as tall as one line of its text needs at that width (longer text wraps).
+    const em = ems(text);
+    const width = o.width ?? Math.min(TAG.maxWidth, Math.max(TAG.minWidth, (o.height ?? TAG.height) * (TAG.text * em + TAG.ends)));
+    const height = o.height ?? Math.min(CARD.height, Math.max(TAG.minHeight, width / (TAG.text * em + TAG.ends)));
+    const radius = Math.min(width / 2, height / 2, 0.017);
+    const body = own(new THREE.MeshStandardMaterial({ color: GLASS.color, roughness: 0.25, metalness: 0, transparent: true, opacity: GLASS.opacity }));
     const group = new THREE.Group();
     group.name = `card: ${text}`;
-    group.add(new THREE.Mesh(roundedBox(width, height, CARD.depth, 0.004), body));
-    const face = textFace(text, width, height, o.textColor ?? '#fafaf7');
+
+    const outline = new THREE.Shape();
+    const hw = width / 2;
+    const hh = height / 2;
+    outline.moveTo(-hw + radius, -hh);
+    outline.lineTo(hw - radius, -hh);
+    outline.absarc(hw - radius, -hh + radius, radius, -Math.PI / 2, 0, false);
+    outline.lineTo(hw, hh - radius);
+    outline.absarc(hw - radius, hh - radius, radius, 0, Math.PI / 2, false);
+    outline.lineTo(-hw + radius, hh);
+    outline.absarc(-hw + radius, hh - radius, radius, Math.PI / 2, Math.PI, false);
+    outline.lineTo(-hw, -hh + radius);
+    outline.absarc(-hw + radius, -hh + radius, radius, Math.PI, Math.PI * 1.5, false);
+    const slab = own(new THREE.ExtrudeGeometry(outline, { depth: CARD.depth, bevelEnabled: false, curveSegments: 10 }));
+    slab.translate(0, 0, -CARD.depth / 2);
+    group.add(new THREE.Mesh(slab, body));
+
+    const face = tagFace(text, width, height, radius);
+    const paint = (color) => {
+      // Any colour three.js reads ("#rrggbb", a name, a number), as sRGB hex.
+      const hex = color == null ? null : `#${new THREE.Color(color).getHexString()}`;
+      const light = hex !== null && isLight(hex);
+      body.color.set(hex !== null && !light ? hex : GLASS.color);
+      face?.draw(light ? hex : null);
+    };
     if (face) {
-      // The same text on both sides, so a card turned in the hand still reads.
+      // The same face on both sides, so a tag turned in the hand still reads.
+      const plane = own(new THREE.PlaneGeometry(width, height));
+      const material = own(new THREE.MeshBasicMaterial({ map: face.tex, transparent: true, depthWrite: false }));
       for (const side of [1, -1]) {
-        const label = new THREE.Mesh(own(new THREE.PlaneGeometry(width * 0.94, height * 0.94)), own(new THREE.MeshBasicMaterial({ map: face, transparent: true, depthWrite: false })));
+        const label = new THREE.Mesh(plane, material);
         label.position.z = side * (CARD.depth / 2 + 0.0004);
         if (side < 0) label.rotation.y = Math.PI;
         label.raycast = noHit;
         group.add(label);
       }
     }
+    paint(o.color);
     group.userData.text = String(text);
-    group.userData.setColor = (color) => body.color.set(color);
+    group.userData.setColor = paint;
     return group;
-  }
-
-  /**
-   * A grab-and-drop matching quiz. Each item is a card the learner picks up and drops on the place it
-   * belongs: a part of the model, a bin, a slot. A right drop snaps the card there and turns it green; a
-   * wrong one sends it back to the tray and flashes red.
-   *   const quiz = kit.matchQuiz({
-   *     root, traits, isGrabbed,
-   *     items: [{ text: 'Left ventricle', at: [0.03, 0.12, 0.02] }, ...],   // at: where it belongs, in root space
-   *     tray: [0, 0.03, 0.16],                                              // centre of the front row of waiting cards
-   *     onChange({ right, total, misses, done, last }) { ... },             // last: { text, correct } or null
-   *   });
-   *   return { root, update(time, delta) { quiz.update(time, delta); } };
-   * Options: radius (how near a drop must land, default 0.05), markers (false hides the target dots),
-   * shuffle (false keeps the cards in the given order). quiz.reset() starts over.
-   * Build the model before calling this: the cards are kept just in front of what root already holds, in
-   * up to two rows that step back and up toward the model.
-   */
-  function matchQuiz(o = {}) {
-    const { root, traits, isGrabbed } = o;
-    if (!root?.isObject3D || typeof traits !== 'function' || typeof isGrabbed !== 'function') {
-      throw new Error('kit.matchQuiz: pass { root, traits, isGrabbed } from build() along with items.');
-    }
-    if (!Array.isArray(o.items) || o.items.length < 2) throw new Error('kit.matchQuiz: give at least 2 items of { text, at: [x, y, z] }.');
-    const radius = o.radius ?? 0.05;
-    const tray = new THREE.Vector3(...vec3(o.tray ?? [0, 0.03, 0.16], 'matchQuiz tray'));
-    const total = o.items.length;
-    // Cards wait in one row of up to four, or two rows, far enough apart that each is its own grab target
-    // for a pinch (the host turns closer neighbours into ray-only grabs).
-    const perRow = total <= 4 ? total : Math.ceil(total / 2);
-    const rows = Math.ceil(total / perRow);
-    const pitch = (o.cardWidth ?? CARD.width) + 0.045;
-    const rowBack = 0.12;
-    const rowUp = Math.sqrt(Math.max(0, pitch * pitch - rowBack * rowBack)) + 0.004;
-    // A tray set far out in front of the model puts the cards in the learner's face and the model out of
-    // reach: keep the back row just clear of what is already in root.
-    root.updateMatrixWorld(true);
-    const content = new THREE.Box3().setFromObject(root);
-    if (!content.isEmpty()) {
-      content.applyMatrix4(root.matrixWorld.clone().invert());
-      tray.z = Math.min(tray.z, Math.max(0, content.max.z) + 0.06 + (rows - 1) * rowBack);
-    }
-    const order = o.items.map((_, i) => i);
-    if (o.shuffle !== false && !dry) {
-      for (let i = order.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [order[i], order[j]] = [order[j], order[i]];
-      }
-    }
-    const markerMaterial = material('light', { color: o.markerColor ?? '#ffd27a', glow: 1.6 });
-    const markerShape = own(new THREE.SphereGeometry(0.006, 16, 12));
-    const entries = o.items.map((item, i) => {
-      const at = new THREE.Vector3(...vec3(item.at, 'matchQuiz item.at'));
-      const slot = order.indexOf(i);
-      const row = Math.floor(slot / perRow);
-      const inRow = Math.min(perRow, total - row * perRow);
-      const home = new THREE.Vector3(tray.x + ((slot % perRow) - (inRow - 1) / 2) * pitch, tray.y + row * rowUp, tray.z - row * rowBack);
-      const mesh = card(item.text, { width: o.cardWidth });
-      mesh.position.copy(home);
-      root.add(mesh);
-      traits(mesh, { grab: true });
-      let marker = null;
-      if (o.markers !== false) {
-        marker = new THREE.Mesh(markerShape, markerMaterial);
-        marker.name = 'quiz target';
-        marker.position.copy(at);
-        root.add(marker);
-      }
-      return { item, at, home, mesh, marker, held: false, placed: false, flash: 0 };
-    });
-    const state = { right: 0, misses: 0 };
-    const report = (last) => o.onChange?.({ right: state.right, total, misses: state.misses, done: state.right === total, last });
-    const rest = new THREE.Quaternion();
-
-    /** A card has just been let go: where did it land? */
-    function settle(entry) {
-      let nearest = null;
-      let distance = Infinity;
-      for (const other of entries) {
-        if (other.placed) continue;
-        const d = entry.mesh.position.distanceTo(other.at);
-        if (d < distance) [nearest, distance] = [other, d];
-      }
-      if (!nearest || distance > radius) return; // let go in the open: it goes back to the tray, no penalty
-      if (nearest === entry) {
-        entry.placed = true;
-        entry.flash = 0; // a red flash from an earlier miss must not undo the green
-        state.right++;
-        entry.mesh.userData.setColor(CARD_COLORS.right);
-        if (entry.marker) entry.marker.visible = false;
-        report({ text: entry.item.text, correct: true });
-      } else {
-        state.misses++;
-        entry.flash = 0.7;
-        entry.mesh.userData.setColor(CARD_COLORS.wrong);
-        report({ text: entry.item.text, correct: false });
-      }
-    }
-
-    return {
-      cards: entries.map((e) => e.mesh),
-      update(_time, delta = 0.016) {
-        const ease = 1 - Math.exp(-delta * 9);
-        for (const entry of entries) {
-          const held = isGrabbed(entry.mesh);
-          if (entry.held && !held && !entry.placed) settle(entry);
-          entry.held = held;
-          if (entry.flash > 0) {
-            entry.flash -= delta;
-            if (entry.flash <= 0) entry.mesh.userData.setColor(CARD_COLORS.idle);
-          }
-          if (held) continue;
-          // A placed card rests just above its target; any other drifts back to its place in the tray.
-          const goal = entry.placed ? entry.at : entry.home;
-          const lift = entry.placed ? CARD.height * 0.8 : 0;
-          entry.mesh.position.x += (goal.x - entry.mesh.position.x) * ease;
-          entry.mesh.position.y += (goal.y + lift - entry.mesh.position.y) * ease;
-          entry.mesh.position.z += (goal.z - entry.mesh.position.z) * ease;
-          entry.mesh.quaternion.slerp(rest, ease);
-        }
-      },
-      /** For tests and "show me": put item `index` down at item `onto`'s place, as a learner's drop would. */
-      drop(index, onto = index) {
-        const entry = entries[index];
-        if (!entry || entry.placed || !entries[onto]) return;
-        entry.mesh.position.copy(entries[onto].at);
-        settle(entry);
-      },
-      reset() {
-        state.right = 0;
-        state.misses = 0;
-        for (const entry of entries) {
-          entry.placed = false;
-          entry.flash = 0;
-          entry.mesh.userData.setColor(CARD_COLORS.idle);
-          if (entry.marker) entry.marker.visible = true;
-        }
-        report(null);
-      },
-    };
-  }
-
-  const makeCard = card;
-  const FLASH = { width: 0.16, height: 0.1 };
-  const TRAY = { width: 0.13, depth: 0.09, again: '#b8641a', known: '#0f7a2a' };
-
-  /**
-   * A deck of flash cards to revise with. One card stands in front of the learner showing its front (a term
-   * or a question). A quick pinch turns it over to show the back (the meaning or the answer). The learner
-   * then picks it up and drops it on one of two trays: "Got it" on the right or "Again" on the left. Cards
-   * dropped on "Again" come round once more; the deck is done when every card is on "Got it".
-   *   const deck = kit.flashcards({
-   *     root, traits, isGrabbed,
-   *     cards: [{ front: 'Turbine', back: 'Hot gas spins it; it drives the compressor.' }, ...],  // 4 to 8 cards
-   *     at: [0, 0.12, 0.1],                                               // where the current card stands, in root space
-   *     onChange({ known, again, left, total, done, side }) { ... },      // side: 'front' or 'back' of the current card
-   *   });
-   *   return { root, update(time, delta) { deck.update(time, delta); } };
-   * Options: spread (how far each tray is from the card, default 0.2). deck.flip() turns the current card
-   * (wire it to a "Flip" button as well); deck.reset() starts over.
-   */
-  function flashcards(o = {}) {
-    const { root, traits, isGrabbed } = o;
-    if (!root?.isObject3D || typeof traits !== 'function' || typeof isGrabbed !== 'function') {
-      throw new Error('kit.flashcards: pass { root, traits, isGrabbed } from build() along with cards.');
-    }
-    const cards = (Array.isArray(o.cards) ? o.cards : []).filter((c) => c && typeof c.front === 'string' && typeof c.back === 'string');
-    if (cards.length < 2) throw new Error('kit.flashcards: give at least 2 cards of { front, back }.');
-    const home = new THREE.Vector3(...vec3(o.at ?? [0, 0.12, 0.1], 'flashcards at'));
-    const spread = o.spread ?? 0.2;
-    const total = cards.length;
-
-    // One card that is picked up and sorted again and again: it takes the next card's two faces each time.
-    // (A stack of grabbable cards would sit so close together that the host makes them ray-only grabs.)
-    const faces = cards.map((c) => ({ front: textFace(c.front, FLASH.width, FLASH.height, '#f2f2f2'), back: textFace(c.back, FLASH.width, FLASH.height, '#fcd29a') }));
-    const body = own(new THREE.MeshStandardMaterial({ color: CARD_COLORS.idle, roughness: 0.6 }));
-    const card = new THREE.Group();
-    card.name = 'flash card';
-    card.add(new THREE.Mesh(roundedBox(FLASH.width, FLASH.height, CARD.depth, 0.006), body));
-    const sides = [1, -1].map((side) => {
-      const label = new THREE.Mesh(own(new THREE.PlaneGeometry(FLASH.width * 0.92, FLASH.height * 0.92)), own(new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false })));
-      label.position.z = side * (CARD.depth / 2 + 0.0004);
-      if (side < 0) label.rotation.y = Math.PI;
-      label.raycast = noHit;
-      card.add(label);
-      return label;
-    });
-    card.position.copy(home);
-    root.add(card);
-    traits(card, { grab: true });
-
-    // The two trays, each with its name standing behind it and a pile of the cards sorted onto it.
-    const trays = { again: { x: -spread, color: TRAY.again, name: 'Again', pile: [] }, known: { x: spread, color: TRAY.known, name: 'Got it', pile: [] } };
-    const slab = own(roundedBox(FLASH.width * 0.6, 0.004, FLASH.height * 0.6, 0.002));
-    const slabMaterial = material('plastic', { color: '#5a5a5a' });
-    for (const tray of Object.values(trays)) {
-      tray.at = new THREE.Vector3(home.x + tray.x, home.y - 0.07, home.z);
-      const pad = new THREE.Mesh(own(roundedBox(TRAY.width, 0.008, TRAY.depth, 0.004)), own(new THREE.MeshStandardMaterial({ color: tray.color, roughness: 0.7 })));
-      pad.name = `tray: ${tray.name}`;
-      pad.position.copy(tray.at);
-      root.add(pad);
-      const sign = makeCard(tray.name, { width: 0.09, color: tray.color });
-      sign.position.set(tray.at.x, tray.at.y + 0.05, tray.at.z - TRAY.depth / 2 - 0.01);
-      root.add(sign);
-    }
-
-    const state = { queue: cards.map((_, i) => i), known: 0, again: 0, flipped: false, held: false, heldFor: 0, grabbedAt: new THREE.Vector3(), pop: 1 };
-    const rest = new THREE.Quaternion();
-    const turned = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
-    const report = () => o.onChange?.({ known: state.known, again: state.again, left: state.queue.length, total, done: state.queue.length === 0, side: state.flipped ? 'back' : 'front' });
-
-    /** Show the card at the front of the queue, front side up; none left hides the card. */
-    function deal() {
-      const next = state.queue[0];
-      state.flipped = false;
-      card.visible = next !== undefined;
-      card.scale.setScalar(next === undefined ? 0.001 : 0.6);
-      state.pop = next === undefined ? 1 : 0.6;
-      card.position.copy(home);
-      card.quaternion.copy(rest);
-      if (next === undefined) return;
-      sides[0].material.map = faces[next].front;
-      sides[1].material.map = faces[next].back;
-      for (const label of sides) {
-        label.visible = Boolean(label.material.map);
-        label.material.needsUpdate = true;
-      }
-    }
-
-    function sort(where) {
-      const tray = trays[where];
-      if (!tray || state.queue.length === 0) return;
-      const index = state.queue.shift();
-      if (where === 'known') state.known++;
-      else {
-        state.again++;
-        state.queue.push(index);
-      }
-      const sorted = new THREE.Mesh(slab, slabMaterial);
-      sorted.position.set(tray.at.x, tray.at.y + 0.008 + tray.pile.length * 0.005, tray.at.z);
-      sorted.raycast = noHit;
-      root.add(sorted);
-      tray.pile.push(sorted);
-      deal();
-      report();
-    }
-
-    function flip() {
-      if (state.queue.length === 0) return;
-      state.flipped = !state.flipped;
-      report();
-    }
-
-    deal();
-    return {
-      card,
-      flip,
-      update(_time, delta = 0.016) {
-        const held = isGrabbed(card);
-        if (held && !state.held) {
-          state.heldFor = 0;
-          state.grabbedAt.copy(card.position);
-        }
-        if (held) state.heldFor += delta;
-        if (state.held && !held) {
-          // A quick pinch that goes nowhere turns the card over; a carry sorts it if it lands on a tray.
-          if (state.heldFor < 0.45 && card.position.distanceTo(state.grabbedAt) < 0.03) flip();
-          else {
-            const where = Object.keys(trays).find((key) => Math.hypot(card.position.x - trays[key].at.x, card.position.z - trays[key].at.z) < 0.09 && Math.abs(card.position.y - trays[key].at.y) < 0.16);
-            if (where) sort(where);
-          }
-        }
-        state.held = held;
-        if (held) return;
-        const ease = 1 - Math.exp(-delta * 9);
-        card.position.lerp(home, ease);
-        card.quaternion.slerp(state.flipped ? turned : rest, ease);
-        if (state.pop < 1) {
-          state.pop = Math.min(1, state.pop + delta * 3);
-          card.scale.setScalar(state.pop);
-        }
-      },
-      /** For tests and "show me": sort the current card as a learner's drop on that tray would. */
-      drop(where) {
-        sort(where === 'again' ? 'again' : 'known');
-      },
-      reset() {
-        for (const tray of Object.values(trays)) {
-          for (const sorted of tray.pile) root.remove(sorted);
-          tray.pile.length = 0;
-        }
-        Object.assign(state, { queue: cards.map((_, i) => i), known: 0, again: 0 });
-        deal();
-        report();
-      },
-    };
   }
 
   // --- Panels ---------------------------------------------------------------------------------------------
@@ -1742,7 +1542,7 @@ export function createKit(THREE, options = {}) {
     material, texture, theme, panel, madePanel,
     roundedBox, extrude, lathe, tube, gear, instances, along, merge,
     glow, particles, ring, shadow, stand, arrow,
-    card, matchQuiz, flashcards,
+    card,
     finalize, pump, dispose,
     presets: Object.keys(PRESETS),
     textures: Object.keys(TEXTURES),

@@ -8,18 +8,18 @@ related work.
 
 ## What it does
 
-- **Courses.** A subject becomes a planned course: two or three lessons to explore, a flash-card review and
-  a grab-and-drop quiz. Lessons are written in the background and saved, so you can leave and come back.
+- **Courses.** A subject becomes a planned course of three or four hands-on lessons. Lessons are written in
+  the background and saved, so you can leave and come back.
 - **A 3D model per course.** A course about one physical object first gets its own model: a reference
   picture (Muse Image, checked by Muse Ember), a textured body from TRELLIS.2, then an agent in Blender
   (Muse Spark) cuts it into named parts that lessons can move, highlight and pull apart. Models are kept and
   reused; the library is in `data/library/` (credits in `data/library/CREDITS.md`).
 - **Voice tutor.** A spoken conversation through Deepgram's Voice Agent API. It answers questions about the
-  subject and the lesson on the desk, and can plan a course or open a lesson for you.
+  subject and the lesson on the desk, quizzes you aloud when you ask, and can plan a course or open a lesson.
 - **Look-and-fix.** The first time a course lesson opens, the headset sends three pictures of it to the
   agent, which revises it once from what it sees.
-- **Hands-first.** Pinch or poke panels, pick up parts, drag a lesson or the picker by its move bar. The
-  interface follows the Meta Horizon OS UI Set (the Horizon UI kit and its dark-mode colours).
+- **Hands-first.** Pinch or poke panels, pick up parts, drag a lesson or the picker by its move bar. Every
+  panel is built from one set of parts in the style of the Meta Horizon OS UI Set (`kit.panel`).
 
 ## How it works
 
@@ -80,7 +80,7 @@ inside XR), then **Enter mixed reality**. In XR, pinch **Talk to the tutor**, a 
 
 ```bash
 # Write one lesson from the command line; every run is logged to apps/server/runs/
-cd apps/server && npm run gen -- "a quiz about the human heart"
+cd apps/server && npm run gen -- "how blood flows through the human heart"
 
 # Look-and-fix by hand: revise a lesson from pictures of it
 npm run review -- --code lesson.js --prompt "..." --out revised.js pic1.jpg pic2.jpg

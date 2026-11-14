@@ -333,8 +333,8 @@
         <Mic class="ask-icon"></Mic>
       </div>
       <div class="ask-text">
-        <span class="ask-title">Ask for a course</span>
-        <span id="voice-label" class="ask-sub">Pinch here, then say any subject</span>
+        <span class="ask-title">Talk to the tutor</span>
+        <span id="voice-label" class="ask-sub">Pinch, then ask for a course or about a lesson</span>
       </div>
       <ChevronRight class="ask-chevron"></ChevronRight>
     </div>

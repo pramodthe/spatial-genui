@@ -13,6 +13,7 @@ import {
 } from '@iwsdk/core';
 import { EXAMPLE_LESSONS } from './lessons';
 import { cancelListening, isListening, microphoneState, startListening, stopAndTranscribe, voiceAvailable } from './voice';
+import { VoiceTutor } from './voice-agent';
 import type { LessonStatus } from './overlay';
 import { courseProgress, createCourse, fetchCourseLesson, listCourses, polishCourseLesson, type CourseSummary } from './courses';
 import { capture, lessonPosition } from './host';
@@ -64,7 +65,7 @@ const STEP_BADGES = {
 } as const;
 // The voice row's microphone circle: ready, listening, working (understanding, planning), missed (try again),
 // unavailable.
-const VOICE_TONES = { ready: '#272727', listening: '#e5343e', working: '#31a8f3', missed: '#fc9435', off: '#8a8a8a' } as const;
+const VOICE_TONES = { ready: '#272727', listening: '#e5343e', working: '#31a8f3', speaking: '#0f7a2a', missed: '#fc9435', off: '#8a8a8a' } as const;
 type VoiceTone = keyof typeof VOICE_TONES;
 
 // Status colours from the Reality Labs Design System: none, poor (working), good, bad.
@@ -165,6 +166,7 @@ class LessonPickerSystem extends createSystem({
       () => clearInterval(this.ticker),
       () => clearTimeout(this.coursePoll),
       () => cancelListening(),
+      () => this.tutor.stop(),
       () => this.handle.dispose(),
       () => (picker = null),
     );
@@ -344,15 +346,89 @@ class LessonPickerSystem extends createSystem({
     }
   }
 
-  /** Pinch once to start talking, again to finish; the request is then written live. */
+  /**
+   * The voice tutor (voice-agent.ts): a spoken conversation that can plan courses and open lessons. Pinch to
+   * start, pinch again to end. Where the tutor is unavailable, voice falls back to a one-shot request: pinch,
+   * say a subject, pinch, and it becomes a course.
+   */
+  private readonly tutor = new VoiceTutor(
+    {
+      createCourse: async (subject) => {
+        const course = await createCourse(subject);
+        this.courses = [course, ...this.courses.filter((c) => c.id !== course.id)];
+        this.showCourse(course.id);
+        this.pollCourses();
+        return { ok: true, title: course.title, note: 'Planned. The lessons are being written now, the first in a few minutes; a course about one object first builds its 3D model (about 20 minutes).' };
+      },
+      listCourses: async () => {
+        await this.refreshCourses();
+        return { courses: this.courses.map((c) => ({ title: c.title, lessons: c.lessons.map((l, i) => `${i + 1}. ${l.title} (${l.status})`) })) };
+      },
+      openLesson: async (name, number) => {
+        await this.refreshCourses();
+        const course = findCourse(this.courses, name);
+        if (!course) return { ok: false, error: `No course matches "${name}".`, courses: this.courses.map((c) => c.title) };
+        const lesson = course.lessons[number - 1];
+        if (!lesson) return { ok: false, error: `"${course.title}" has ${course.lessons.length} lessons.` };
+        this.showCourse(course.id);
+        await this.openStep(number - 1);
+        return { ok: true, course: course.title, lesson: lesson.title, state: lesson.status === 'ready' ? 'opened on the desk' : 'being written; it takes a few minutes' };
+      },
+      currentLesson: () => {
+        const prompt = this.status.prompt;
+        if (!prompt || this.status.phase === 'idle') return { open: false };
+        const title = EXAMPLE_LESSONS.find((l) => l.prompt === prompt)?.title ?? this.titles.get(prompt) ?? null;
+        return { open: true, title, request: prompt.split('\n(This is lesson')[0], state: this.status.phase };
+      },
+    },
+    {
+      onText: (role, text) => {
+        this.tutorHeard = true;
+        this.setVoice(`${role === 'user' ? 'You' : 'Tutor'}: ${ascii(text)}`, role === 'user' ? 'listening' : 'speaking');
+      },
+      onState: (state, detail) => {
+        if (state === 'connecting') this.setVoice('Connecting to the tutor...', 'working');
+        else if (state === 'thinking') this.setVoice('Thinking...', 'working');
+        else if (state === 'stopped') this.setVoice(detail ? ascii(detail) : 'Pinch, then ask for a course or about a lesson', detail ? 'off' : 'ready');
+        else if (state === 'listening' && !this.tutorHeard) this.setVoice('Listening: ask anything. Pinch here to stop.', 'listening');
+        if (state === 'stopped') this.tutorHeard = false;
+      },
+    },
+  );
+  private tutorHeard = false;
+  private tutorOff = false;
+
+  /** What the tutor knows at the start: the saved courses and the lesson on the desk. */
+  private async tutorContext(): Promise<string> {
+    await this.refreshCourses();
+    const courses = this.courses.slice(0, 8).map((c) => `- ${c.title}: ${c.lessons.map((l, i) => `${i + 1}. ${l.title} (${l.status})`).join('; ')}`);
+    const open = this.status.prompt && this.status.phase !== 'idle' ? (EXAMPLE_LESSONS.find((l) => l.prompt === this.status.prompt)?.title ?? this.titles.get(this.status.prompt) ?? 'a lesson') : null;
+    return `Saved courses:\n${courses.join('\n') || '(none yet)'}\nOn the desk now: ${open ?? 'nothing'}.`;
+  }
+
+  /** Pinch to talk to the tutor, again to stop. */
   private async toggleVoice() {
     if (!voiceAvailable() || this.voiceBusy) return;
+    if (this.tutor.active) {
+      this.tutor.stop();
+      return;
+    }
     if (!isListening()) {
       // The browser can't ask for the microphone inside XR: it has to be allowed on the start page first.
       const allowed = await microphoneState();
       if (allowed === 'prompt' || allowed === 'denied') {
         this.setVoice('Allow the microphone first: leave XR and tap "Allow microphone" on the start page.', 'off');
         return;
+      }
+      if (!this.tutorOff) {
+        try {
+          await this.tutor.start(await this.tutorContext());
+          return;
+        } catch {
+          // No tutor on this server (or it can't be reached): one-shot voice requests instead.
+          this.tutor.stop();
+          this.tutorOff = true;
+        }
       }
       try {
         await startListening(() => void this.toggleVoice());
@@ -447,7 +523,22 @@ class LessonPickerSystem extends createSystem({
 const Object3DUp = new Vector3(0, 1, 0);
 
 /** The panel font has plain ASCII only; keep server messages short and printable. */
+/** A course whose title best matches what the learner said (shared words), or none. */
+function findCourse(courses: CourseSummary[], name: string): CourseSummary | undefined {
+  const words = (text: string) => new Set(text.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2 && !['how', 'the', 'and', 'works', 'work'].includes(w)));
+  const wanted = words(name);
+  let best: CourseSummary | undefined;
+  let score = 0;
+  for (const course of courses) {
+    const shared = [...words(course.title)].filter((w) => wanted.has(w)).length;
+    if (shared > score) [best, score] = [course, shared];
+  }
+  return best;
+}
+
+const TYPOGRAPHY: Record<string, string> = { '\u2014': ' - ', '\u2013': '-', '\u2018': "'", '\u2019': "'", '\u201c': '"', '\u201d': '"', '\u2026': '...' };
+
 function ascii(text: string) {
-  const plain = text.replace(/[^\x20-\x7e]/g, '').trim();
+  const plain = text.replace(/[\u2013\u2014\u2018\u2019\u201c\u201d\u2026]/g, (ch) => TYPOGRAPHY[ch]).replace(/[^\x20-\x7e]/g, '').replace(/\s+/g, ' ').trim();
   return plain.length > 90 ? `${plain.slice(0, 87)}...` : plain || 'unknown error';
 }

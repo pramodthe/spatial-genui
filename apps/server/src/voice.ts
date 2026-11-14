@@ -4,6 +4,26 @@
 const META_BASE = (process.env.META_API_BASE || 'https://api.meta.ai/v1').replace(/\/$/, '');
 const MODEL = process.env.VOICE_MODEL || 'muse-voice-transcribe-1.0';
 
+/**
+ * A short-lived Deepgram token for the voice tutor (the browser's Voice Agent connection, xr voice-agent.ts):
+ * it is only needed to open the WebSocket, so it lives 60 s, and the Deepgram key stays on this server.
+ */
+export async function voiceAgentToken(): Promise<{ ok: true; token: string } | { ok: false; error: string }> {
+  const key = process.env.DEEPGRAM_API_KEY;
+  if (!key) return { ok: false, error: 'The voice tutor is not set up on this server (DEEPGRAM_API_KEY).' };
+  try {
+    const res = await fetch('https://api.deepgram.com/v1/auth/grant', {
+      method: 'POST', headers: { authorization: `Token ${key}`, 'content-type': 'application/json' }, body: JSON.stringify({ ttl_seconds: 60 }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    const body = (await res.json().catch(() => ({}))) as { access_token?: string; err_msg?: string };
+    if (!res.ok || !body.access_token) return { ok: false, error: body.err_msg ?? `Deepgram refused the token (HTTP ${res.status}).` };
+    return { ok: true, token: body.access_token };
+  } catch (err) {
+    return { ok: false, error: `Deepgram could not be reached: ${(err as Error).message}` };
+  }
+}
+
 export type Transcription = { ok: true; text: string; ms: number; audioMs?: number } | { ok: false; error: string };
 
 export async function transcribe(wav: Buffer): Promise<Transcription> {

@@ -28,6 +28,14 @@ JOB_DIR: Path = args.job.resolve()
 mcp = MCPServer("blender")
 
 
+def _failure(err: Exception, timeout: float) -> str:
+    if isinstance(err, asyncio.TimeoutError):
+        return f"timed out after {timeout:.0f} s"
+    if isinstance(err, ValueError):
+        return "sent a reply that could not be read (over 16 MB or not JSON)"
+    return "crashed"
+
+
 class Bridge:
     """One headless Blender process running blender_bridge.py, restarted if it hangs or dies."""
 
@@ -63,12 +71,14 @@ class Bridge:
             await self.proc.stdin.drain()
             try:
                 return await asyncio.wait_for(self._read_reply(), timeout=timeout)
-            except (asyncio.TimeoutError, RuntimeError) as err:
+            except (asyncio.TimeoutError, RuntimeError, ValueError) as err:
+                # ValueError: a reply line over the stream limit, or not JSON. Either way the pipe is out of step
+                # with the requests, so Blender is restarted as after a crash.
                 self.proc.kill()
                 await self.proc.wait()
                 self.proc = None
-                reason = f"timed out after {timeout:.0f} s" if isinstance(err, asyncio.TimeoutError) else "crashed"
-                return {"ok": False, "error": f"Blender {reason}; it was restarted and the scene is now empty."}
+                error = f"Blender {_failure(err, timeout)}; it was restarted and the scene is now empty."
+                return {"ok": False, "error": error}
 
 
 bridge = Bridge()

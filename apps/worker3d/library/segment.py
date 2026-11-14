@@ -4,7 +4,7 @@ Step 1  python library/segment.py idglb <model.glb> <work dir>
         Writes <work>/ids.glb: the model's faces (low-poly models split finer first, see load_meshes), each in its own flat vertex colour encoding its number
         (face k of the model is colour k + 1 as 24-bit RGB; black is background). Rendered unlit, every
         pixel then says which face of the model it shows.
-Step 2  apps/server/src/three-d/segment-parts.ts renders the model and ids.glb from the same angles,
+Step 2  apps/server/research/three-d/segment-parts.ts renders the model and ids.glb from the same angles,
         asks SAM 3.1 for every part name in every view, and saves the replies.
 Step 3  (optional) python library/segment.py p3sam <model.glb> <work dir>
         Geometrically clean part regions from P3-SAM on a Modal GPU (modal_parts.py); assign then only

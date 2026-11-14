@@ -96,9 +96,13 @@ class BlenderSandbox:
             await self.sb.stdin.drain.aio()
             try:
                 return await asyncio.wait_for(self._read_reply(), timeout=timeout)
-            except (asyncio.TimeoutError, RuntimeError) as err:
+            except (asyncio.TimeoutError, RuntimeError, ValueError) as err:
+                # ValueError: a reply line that is not JSON; the stream is out of step, so start over.
                 await self.close()
-                reason = f"timed out after {timeout:.0f} s" if isinstance(err, asyncio.TimeoutError) else "crashed"
+                if isinstance(err, asyncio.TimeoutError):
+                    reason = f"timed out after {timeout:.0f} s"
+                else:
+                    reason = "sent a reply that could not be read" if isinstance(err, ValueError) else "crashed"
                 return {"ok": False, "error": f"Blender {reason}; it was restarted and the scene is now empty."}
 
     async def close(self) -> None:

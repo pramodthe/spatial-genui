@@ -1,7 +1,8 @@
 // Room placement and hand features, in the managed browser's emulated XR session (hand input):
 // - the lesson stands in the anchored room frame and its spot is saved;
 // - a lesson built below its origin, for a learner sitting low, stays above the floor;
-// - a card's own bar moves that card and not the lesson, never below the floor; its corner grip resizes it;
+// - a card held by its frame moves (not the lesson, and not when its button is pressed), two hands resize it,
+//   and let go below the floor it comes back up; the picker is held by its frame too;
 // - two hands on a model scale it;
 // - a pointer over a pressable object makes it glow.
 // Returns the measurements; fails (ok: false) listing any check that didn't hold.
@@ -79,64 +80,112 @@ export default async function run({ frame, page }) {
       await sleep(300);
       out.glowAfter = glowing();
 
-      // Card bar: shown with the chrome (the host adds it once the card has laid out), dragged 10 cm to the right.
-      genui.setOverlayHidden(false);
-      const cardBar = () => genui.inspectMoveHandles().find((h) => h.target === 'GenUI Panel' && h.kind === 'move' && h.visible);
-      const cardGrip = () => genui.inspectMoveHandles().find((h) => h.target === 'GenUI Panel' && h.kind === 'resize' && h.visible);
-      for (let i = 0; i < 25 && !cardBar(); i++) await sleep(200);
-      const bar = cardBar();
-      out.cardBar = Boolean(bar);
-      if (bar) {
+      // Cards: held by the frame around them (set up once the card has laid out).
+      const card = genui.debugRoot().children.find((o) => o.name === 'GenUI Panel');
+      const frameOf = () => { let f = null; card.traverse((o) => { if (!f && o.name === 'Card frame') f = o; }); return f; };
+      for (let i = 0; i < 25 && !frameOf(); i++) await sleep(200);
+      const frame = frameOf();
+      out.cardFrame = Boolean(frame);
+      if (frame) {
+        frame.geometry.computeBoundingBox();
+        const fb = frame.geometry.boundingBox;
+        // A point on the frame's margin at the card's left or right edge, in the world.
+        const edge = (side) => { frame.updateWorldMatrix(true, false); const v = frame.position.clone().set(side < 0 ? fb.min.x + 0.012 : fb.max.x - 0.012, (fb.min.y + fb.max.y) / 2, 0); return worldOfLocal(frame, v); };
+        const worldOfLocal = (o, v) => { const w = o.localToWorld(v); return [w.x, w.y, w.z]; };
         const lessonBefore = anchor.position.clone();
-        const card = genui.debugRoot().children.find((o) => o.name === 'GenUI Panel');
         const cardBefore = worldOf(card);
-        const p = bar.position;
-        await r.dispatch('set_transform', { device: 'hand-right', position: { x: p[0] + 0.05, y: p[1] + 0.1, z: p[2] + 0.3 } });
+        // One hand: point at the frame's left edge, pinch, move 10 cm right, let go.
+        const p = edge(-1);
+        await r.dispatch('set_transform', { device: 'hand-right', position: { x: p[0] + 0.05, y: p[1] + 0.05, z: p[2] + 0.3 } });
         await r.dispatch('look_at', { device: 'hand-right', target: at(p) });
         await sleep(200);
         await r.dispatch('set_select_value', { device: 'hand-right', value: 1, duration: 0.1 });
         await sleep(150);
-        await r.dispatch('animate_to', { device: 'hand-right', position: { x: p[0] + 0.15, y: p[1] + 0.1, z: p[2] + 0.3 }, duration: 0.3 });
+        await r.dispatch('animate_to', { device: 'hand-right', position: { x: p[0] + 0.15, y: p[1] + 0.05, z: p[2] + 0.3 }, duration: 0.3 });
         await sleep(150);
         await r.dispatch('set_select_value', { device: 'hand-right', value: 0, duration: 0.1 });
-        await sleep(200);
+        await sleep(250);
         const cardAfter = worldOf(card);
         out.cardMovedM = round(Math.hypot(cardAfter[0] - cardBefore[0], cardAfter[1] - cardBefore[1], cardAfter[2] - cardBefore[2]));
         out.lessonStayedPut = anchor.position.distanceTo(lessonBefore) < 0.001;
 
-        // Drag the card's bar 1.5 m down: the card stops above the floor.
-        const low = cardBar().position;
-        await r.dispatch('set_transform', { device: 'hand-right', position: { x: low[0] + 0.05, y: low[1] + 0.1, z: low[2] + 0.3 } });
+        // The card's button still presses (a pinch on the card itself doesn't move it).
+        const button = genui.inspect().panelButtons[0];
+        const callsBefore = genui.inspect().handlerCalls;
+        const cardBeforePress = worldOf(card);
+        await r.dispatch('set_transform', { device: 'hand-right', position: { x: button.center[0] + 0.03, y: button.center[1] + 0.03, z: button.center[2] + 0.3 } });
+        await r.dispatch('look_at', { device: 'hand-right', target: at(button.center) });
+        await sleep(200);
+        await r.dispatch('select', { device: 'hand-right', duration: 0.2 });
+        await sleep(250);
+        out.buttonPressed = genui.inspect().handlerCalls > callsBefore;
+        const cardAfterPress = worldOf(card);
+        out.cardStillOnPress = Math.hypot(cardAfterPress[0] - cardBeforePress[0], cardAfterPress[1] - cardBeforePress[1], cardAfterPress[2] - cardBeforePress[2]) < 0.005;
+        await r.dispatch('set_transform', { device: 'hand-right', position: { x: 0.35, y: 0.6, z: 0.1 } });
+        await sleep(200);
+
+        // Two hands: point at the frame's left and right edges, pinch both, swing the right hand 15 cm further out.
+        const scaleBefore = card.scale.x;
+        const left = edge(-1);
+        const right = edge(1);
+        const leftFrom = { x: left[0] - 0.05, y: left[1] - 0.05, z: left[2] + 0.3 };
+        const rightFrom = { x: right[0] + 0.05, y: right[1] - 0.05, z: right[2] + 0.3 };
+        await r.dispatch('set_transform', { device: 'hand-left', position: leftFrom });
+        await r.dispatch('look_at', { device: 'hand-left', target: at(left) });
+        await r.dispatch('set_transform', { device: 'hand-right', position: rightFrom });
+        await r.dispatch('look_at', { device: 'hand-right', target: at(right) });
+        await sleep(200);
+        await r.dispatch('set_select_value', { device: 'hand-left', value: 1, duration: 0.1 });
+        await r.dispatch('set_select_value', { device: 'hand-right', value: 1, duration: 0.1 });
+        await sleep(150);
+        await r.dispatch('animate_to', { device: 'hand-right', position: { x: rightFrom.x + 0.15, y: rightFrom.y, z: rightFrom.z }, duration: 0.3 });
+        await sleep(150);
+        for (const hand of ['hand-left', 'hand-right']) await r.dispatch('set_select_value', { device: hand, value: 0 });
+        await sleep(250);
+        out.cardScaleRatio = round(card.scale.x / scaleBefore);
+        for (const hand of ['hand-left', 'hand-right']) await r.dispatch('set_transform', { device: hand, position: { x: hand === 'hand-left' ? -0.35 : 0.35, y: 0.6, z: 0.1 } });
+        await sleep(200);
+
+        // Pull the card 1.4 m down by its frame and let go: it comes back above the floor.
+        const low = edge(-1);
+        await r.dispatch('set_transform', { device: 'hand-right', position: { x: low[0] + 0.05, y: low[1] + 0.05, z: low[2] + 0.3 } });
         await r.dispatch('look_at', { device: 'hand-right', target: at(low) });
         await sleep(200);
         await r.dispatch('set_select_value', { device: 'hand-right', value: 1, duration: 0.1 });
         await sleep(150);
-        await r.dispatch('animate_to', { device: 'hand-right', position: { x: low[0] + 0.05, y: low[1] - 1.4, z: low[2] + 0.3 }, duration: 0.4 });
-        await sleep(200);
+        await r.dispatch('animate_to', { device: 'hand-right', position: { x: low[0] + 0.05, y: low[1] - 1.35, z: low[2] + 0.3 }, duration: 0.4 });
+        await sleep(150);
         await r.dispatch('set_select_value', { device: 'hand-right', value: 0, duration: 0.1 });
+        await sleep(300);
+        frame.updateWorldMatrix(true, false);
+        out.cardLowestM = round(frame.localToWorld(fb.min.clone()).y);
+      }
+      // The picker (in the room frame beside the lesson) is held by its frame too.
+      genui.setOverlayHidden(false);
+      await sleep(600);
+      const picker = anchor.parent.children.find((o) => o.name === 'Lesson Picker');
+      let pickerFrame = null;
+      picker?.traverse((o) => { if (!pickerFrame && o.name === 'Card frame') pickerFrame = o; });
+      out.pickerFrame = Boolean(pickerFrame);
+      if (pickerFrame) {
+        pickerFrame.geometry.computeBoundingBox();
+        const pb = pickerFrame.geometry.boundingBox;
+        pickerFrame.updateWorldMatrix(true, false);
+        // Its outer (left) edge: the inner one faces the lesson, whose card can stand in the way.
+        const w = pickerFrame.localToWorld(pickerFrame.position.clone().set(pb.min.x + 0.012, (pb.min.y + pb.max.y) / 2, 0));
+        const q = [w.x, w.y, w.z];
+        const before = worldOf(picker);
+        await r.dispatch('set_transform', { device: 'hand-right', position: { x: q[0] - 0.05, y: q[1] + 0.05, z: q[2] + 0.3 } });
+        await r.dispatch('look_at', { device: 'hand-right', target: at(q) });
         await sleep(200);
-        // The card's bar sits 2.5 cm below its lower edge (panel text is instanced, so its meshes' own boxes mislead).
-        out.cardLowestM = round(cardBar().position[1] + 0.025);
-
-        // The corner grip: pinch it and pull it 10 cm further out.
-        await r.dispatch('set_transform', { device: 'hand-right', position: { x: 0.35, y: 0.6, z: 0.1 } });
-        await sleep(200);
-        const grip = cardGrip();
-        out.cardGrip = Boolean(grip);
-        if (grip) {
-          const scaleBefore = grip.targetScale;
-          const g = grip.position;
-          await r.dispatch('set_transform', { device: 'hand-right', position: { x: g[0] + 0.05, y: g[1] + 0.1, z: g[2] + 0.3 } });
-          await r.dispatch('look_at', { device: 'hand-right', target: at(g) });
-          await sleep(200);
-          await r.dispatch('set_select_value', { device: 'hand-right', value: 1, duration: 0.1 });
-          await sleep(150);
-          await r.dispatch('animate_to', { device: 'hand-right', position: { x: g[0] + 0.15, y: g[1] + 0.05, z: g[2] + 0.3 }, duration: 0.3 });
-          await sleep(150);
-          await r.dispatch('set_select_value', { device: 'hand-right', value: 0, duration: 0.1 });
-          await sleep(200);
-          out.cardScaleRatio = round(cardGrip().targetScale / scaleBefore);
-        }
+        await r.dispatch('set_select_value', { device: 'hand-right', value: 1, duration: 0.1 });
+        await sleep(150);
+        await r.dispatch('animate_to', { device: 'hand-right', position: { x: q[0] - 0.15, y: q[1] + 0.05, z: q[2] + 0.3 }, duration: 0.3 });
+        await sleep(150);
+        await r.dispatch('set_select_value', { device: 'hand-right', value: 0, duration: 0.1 });
+        await sleep(250);
+        const after = worldOf(picker);
+        out.pickerMovedM = round(Math.hypot(after[0] - before[0], after[1] - before[1], after[2] - before[2]));
       }
       genui.setOverlayHidden(true);
       await r.dispatch('set_transform', { device: 'hand-right', position: { x: 0.35, y: 0.6, z: 0.1 } });
@@ -167,12 +216,15 @@ export default async function run({ frame, page }) {
       aboveFloor: out.aboveFloor === true,
       glowWhileOver: out.glowWhileOver >= 1,
       glowAfter: out.glowAfter === 0,
-      cardBar: out.cardBar === true,
+      cardFrame: out.cardFrame === true,
       cardMovedM: out.cardMovedM >= 0.05,
       lessonStayedPut: out.lessonStayedPut === true,
-      cardLowestM: out.cardLowestM >= 0,
-      cardGrip: out.cardGrip === true,
+      buttonPressed: out.buttonPressed === true,
+      cardStillOnPress: out.cardStillOnPress === true,
       cardScaleRatio: out.cardScaleRatio > 1.1,
+      cardLowestM: out.cardLowestM >= 0,
+      pickerFrame: out.pickerFrame === true,
+      pickerMovedM: out.pickerMovedM >= 0.05,
       heldByTwo: out.heldByTwo === true,
       scaleRatio: out.scaleRatio > 1.05,
     };

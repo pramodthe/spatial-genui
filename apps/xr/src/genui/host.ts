@@ -22,7 +22,8 @@ import {
   type World,
 } from '@iwsdk/core';
 import { captureLesson, expandByMesh, type CaptureOptions } from './capture';
-import { createMoveHandle, MOVE_HANDLE_RADIUS_M, setFloorHeight, worldYaw, type MoveHandle } from './handle';
+import { createMoveHandle, MOVE_HANDLE_RADIUS_M, setFloorHeight, type MoveHandle } from './handle';
+import { makeCardGrabbable, setGrabFilter, type CardGrab } from './grab';
 import { createGlow, glowOnHover, tickGlows, type Glow } from './hover';
 import { assetHandle, assetIdsIn, creditsFor, preloadAssets } from './library';
 import type { TeachingRig } from './rig';
@@ -78,8 +79,8 @@ type Mounted = {
   kit: Kit | null;
   /** The bar the learner drags to move the whole lesson, and where the lesson layout found the root. */
   handle: MoveHandle | null;
-  /** Bars under the lesson's cards, to move one card on its own (added once the cards have laid out). */
-  cardHandles: MoveHandle[];
+  /** The lesson's cards, held by their frames (set up once the cards have laid out). */
+  cards: CardGrab[];
   /** Hover glows of the lesson's grabbable and pressable objects and parts, by target. */
   glows: Map<Object3D, Glow>;
   handleRest: { offset: Vector3; root: Vector3 } | null;
@@ -156,12 +157,10 @@ const FLOOR_CLEARANCE_M = 0.05;
 // An unlabelled horizontal surface at least this far below the eyes counts as floor.
 const FLOOR_DROP_M = 1.0;
 const SPOT_STORAGE_KEY = 'genui.lessonSpot.v1';
-// A card stays at least this far from the eyes (along the floor), and its bar this far below it.
+// A card stays at least this far from the eyes (along the floor), and starts at this share of the size the lesson
+// drew it (a card half a metre from the eyes filled the view).
 const CARD_MIN_DISTANCE_M = 0.45;
-const CARD_HANDLE_GAP_M = 0.025;
-// A card's corner grip resizes it between these multiples of its size.
-const CARD_MIN_SCALE = 0.6;
-const CARD_MAX_SCALE = 2;
+const CARD_START_SCALE = 0.8;
 // A panel's top edge stays within this slope above the eye line (10 degrees): no reading upwards.
 const PANEL_TOP_RISE = Math.tan((10 * Math.PI) / 180);
 // Two hands scale a grabbed object between these multiples of its size.
@@ -243,7 +242,7 @@ export function unmountGenerated() {
   if (!current) return;
   current.kit?.dispose();
   current.handle?.dispose();
-  for (const handle of current.cardHandles) handle.dispose();
+  for (const card of current.cards) card.dispose();
   for (const glow of current.glows.values()) glow.dispose();
   for (const panel of current.panels.values()) URL.revokeObjectURL(panel.url);
   // Children before parents so each entity releases its own resources.
@@ -440,7 +439,7 @@ export async function mountGenerated(code: string): Promise<MountReport> {
     onSurface: null,
     kit: (await loadKit())?.createKit(IWSDK) ?? null,
     handle: null,
-    cardHandles: [],
+    cards: [],
     glows: new Map(),
     handleRest: null,
   };
@@ -699,13 +698,18 @@ class GenUISystem extends createSystem({
     // Textures are painted a few milliseconds per frame, so a lesson never stalls the headset.
     mounted.kit?.pump(5);
     tickGlows();
+    if (mounted.cards.length > 0) {
+      const head = this.world.camera.getWorldPosition(new Vector3());
+      const floor = floorHeight(head);
+      for (const card of mounted.cards) card.tick(head, floor);
+    }
     if (mounted.declutterIn !== null && [...mounted.panels.values()].every((p) => p.document)) {
       // UIKit lays panels out over a few frames; measure once their sizes are real.
       if (mounted.declutterIn-- <= 0) {
         mounted.declutterIn = null;
         if (mounted.rigs.length > 0) layoutLessonPanels(mounted);
         else keepPanelsInView(mounted);
-        addCardHandles(mounted);
+        setUpCards(mounted);
       }
     }
     for (const rig of mounted.rigs) {
@@ -771,15 +775,10 @@ function applyProps(document: UIKitDocument, id: string, props: ElementProps) {
  * Only a pinch picks up a near-grabbable object: a hand's pinch, or a pointed pinch where the ray is let in for
  * presses (a small part in motion, an orbiting planet, is easier to take from a distance). IWSDK's grab handle
  * would also let a fingertip touch drag it: a hand reaching in to pinch touches the model with its fingertip
- * first, so the model followed the finger and was dropped instead of being held. The handle lives in an
- * IWSDK-internal component; if it isn't there (another IWSDK version), the object keeps IWSDK's behaviour.
+ * first, so the model followed the finger and was dropped instead of being held.
  */
 function pinchOnlyGrab(entity: Entity) {
-  const component = entity.getComponents().find((c) => c?.id === 'Handle');
-  const store = component ? (entity.getValue(component, 'instance' as never) as { getOptions?: () => object } | null) : null;
-  if (typeof store?.getOptions !== 'function') return;
-  const options = store.getOptions;
-  store.getOptions = () => ({ ...options(), filter: (event: { pointerType?: string }) => event.pointerType !== 'touch' });
+  setGrabFilter(entity, (event) => event.pointerType !== 'touch');
 }
 
 function track(mounted: Mounted, entity: Entity, object: Object3D): Entity {
@@ -1154,28 +1153,16 @@ function keepPanelsInView(mounted: Mounted) {
 }
 
 /**
- * Horizon-style bars under a lesson's cards (panels with something to press, standing in the lesson): the
- * learner pinches one and drags that card on its own (the lesson's own bar still moves everything), or pinches
- * the grip at the card's lower right corner and pulls it out or in to make the card bigger or smaller.
+ * A lesson's cards (panels with something to press, standing in the lesson) start a little smaller than the lesson
+ * drew them, and the learner holds them by their frames: one hand moves a card, two hands make it bigger or smaller.
  */
-function addCardHandles(mounted: Mounted) {
+function setUpCards(mounted: Mounted) {
   if (!world || !mounted.root) return;
-  for (const panel of mounted.panels.values()) {
+  for (const [entity, panel] of mounted.panels) {
     if (panel.holder.parent !== mounted.root || (panel.handlers.length === 0 && panel.valueIds.length === 0)) continue;
+    panel.holder.scale.multiplyScalar(CARD_START_SCALE);
     panel.holder.updateWorldMatrix(true, true);
-    const box = new Box3().setFromObject(panel.holder);
-    if (box.isEmpty()) continue;
-    const origin = panel.holder.getWorldPosition(new Vector3());
-    const below = new Vector3((box.min.x + box.max.x) / 2, box.min.y - CARD_HANDLE_GAP_M, (box.min.z + box.max.z) / 2);
-    const offset = below.sub(origin).applyAxisAngle(new Vector3(0, 1, 0), -worldYaw(panel.holder));
-    const handle = createMoveHandle(world, panel.holder, { offset: offset.toArray() as [number, number, number] });
-    handle.setShown(true);
-    mounted.cardHandles.push(handle);
-    // The card's right edge: its width is what the lesson asked for, at the scale it stands at.
-    const halfWidth = (panel.width * panel.holder.getWorldScale(new Vector3()).x) / 2;
-    const grip = createMoveHandle(world, panel.holder, { offset: [halfWidth + CARD_HANDLE_GAP_M, offset.y, offset.z], resize: [CARD_MIN_SCALE, CARD_MAX_SCALE] });
-    grip.setShown(true);
-    mounted.cardHandles.push(grip);
+    mounted.cards.push(makeCardGrabbable(panel.holder, entity));
   }
 }
 

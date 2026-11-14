@@ -9,7 +9,6 @@ import {
   MeshBasicMaterial,
   MovementMode,
   RayInteractable,
-  SphereGeometry,
   Vector3,
   VisibilityState,
   type Entity,
@@ -38,8 +37,6 @@ type Options = {
   offset: [number, number, number];
   /** Stand the bar upright (beside a panel) instead of lying flat (in front of a lesson). */
   upright?: boolean;
-  /** A corner grip that resizes the target (scaled between these multiples of its present size) instead of moving it. */
-  resize?: [number, number];
   /** The learner let go: the target is where they want it. */
   onMoved?: () => void;
 };
@@ -58,18 +55,16 @@ type Record = {
   onMoved?: () => void;
   /** The target's scale when the handle was made: the offset was measured at that size. */
   scaleRef: number;
-  resize?: { min: number; max: number };
-  /** Set when a grab starts: for moving, how far the target reaches below its origin; for resizing, its scale and
-   *  the grip's distance from its origin. */
-  grab: { bottom: number; scale: number; reach: number } | null;
+  /** Set when a grab starts: how far the target reaches below its origin (it stays above the floor). */
+  grab: { bottom: number } | null;
 };
 
 const BAR_LENGTH_M = 0.16;
-const BAR_RADIUS_M = 0.014;
-const GRIP_RADIUS_M = 0.016;
+const BAR_RADIUS_M = 0.008;
 // Nothing a learner drags goes lower than this above the floor.
 const FLOOR_CLEARANCE_M = 0.02;
 const COLORS = ['#c0c0c0', '#ffffff', '#31a8f3'] as const; // resting, pointed at, held (Horizon greys, selection blue)
+const OPACITY = [0.45, 0.9, 0.9] as const; // faint until pointed at
 const UP = new Vector3(0, 1, 0);
 
 const records = new Set<Record>();
@@ -98,7 +93,6 @@ export function setMoveHandlesHidden(hidden: boolean) {
 export function inspectMoveHandles() {
   return [...records].map((record) => ({
     target: record.target.name,
-    kind: record.resize ? 'resize' : 'move',
     targetScale: Math.round(record.target.scale.x * 1000) / 1000,
     visible: record.bar.visible,
     held: record.held,
@@ -107,23 +101,19 @@ export function inspectMoveHandles() {
   }));
 }
 
-/**
- * Give `target` (turned only about the vertical, inside frames that are too) a move handle or, with `resize`, a
- * corner grip that scales it.
- */
+/** Give `target` (turned only about the vertical, inside frames that are too) a move handle. */
 export function createMoveHandle(world: World, target: Object3D, options: Options): MoveHandle {
-  const geometry = options.resize ? new SphereGeometry(GRIP_RADIUS_M, 16, 12) : new CapsuleGeometry(BAR_RADIUS_M, BAR_LENGTH_M - BAR_RADIUS_M * 2, 6, 16);
-  if (!options.resize && !options.upright) geometry.rotateZ(Math.PI / 2);
-  const material = new MeshBasicMaterial({ color: COLORS[0], transparent: true, opacity: 0.9 });
+  const geometry = new CapsuleGeometry(BAR_RADIUS_M, BAR_LENGTH_M - BAR_RADIUS_M * 2, 6, 16);
+  if (!options.upright) geometry.rotateZ(Math.PI / 2);
+  const material = new MeshBasicMaterial({ color: COLORS[0], transparent: true, opacity: OPACITY[0] });
   const bar = new Mesh(geometry, material);
-  bar.name = `${options.resize ? 'Resize grip' : 'Move handle'}: ${target.name}`;
+  bar.name = `Move handle: ${target.name}`;
   const entity = world.createTransformEntity(bar);
   entity.addComponent(DistanceGrabbable, { movementMode: MovementMode.MoveAtSource, rotate: false, scale: false });
   const scaleRef = target.scale.x || 1;
   const record: Record = {
     entity, bar, material, target, offset: new Vector3(...options.offset), held: false, shown: false, drawn: drawn(target), look: 0,
     onMoved: options.onMoved, scaleRef, grab: null,
-    resize: options.resize ? { min: scaleRef * options.resize[0], max: scaleRef * options.resize[1] } : undefined,
   };
   records.add(record);
   follow(record);
@@ -215,16 +205,12 @@ class MoveHandleSystem extends createSystem({}) {
       const held = record.entity.hasComponent(Grabbed);
       const { bar, target } = record;
       if (held && !record.held) {
-        // A grab starts: measure what this drag must keep (the target's lowest point, or its size and the grip's reach).
+        // A grab starts: measure how far the target reaches below its origin, to keep it above the floor.
         const origin = target.getWorldPosition(at);
         boxAround(target, box);
-        record.grab = { bottom: box.isEmpty() ? 0 : origin.y - box.min.y, scale: target.scale.x, reach: bar.position.distanceTo(origin) || 1 };
+        record.grab = { bottom: box.isEmpty() ? 0 : origin.y - box.min.y };
       }
-      if (held && record.resize && record.grab) {
-        // The grip is a corner: the target grows as the grip moves away from its middle, and shrinks as it comes back.
-        const reach = bar.position.distanceTo(target.getWorldPosition(at));
-        target.scale.setScalar(Math.min(record.resize.max, Math.max(record.resize.min, (record.grab.scale * reach) / record.grab.reach)));
-      } else if (held && record.grab) {
+      if (held && record.grab) {
         // The target keeps its place beside the bar, never below the floor, and turns to face the learner.
         this.world.camera.getWorldPosition(this.head);
         at.copy(bar.position).sub(offsetNow(record, shift));
@@ -239,6 +225,7 @@ class MoveHandleSystem extends createSystem({}) {
       if (look !== record.look) {
         record.look = look;
         record.material.color.set(COLORS[look]);
+        record.material.opacity = OPACITY[look];
       }
       if (record.held && !held) {
         record.grab = null;

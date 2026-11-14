@@ -17,7 +17,8 @@ import { TutorUnavailable, VoiceTutor } from './voice-agent';
 import type { LessonStatus } from './overlay';
 import { courseProgress, createCourse, fetchCourseLesson, listCourses, polishCourseLesson, type CourseSummary } from './courses';
 import { capture, floorHeight, lessonPosition, roomFrame } from './host';
-import { boxAround, createMoveHandle, worldYaw, type MoveHandle } from './handle';
+import { makeCardGrabbable, type CardGrab } from './grab';
+import { boxAround, worldYaw } from './handle';
 
 /**
  * In-headset lesson picker. The desktop prompt box is a DOM overlay, which an immersive session doesn't
@@ -47,8 +48,6 @@ const CENTRE = { width: 0.56, distance: 0.7, belowEyes: 0.2, yaw: 0 };
 const DOCKED = { width: 0.36, distance: 0.5, belowEyes: 0.3, yaw: (60 * Math.PI) / 180 };
 // Frames to wait after entering XR before placing: the first frames can still have the pre-session camera pose.
 const SETTLE_FRAMES = 20;
-// The move handle stands this far outside the panel's right edge.
-const HANDLE_GAP_M = 0.035;
 // The picker's lowest edge stays this far above the floor (its half height is a guess until it has laid out).
 const PICKER_FLOOR_CLEARANCE_M = 0.05;
 const PICKER_FALLBACK_HALF_HEIGHT_M = 0.3;
@@ -123,7 +122,10 @@ class LessonPickerSystem extends createSystem({
   private inXR = false;
   private interactive = true;
   private docked = false;
-  private handle!: MoveHandle;
+  /** Held by its frame, like a lesson's cards: one hand moves it, two hands resize it. */
+  private card!: CardGrab;
+  private frames = 0;
+  private readonly eye = new Vector3();
   /** The learner dragged the picker somewhere: it stays there for the rest of the session. */
   private moved = false;
   private placeIn = -1;
@@ -149,11 +151,7 @@ class LessonPickerSystem extends createSystem({
     this.entity.addComponent(PanelUI, { config: `${import.meta.env.BASE_URL}ui/lesson-picker.uikitml` });
     this.entity.addComponent(RayInteractable, {});
     this.entity.addComponent(PokeInteractable, {});
-    this.handle = createMoveHandle(this.world, this.holder, {
-      offset: [CENTRE.width / 2 + HANDLE_GAP_M, 0, 0],
-      upright: true,
-      onMoved: () => (this.moved = true),
-    });
+    this.card = makeCardGrabbable(this.holder, this.entity, () => (this.moved = true));
 
     this.queries.documents.subscribe('qualify', (entity) => {
       if (entity !== this.entity) return;
@@ -175,7 +173,7 @@ class LessonPickerSystem extends createSystem({
       () => clearTimeout(this.coursePoll),
       () => cancelListening(),
       () => this.tutor.stop(),
-      () => this.handle.dispose(),
+      () => this.card.dispose(),
       () => (picker = null),
     );
     // While a lesson is being written, count the seconds (once a second, not every frame).
@@ -186,12 +184,16 @@ class LessonPickerSystem extends createSystem({
 
   update(): void {
     if (this.placeIn > 0 && --this.placeIn === 0) this.place();
+    // Its content changes size (courses, lists, docking): the frame follows, a few times a second.
+    if (++this.frames % 20 === 0) this.card.refit();
+    this.world.camera.getWorldPosition(this.eye);
+    this.card.tick(this.eye, floorHeight(this.eye));
   }
 
   refreshVisibility() {
     const show = this.inXR && !hiddenByHost;
     this.holder.visible = show;
-    this.handle.setShown(show);
+    this.card.setEnabled(show);
     // A hidden panel must not catch a hand ray meant for something else.
     if (show !== this.interactive) {
       this.interactive = show;
@@ -497,7 +499,6 @@ class LessonPickerSystem extends createSystem({
 
   private applySize() {
     const width = this.docked ? DOCKED.width : CENTRE.width;
-    this.handle.offset.x = width / 2 + HANDLE_GAP_M;
     // Height is generous so the width is what sets the scale (as the host does for lesson panels).
     this.document?.setTargetDimensions(width, width * 4);
     const course = this.courses.find((c) => c.id === this.shown);

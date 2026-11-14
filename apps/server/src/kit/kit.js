@@ -1203,6 +1203,162 @@ export function createKit(THREE, options = {}) {
     };
   }
 
+  const makeCard = card;
+  const FLASH = { width: 0.16, height: 0.1 };
+  const TRAY = { width: 0.13, depth: 0.09, again: '#b7791f', known: '#1f7a3a' };
+
+  /**
+   * A deck of flash cards to revise with. One card stands in front of the learner showing its front (a term
+   * or a question). A quick pinch turns it over to show the back (the meaning or the answer). The learner
+   * then picks it up and drops it on one of two trays: "Got it" on the right or "Again" on the left. Cards
+   * dropped on "Again" come round once more; the deck is done when every card is on "Got it".
+   *   const deck = kit.flashcards({
+   *     root, traits, isGrabbed,
+   *     cards: [{ front: 'Turbine', back: 'Hot gas spins it; it drives the compressor.' }, ...],  // 4 to 8 cards
+   *     at: [0, 0.12, 0.1],                                               // where the current card stands, in root space
+   *     onChange({ known, again, left, total, done, side }) { ... },      // side: 'front' or 'back' of the current card
+   *   });
+   *   return { root, update(time, delta) { deck.update(time, delta); } };
+   * Options: spread (how far each tray is from the card, default 0.2). deck.flip() turns the current card
+   * (wire it to a "Flip" button as well); deck.reset() starts over.
+   */
+  function flashcards(o = {}) {
+    const { root, traits, isGrabbed } = o;
+    if (!root?.isObject3D || typeof traits !== 'function' || typeof isGrabbed !== 'function') {
+      throw new Error('kit.flashcards: pass { root, traits, isGrabbed } from build() along with cards.');
+    }
+    const cards = (Array.isArray(o.cards) ? o.cards : []).filter((c) => c && typeof c.front === 'string' && typeof c.back === 'string');
+    if (cards.length < 2) throw new Error('kit.flashcards: give at least 2 cards of { front, back }.');
+    const home = new THREE.Vector3(...vec3(o.at ?? [0, 0.12, 0.1], 'flashcards at'));
+    const spread = o.spread ?? 0.2;
+    const total = cards.length;
+
+    // One card that is picked up and sorted again and again: it takes the next card's two faces each time.
+    // (A stack of grabbable cards would sit so close together that the host makes them ray-only grabs.)
+    const faces = cards.map((c) => ({ front: textFace(c.front, FLASH.width, FLASH.height, '#fafaf7'), back: textFace(c.back, FLASH.width, FLASH.height, '#ffe9b0') }));
+    const body = own(new THREE.MeshStandardMaterial({ color: CARD_COLORS.idle, roughness: 0.6 }));
+    const card = new THREE.Group();
+    card.name = 'flash card';
+    card.add(new THREE.Mesh(roundedBox(FLASH.width, FLASH.height, CARD.depth, 0.006), body));
+    const sides = [1, -1].map((side) => {
+      const label = new THREE.Mesh(own(new THREE.PlaneGeometry(FLASH.width * 0.92, FLASH.height * 0.92)), own(new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false })));
+      label.position.z = side * (CARD.depth / 2 + 0.0004);
+      if (side < 0) label.rotation.y = Math.PI;
+      label.raycast = noHit;
+      card.add(label);
+      return label;
+    });
+    card.position.copy(home);
+    root.add(card);
+    traits(card, { grab: true });
+
+    // The two trays, each with its name standing behind it and a pile of the cards sorted onto it.
+    const trays = { again: { x: -spread, color: TRAY.again, name: 'Again', pile: [] }, known: { x: spread, color: TRAY.known, name: 'Got it', pile: [] } };
+    const slab = own(roundedBox(FLASH.width * 0.6, 0.004, FLASH.height * 0.6, 0.002));
+    const slabMaterial = material('plastic', { color: '#3a4250' });
+    for (const tray of Object.values(trays)) {
+      tray.at = new THREE.Vector3(home.x + tray.x, home.y - 0.07, home.z);
+      const pad = new THREE.Mesh(own(roundedBox(TRAY.width, 0.008, TRAY.depth, 0.004)), own(new THREE.MeshStandardMaterial({ color: tray.color, roughness: 0.7 })));
+      pad.name = `tray: ${tray.name}`;
+      pad.position.copy(tray.at);
+      root.add(pad);
+      const sign = makeCard(tray.name, { width: 0.09, color: tray.color });
+      sign.position.set(tray.at.x, tray.at.y + 0.05, tray.at.z - TRAY.depth / 2 - 0.01);
+      root.add(sign);
+    }
+
+    const state = { queue: cards.map((_, i) => i), known: 0, again: 0, flipped: false, held: false, heldFor: 0, grabbedAt: new THREE.Vector3(), pop: 1 };
+    const rest = new THREE.Quaternion();
+    const turned = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
+    const report = () => o.onChange?.({ known: state.known, again: state.again, left: state.queue.length, total, done: state.queue.length === 0, side: state.flipped ? 'back' : 'front' });
+
+    /** Show the card at the front of the queue, front side up; none left hides the card. */
+    function deal() {
+      const next = state.queue[0];
+      state.flipped = false;
+      card.visible = next !== undefined;
+      card.scale.setScalar(next === undefined ? 0.001 : 0.6);
+      state.pop = next === undefined ? 1 : 0.6;
+      card.position.copy(home);
+      card.quaternion.copy(rest);
+      if (next === undefined) return;
+      sides[0].material.map = faces[next].front;
+      sides[1].material.map = faces[next].back;
+      for (const label of sides) {
+        label.visible = Boolean(label.material.map);
+        label.material.needsUpdate = true;
+      }
+    }
+
+    function sort(where) {
+      const tray = trays[where];
+      if (!tray || state.queue.length === 0) return;
+      const index = state.queue.shift();
+      if (where === 'known') state.known++;
+      else {
+        state.again++;
+        state.queue.push(index);
+      }
+      const sorted = new THREE.Mesh(slab, slabMaterial);
+      sorted.position.set(tray.at.x, tray.at.y + 0.008 + tray.pile.length * 0.005, tray.at.z);
+      sorted.raycast = noHit;
+      root.add(sorted);
+      tray.pile.push(sorted);
+      deal();
+      report();
+    }
+
+    function flip() {
+      if (state.queue.length === 0) return;
+      state.flipped = !state.flipped;
+      report();
+    }
+
+    deal();
+    return {
+      card,
+      flip,
+      update(_time, delta = 0.016) {
+        const held = isGrabbed(card);
+        if (held && !state.held) {
+          state.heldFor = 0;
+          state.grabbedAt.copy(card.position);
+        }
+        if (held) state.heldFor += delta;
+        if (state.held && !held) {
+          // A quick pinch that goes nowhere turns the card over; a carry sorts it if it lands on a tray.
+          if (state.heldFor < 0.45 && card.position.distanceTo(state.grabbedAt) < 0.03) flip();
+          else {
+            const where = Object.keys(trays).find((key) => Math.hypot(card.position.x - trays[key].at.x, card.position.z - trays[key].at.z) < 0.09 && Math.abs(card.position.y - trays[key].at.y) < 0.16);
+            if (where) sort(where);
+          }
+        }
+        state.held = held;
+        if (held) return;
+        const ease = 1 - Math.exp(-delta * 9);
+        card.position.lerp(home, ease);
+        card.quaternion.slerp(state.flipped ? turned : rest, ease);
+        if (state.pop < 1) {
+          state.pop = Math.min(1, state.pop + delta * 3);
+          card.scale.setScalar(state.pop);
+        }
+      },
+      /** For tests and "show me": sort the current card as a learner's drop on that tray would. */
+      drop(where) {
+        sort(where === 'again' ? 'again' : 'known');
+      },
+      reset() {
+        for (const tray of Object.values(trays)) {
+          for (const sorted of tray.pile) root.remove(sorted);
+          tray.pile.length = 0;
+        }
+        Object.assign(state, { queue: cards.map((_, i) => i), known: 0, again: 0 });
+        deal();
+        report();
+      },
+    };
+  }
+
   // --- Panels ---------------------------------------------------------------------------------------------
 
   /**
@@ -1318,7 +1474,7 @@ export function createKit(THREE, options = {}) {
     material, texture, theme,
     roundedBox, extrude, lathe, tube, gear, instances, along, merge,
     glow, particles, ring, shadow, stand, arrow,
-    card, matchQuiz,
+    card, matchQuiz, flashcards,
     finalize, pump, dispose,
     presets: Object.keys(PRESETS),
     textures: Object.keys(TEXTURES),

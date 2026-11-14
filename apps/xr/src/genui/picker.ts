@@ -16,8 +16,8 @@ import { cancelListening, isListening, microphoneState, startListening, stopAndT
 import { TutorUnavailable, VoiceTutor } from './voice-agent';
 import type { LessonStatus } from './overlay';
 import { courseProgress, createCourse, fetchCourseLesson, listCourses, polishCourseLesson, type CourseSummary } from './courses';
-import { capture, lessonPosition } from './host';
-import { createMoveHandle, type MoveHandle } from './handle';
+import { capture, lessonPosition, roomFrame } from './host';
+import { createMoveHandle, worldYaw, type MoveHandle } from './handle';
 
 /**
  * In-headset lesson picker. The desktop prompt box is a DOM overlay, which an immersive session doesn't
@@ -142,7 +142,7 @@ class LessonPickerSystem extends createSystem({
     this.holder = new Group();
     this.holder.name = 'Lesson Picker';
     this.holder.visible = false;
-    this.entity = this.world.createTransformEntity(this.holder);
+    this.entity = this.world.createTransformEntity(this.holder, { parent: roomFrame().entity });
     this.entity.addComponent(PanelUI, { config: `${import.meta.env.BASE_URL}ui/lesson-picker.uikitml` });
     this.entity.addComponent(RayInteractable, {});
     this.entity.addComponent(PokeInteractable, {});
@@ -520,10 +520,13 @@ class LessonPickerSystem extends createSystem({
     this.forward.y = 0;
     if (this.forward.lengthSq() < 1e-6) this.forward.set(0, 0, -1);
     this.forward.normalize().applyAxisAngle(Object3DUp, spot.yaw);
-    this.holder.position.copy(this.head).addScaledVector(this.forward, spot.distance);
-    this.holder.position.y = this.head.y - spot.belowEyes;
+    // Worked out in the world, then put in the room's frame (anchored to the room, so it can differ).
+    const at = this.head.clone().addScaledVector(this.forward, spot.distance);
+    at.y = this.head.y - spot.belowEyes;
+    const frame = this.holder.parent;
+    this.holder.position.copy(frame ? frame.worldToLocal(at.clone()) : at);
     // Panels face +Z: yaw toward the head.
-    this.holder.rotation.set(0, Math.atan2(this.head.x - this.holder.position.x, this.head.z - this.holder.position.z), 0);
+    this.holder.rotation.set(0, Math.atan2(this.head.x - at.x, this.head.z - at.z) - worldYaw(frame), 0);
   }
 
   private render() {

@@ -1,265 +1,478 @@
 <!--
   In-headset lesson picker (src/genui/picker.ts). The 2D prompt box disappears in XR, so this is how a
-  learner starts a lesson with hands only: point and pinch, or touch a card. Plain divs with explicit
-  colours, so it reads the same in both colour schemes. picker.ts sizes it with setTargetDimensions,
-  fills in the card text and the status, and docks it to the side while a lesson is showing.
+  learner starts a lesson with hands only: point and pinch, or touch. Styled after the Meta Horizon OS UI
+  Set (Reality Labs Design System): the Horizon kit's Panel and Button, tiles, grouped list cells and
+  Lucide icons, with the set's dark-mode colours and Inter type ramp (sizes in design pixels; picker.ts
+  scales the whole panel with setTargetDimensions). picker.ts fills in the text and the states, and docks
+  the panel beside a lesson while one is showing.
 -->
 <style>
   .picker {
     flex-direction: column;
-    width: 60;
-    gap: 1.6;
-    padding-top: 3;
-    padding-bottom: 3;
-    padding-left: 3;
-    padding-right: 3;
-    border-radius: 3;
-    border-width: 0.15;
-    border-color: #3a3d44;
-    background-color: #17191d;
+    width: 540px;
+    gap: 16px;
+    padding-top: 24px;
+    padding-bottom: 24px;
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+
+  .top {
+    flex-direction: column;
+    gap: 4px;
   }
 
   .eyebrow {
-    color: #f5d90a;
-    font-size: 1.8;
-    font-weight: 700;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
+    line-height: 1.333;
+    font-weight: 500;
   }
 
   .heading {
-    color: #fafaf7;
-    font-size: 4;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 24px;
+    line-height: 1.25;
     font-weight: 700;
+    letter-spacing: -0.5px;
   }
 
   .hint {
-    color: #c9ccd2;
-    font-size: 2.2;
-  }
-
-  .row {
-    flex-direction: row;
-    gap: 1.6;
-  }
-
-  .card {
-    flex-direction: column;
-    flex-grow: 1;
-    flex-basis: 0;
-    gap: 0.6;
-    padding-top: 2;
-    padding-bottom: 2;
-    padding-left: 2.2;
-    padding-right: 2.2;
-    border-radius: 2;
-    border-width: 0.15;
-    border-color: #4a4e57;
-    background-color: #262930;
-    cursor: pointer;
-  }
-
-  .card:hover {
-    background-color: #2f6fdb;
-    border-color: #8db4f5;
-  }
-
-  .card-title {
-    color: #fafaf7;
-    font-size: 3.2;
-    font-weight: 700;
-  }
-
-  .card-sub {
-    color: #d6d9de;
-    font-size: 2.1;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+    line-height: 1.429;
+    font-weight: 500;
   }
 
   .section {
     flex-direction: column;
-    gap: 1.6;
+    gap: 16px;
   }
 
-  .line {
+  .block {
+    flex-direction: column;
+  }
+
+  .section-header {
     flex-direction: row;
     align-items: center;
-    gap: 1.6;
-    padding-top: 1.6;
-    padding-bottom: 1.6;
-    padding-left: 2.2;
-    padding-right: 2.2;
-    border-radius: 2;
-    border-width: 0.15;
-    border-color: #4a4e57;
-    background-color: #262930;
+    height: 40px;
+  }
+
+  .section-title {
+    flex-grow: 1;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 20px;
+    line-height: 1.2;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+
+  .section-note {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
+    line-height: 1.333;
+    font-weight: 500;
+  }
+
+  .ask {
+    flex-direction: row;
+    align-items: center;
+    gap: 14px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    padding-left: 12px;
+    padding-right: 16px;
+    border-radius: 16px;
+    background-color: rgba(255, 255, 255, 0.9);
     cursor: pointer;
   }
 
-  .line:hover {
-    background-color: #2f6fdb;
-    border-color: #8db4f5;
+  .ask:hover {
+    background-color: #d9d9d9;
   }
 
-  .line-title {
-    flex-grow: 1;
-    flex-shrink: 1;
-    color: #fafaf7;
-    font-size: 2.6;
-    font-weight: 700;
-  }
-
-  .line-state {
+  .ask-circle {
+    width: 40px;
+    height: 40px;
+    border-radius: 20px;
     flex-shrink: 0;
-    color: #d6d9de;
-    font-size: 2.1;
+    align-items: center;
+    justify-content: center;
+    background-color: #272727;
   }
 
-  .voice {
+  .ask-icon {
+    width: 20px;
+    height: 20px;
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .ask-text {
+    flex-direction: column;
+    flex-grow: 1;
+    flex-shrink: 1;
+    gap: 2px;
+  }
+
+  .ask-title {
+    color: #272727;
+    font-size: 16px;
+    line-height: 1.25;
+    font-weight: 700;
+  }
+
+  .ask-sub {
+    color: rgba(39, 39, 39, 0.7);
+    font-size: 12px;
+    line-height: 1.333;
+    font-weight: 500;
+  }
+
+  .ask-chevron {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    color: rgba(39, 39, 39, 0.7);
+  }
+
+  .tiles {
     flex-direction: row;
-    align-items: center;
-    padding-top: 1.8;
-    padding-bottom: 1.8;
-    padding-left: 2.2;
-    padding-right: 2.2;
-    border-radius: 2;
-    border-width: 0.15;
-    border-color: #4a4e57;
-    background-color: #1f3354;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .tile {
+    flex-direction: column;
+    gap: 6px;
+    width: 240px;
+    padding-top: 14px;
+    padding-bottom: 14px;
+    padding-left: 14px;
+    padding-right: 14px;
+    border-radius: 16px;
+    border-width: 2px;
+    border-color: rgba(255, 255, 255, 0);
+    background-color: rgba(255, 255, 255, 0.08);
     cursor: pointer;
   }
 
-  .voice:hover {
-    background-color: #2f6fdb;
+  .tile:hover {
+    background-color: rgba(255, 255, 255, 0.16);
   }
 
-  .voice-label {
+  .tile-icon {
+    width: 24px;
+    height: 24px;
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .tile-title {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 16px;
+    line-height: 1.25;
+    font-weight: 700;
+  }
+
+  .tile-sub {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
+    line-height: 1.333;
+    font-weight: 500;
+  }
+
+  .list {
+    flex-direction: column;
+    gap: 2px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    padding-left: 4px;
+    padding-right: 4px;
+    border-radius: 16px;
+    background-color: rgba(0, 0, 0, 0.14);
+  }
+
+  .cell {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    padding-left: 10px;
+    padding-right: 10px;
+    border-radius: 12px;
+    background-color: rgba(255, 255, 255, 0);
+    cursor: pointer;
+  }
+
+  .cell:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .cell-icon {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .cell-text {
+    flex-direction: column;
     flex-grow: 1;
     flex-shrink: 1;
-    color: #fafaf7;
-    font-size: 2.6;
+    gap: 2px;
+  }
+
+  .cell-primary {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 14px;
+    line-height: 1.429;
+    font-weight: 500;
+  }
+
+  .cell-secondary {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
+    line-height: 1.333;
+    font-weight: 500;
+  }
+
+  .chevron {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .track {
+    height: 4px;
+    margin-top: 6px;
+    border-radius: 2px;
+    background-color: rgba(255, 255, 255, 0.15);
+  }
+
+  .fill {
+    width: 0%;
+    height: 4px;
+    border-radius: 2px;
+    background-color: rgba(255, 255, 255, 0.9);
+  }
+
+  .badge {
+    width: 28px;
+    height: 28px;
+    border-radius: 14px;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(255, 255, 255, 0.15);
+  }
+
+  .badge-num {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 13px;
+    line-height: 1.231;
     font-weight: 700;
+  }
+
+  .toolbar {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .toolbar-note {
+    flex-grow: 1;
+    flex-shrink: 1;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
+    line-height: 1.333;
+    font-weight: 500;
   }
 
   .status {
     flex-direction: row;
     align-items: center;
-    gap: 1.4;
-    padding-top: 1.6;
-    padding-bottom: 1.6;
-    padding-left: 2.2;
-    padding-right: 2.2;
-    border-radius: 2;
-    background-color: #262930;
+    gap: 12px;
+    min-height: 48px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    padding-left: 14px;
+    padding-right: 8px;
+    border-radius: 16px;
+    background-color: rgba(0, 0, 0, 0.14);
   }
 
   .dot {
-    width: 2;
-    height: 2;
-    border-radius: 1;
-    background-color: #8a8f99;
+    width: 10px;
+    height: 10px;
+    border-radius: 5px;
+    flex-shrink: 0;
+    background-color: #8a8a8a;
   }
 
   .status-text {
     flex-grow: 1;
     flex-shrink: 1;
-    color: #eef0f3;
-    font-size: 2.4;
-  }
-
-  .action {
-    padding-top: 1.4;
-    padding-bottom: 1.4;
-    padding-left: 2.4;
-    padding-right: 2.4;
-    border-radius: 1.6;
-    background-color: #2f6fdb;
-    cursor: pointer;
-  }
-
-  .action:hover {
-    background-color: #4a86ef;
-  }
-
-  .action-label {
-    color: #ffffff;
-    font-size: 2.4;
-    font-weight: 700;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 14px;
+    line-height: 1.429;
+    font-weight: 500;
   }
 </style>
-<div class="picker">
-  <span id="eyebrow" class="eyebrow">MIXED REALITY LESSONS</span>
-  <span id="heading" class="heading">What do you want to learn?</span>
-  <span id="hint" class="hint">Point at a card, then pinch.</span>
+<Panel id="picker" class="picker">
+  <div class="top">
+    <span id="eyebrow" class="eyebrow">LESSONS ON YOUR DESK</span>
+    <span id="heading" class="heading">What do you want to learn?</span>
+    <span id="hint" class="hint">Point at anything, then pinch.</span>
+  </div>
+
   <div id="home" class="section">
-    <div class="row">
-      <div id="lesson-0" class="card">
-        <span id="lesson-0-title" class="card-title">Lesson</span>
-        <span id="lesson-0-sub" class="card-sub">...</span>
+    <div id="voice" class="ask">
+      <div id="voice-circle" class="ask-circle">
+        <Mic class="ask-icon"></Mic>
       </div>
-      <div id="lesson-1" class="card">
-        <span id="lesson-1-title" class="card-title">Lesson</span>
-        <span id="lesson-1-sub" class="card-sub">...</span>
+      <div class="ask-text">
+        <span class="ask-title">Ask for a course</span>
+        <span id="voice-label" class="ask-sub">Pinch here, then say any subject</span>
+      </div>
+      <ChevronRight class="ask-chevron"></ChevronRight>
+    </div>
+
+    <div class="block">
+      <div class="section-header">
+        <span class="section-title">Start a lesson</span>
+        <span class="section-note">Opens at once</span>
+      </div>
+      <div class="tiles">
+        <div id="lesson-0" class="tile">
+          <Heart class="tile-icon"></Heart>
+          <span id="lesson-0-title" class="tile-title">Lesson</span>
+          <span id="lesson-0-sub" class="tile-sub">...</span>
+        </div>
+        <div id="lesson-1" class="tile">
+          <Microscope class="tile-icon"></Microscope>
+          <span id="lesson-1-title" class="tile-title">Lesson</span>
+          <span id="lesson-1-sub" class="tile-sub">...</span>
+        </div>
+        <div id="lesson-2" class="tile">
+          <Cog class="tile-icon"></Cog>
+          <span id="lesson-2-title" class="tile-title">Lesson</span>
+          <span id="lesson-2-sub" class="tile-sub">...</span>
+        </div>
+        <div id="lesson-3" class="tile">
+          <Flower2 class="tile-icon"></Flower2>
+          <span id="lesson-3-title" class="tile-title">Lesson</span>
+          <span id="lesson-3-sub" class="tile-sub">...</span>
+        </div>
       </div>
     </div>
-    <div class="row">
-      <div id="lesson-2" class="card">
-        <span id="lesson-2-title" class="card-title">Lesson</span>
-        <span id="lesson-2-sub" class="card-sub">...</span>
+
+    <div id="shelf-label" class="block" style="display: none">
+      <div class="section-header">
+        <span class="section-title">My courses</span>
+        <span class="section-note">Saved for you</span>
       </div>
-      <div id="lesson-3" class="card">
-        <span id="lesson-3-title" class="card-title">Lesson</span>
-        <span id="lesson-3-sub" class="card-sub">...</span>
+      <div class="list">
+        <div id="course-0" class="cell" style="display: none">
+          <Library class="cell-icon"></Library>
+          <div class="cell-text">
+            <span id="course-0-title" class="cell-primary">Course</span>
+            <span id="course-0-state" class="cell-secondary">...</span>
+            <div class="track"><div id="course-0-fill" class="fill"></div></div>
+          </div>
+          <ChevronRight class="chevron"></ChevronRight>
+        </div>
+        <div id="course-1" class="cell" style="display: none">
+          <Library class="cell-icon"></Library>
+          <div class="cell-text">
+            <span id="course-1-title" class="cell-primary">Course</span>
+            <span id="course-1-state" class="cell-secondary">...</span>
+            <div class="track"><div id="course-1-fill" class="fill"></div></div>
+          </div>
+          <ChevronRight class="chevron"></ChevronRight>
+        </div>
+        <div id="course-2" class="cell" style="display: none">
+          <Library class="cell-icon"></Library>
+          <div class="cell-text">
+            <span id="course-2-title" class="cell-primary">Course</span>
+            <span id="course-2-state" class="cell-secondary">...</span>
+            <div class="track"><div id="course-2-fill" class="fill"></div></div>
+          </div>
+          <ChevronRight class="chevron"></ChevronRight>
+        </div>
       </div>
-    </div>
-    <div id="voice" class="voice">
-      <span id="voice-label" class="voice-label">Ask for a course: pinch, then say it</span>
-    </div>
-    <span id="shelf-label" class="eyebrow" style="display: none">MY COURSES</span>
-    <div id="course-0" class="line" style="display: none">
-      <span id="course-0-title" class="line-title">Course</span>
-      <span id="course-0-state" class="line-state">...</span>
-    </div>
-    <div id="course-1" class="line" style="display: none">
-      <span id="course-1-title" class="line-title">Course</span>
-      <span id="course-1-state" class="line-state">...</span>
-    </div>
-    <div id="course-2" class="line" style="display: none">
-      <span id="course-2-title" class="line-title">Course</span>
-      <span id="course-2-state" class="line-state">...</span>
     </div>
   </div>
+
   <div id="course" class="section" style="display: none">
-    <span id="course-sub" class="hint">...</span>
-    <div id="step-0" class="line" style="display: none">
-      <span id="step-0-title" class="line-title">Lesson</span>
-      <span id="step-0-state" class="line-state">...</span>
+    <div class="toolbar">
+      <Button id="back" variant="secondary" size="sm">
+        <ButtonIcon>
+          <ArrowLeft></ArrowLeft>
+        </ButtonIcon>
+        <ButtonLabel>All lessons</ButtonLabel>
+      </Button>
+      <span id="course-sub" class="toolbar-note">...</span>
     </div>
-    <div id="step-1" class="line" style="display: none">
-      <span id="step-1-title" class="line-title">Lesson</span>
-      <span id="step-1-state" class="line-state">...</span>
-    </div>
-    <div id="step-2" class="line" style="display: none">
-      <span id="step-2-title" class="line-title">Lesson</span>
-      <span id="step-2-state" class="line-state">...</span>
-    </div>
-    <div id="step-3" class="line" style="display: none">
-      <span id="step-3-title" class="line-title">Lesson</span>
-      <span id="step-3-state" class="line-state">...</span>
-    </div>
-    <div id="step-4" class="line" style="display: none">
-      <span id="step-4-title" class="line-title">Lesson</span>
-      <span id="step-4-state" class="line-state">...</span>
-    </div>
-    <div id="back" class="voice">
-      <span class="voice-label">Back to all lessons</span>
+    <div class="list">
+      <div id="step-0" class="cell" style="display: none">
+        <div id="step-0-badge" class="badge"><span id="step-0-num" class="badge-num">1</span></div>
+        <div class="cell-text">
+          <span id="step-0-title" class="cell-primary">Lesson</span>
+          <span id="step-0-state" class="cell-secondary">...</span>
+        </div>
+        <ChevronRight class="chevron"></ChevronRight>
+      </div>
+      <div id="step-1" class="cell" style="display: none">
+        <div id="step-1-badge" class="badge"><span id="step-1-num" class="badge-num">2</span></div>
+        <div class="cell-text">
+          <span id="step-1-title" class="cell-primary">Lesson</span>
+          <span id="step-1-state" class="cell-secondary">...</span>
+        </div>
+        <ChevronRight class="chevron"></ChevronRight>
+      </div>
+      <div id="step-2" class="cell" style="display: none">
+        <div id="step-2-badge" class="badge"><span id="step-2-num" class="badge-num">3</span></div>
+        <div class="cell-text">
+          <span id="step-2-title" class="cell-primary">Lesson</span>
+          <span id="step-2-state" class="cell-secondary">...</span>
+        </div>
+        <ChevronRight class="chevron"></ChevronRight>
+      </div>
+      <div id="step-3" class="cell" style="display: none">
+        <div id="step-3-badge" class="badge"><span id="step-3-num" class="badge-num">4</span></div>
+        <div class="cell-text">
+          <span id="step-3-title" class="cell-primary">Lesson</span>
+          <span id="step-3-state" class="cell-secondary">...</span>
+        </div>
+        <ChevronRight class="chevron"></ChevronRight>
+      </div>
+      <div id="step-4" class="cell" style="display: none">
+        <div id="step-4-badge" class="badge"><span id="step-4-num" class="badge-num">5</span></div>
+        <div class="cell-text">
+          <span id="step-4-title" class="cell-primary">Lesson</span>
+          <span id="step-4-state" class="cell-secondary">...</span>
+        </div>
+        <ChevronRight class="chevron"></ChevronRight>
+      </div>
     </div>
   </div>
+
   <div id="status" class="status">
     <div id="status-dot" class="dot"></div>
     <span id="status-text" class="status-text">Pick a lesson to start.</span>
-    <div id="fix" class="action" style="display: none">
-      <span class="action-label">Fix it</span>
-    </div>
-    <div id="fresh" class="action" style="display: none">
-      <span class="action-label">Make a new one</span>
-    </div>
+    <Button id="fix" variant="primary" size="sm" style="display: none">
+      <ButtonIcon>
+        <Wrench></Wrench>
+      </ButtonIcon>
+      <ButtonLabel>Fix it</ButtonLabel>
+    </Button>
+    <Button id="fresh" variant="secondary" size="sm" style="display: none">
+      <ButtonIcon>
+        <RefreshCw></RefreshCw>
+      </ButtonIcon>
+      <ButtonLabel>New version</ButtonLabel>
+    </Button>
   </div>
-</div>
+</Panel>

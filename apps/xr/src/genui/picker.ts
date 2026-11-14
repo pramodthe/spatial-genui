@@ -41,9 +41,9 @@ type PickerHandlers = {
   onStatus: (listener: (status: LessonStatus) => void) => () => void;
 };
 
-const CENTRE = { width: 0.5, distance: 0.7, belowEyes: 0.2, yaw: 0 };
+const CENTRE = { width: 0.56, distance: 0.7, belowEyes: 0.2, yaw: 0 };
 // To the left, outside the 35 degrees either side of straight ahead where the host lays out lesson panels.
-const DOCKED = { width: 0.32, distance: 0.5, belowEyes: 0.3, yaw: (60 * Math.PI) / 180 };
+const DOCKED = { width: 0.36, distance: 0.5, belowEyes: 0.3, yaw: (60 * Math.PI) / 180 };
 // Frames to wait after entering XR before placing: the first frames can still have the pre-session camera pose.
 const SETTLE_FRAMES = 20;
 // The move handle stands this far outside the panel's right edge.
@@ -55,14 +55,25 @@ const COURSE_POLL_MS = 4000;
 // A lesson's textures and panels are in by now; its pictures then go to the agent for one revision.
 const REVIEW_AFTER_MS = 7000;
 const STEP_STATES = { pending: 'Pinch to write it', generating: 'Writing...', ready: 'Ready: pinch to open', failed: 'Failed: pinch to retry' } as const;
+// Lesson number badges, by state (Reality Labs Design System, dark mode).
+const STEP_BADGES = {
+  pending: { background: 'rgba(255, 255, 255, 0.15)', number: 'rgba(255, 255, 255, 0.9)' },
+  generating: { background: '#fc9435', number: '#272727' },
+  ready: { background: 'rgba(255, 255, 255, 0.9)', number: '#272727' },
+  failed: { background: '#f7818c', number: '#272727' },
+} as const;
+// The voice row's microphone circle: ready, listening, working, unavailable.
+const VOICE_TONES = { ready: '#272727', listening: '#e5343e', working: '#fc9435', off: '#8a8a8a' } as const;
+type VoiceTone = keyof typeof VOICE_TONES;
 
+// Status colours from the Reality Labs Design System: none, poor (working), good, bad.
 const PHASES: Record<LessonStatus['phase'], { dot: string; background: string }> = {
-  idle: { dot: '#8a8f99', background: '#262930' },
-  building: { dot: '#f5a524', background: '#3d3215' },
-  fixing: { dot: '#f5a524', background: '#3d3215' },
-  ready: { dot: '#3cb44b', background: '#173a22' },
-  failed: { dot: '#e6194b', background: '#3f1a1f' },
-  broken: { dot: '#e6194b', background: '#3f1a1f' },
+  idle: { dot: '#8a8a8a', background: 'rgba(0, 0, 0, 0.14)' },
+  building: { dot: '#fc9435', background: 'rgba(252, 148, 53, 0.14)' },
+  fixing: { dot: '#fc9435', background: 'rgba(252, 148, 53, 0.14)' },
+  ready: { dot: '#2ad116', background: 'rgba(42, 209, 22, 0.12)' },
+  failed: { dot: '#f7818c', background: 'rgba(247, 129, 140, 0.16)' },
+  broken: { dot: '#f7818c', background: 'rgba(247, 129, 140, 0.16)' },
 };
 
 let handlers: PickerHandlers | null = null;
@@ -221,7 +232,7 @@ class LessonPickerSystem extends createSystem({
     document.getElementById('fix')?.addEventListener('click', () => handlers?.fix());
     document.getElementById('fresh')?.addEventListener('click', () => handlers?.fresh());
     document.getElementById('voice')?.addEventListener('click', () => void this.toggleVoice());
-    if (!voiceAvailable()) this.setVoice('Voice input is not available in this browser.', '#3a3d44');
+    if (!voiceAvailable()) this.setVoice('Voice input is not available in this browser.', 'off');
     for (let i = 0; i < SHELF_ROWS; i++) document.getElementById(`course-${i}`)?.addEventListener('click', () => this.showCourse(this.courses[i]?.id ?? null));
     for (let i = 0; i < COURSE_STEPS; i++) document.getElementById(`step-${i}`)?.addEventListener('click', () => void this.openStep(i));
     document.getElementById('back')?.addEventListener('click', () => this.showCourse(null));
@@ -236,7 +247,7 @@ class LessonPickerSystem extends createSystem({
       this.showCourse(course.id);
       this.pollCourses();
     } catch (err) {
-      this.setVoice(`That didn't work: ${ascii((err as Error).message)}`, '#3a3d44');
+      this.setVoice(`That didn't work: ${ascii((err as Error).message)}`, 'off');
     }
   }
 
@@ -311,6 +322,8 @@ class LessonPickerSystem extends createSystem({
       if (!row) continue;
       document.getElementById(`course-${i}-title`)?.setProperties({ text: ascii(row.title) });
       document.getElementById(`course-${i}-state`)?.setProperties({ text: courseProgress(row) });
+      const ready = row.lessons.filter((l) => l.status === 'ready').length;
+      document.getElementById(`course-${i}-fill`)?.setProperties({ width: `${row.lessons.length ? Math.round((100 * ready) / row.lessons.length) : 0}%` });
     }
     if (!course) return;
     const modelling = course.model?.status === 'building';
@@ -321,9 +334,11 @@ class LessonPickerSystem extends createSystem({
     });
     for (let i = 0; i < COURSE_STEPS; i++) {
       const lesson = course.lessons[i];
-      document.getElementById(`step-${i}`)?.setProperties({ display: lesson ? 'flex' : 'none', borderColor: lesson?.status === 'ready' ? '#3cb44b' : '#4a4e57' });
+      document.getElementById(`step-${i}`)?.setProperties({ display: lesson ? 'flex' : 'none' });
       if (!lesson) continue;
-      document.getElementById(`step-${i}-title`)?.setProperties({ text: `${i + 1}. ${ascii(lesson.title)}` });
+      document.getElementById(`step-${i}-badge`)?.setProperties({ backgroundColor: STEP_BADGES[lesson.status].background });
+      document.getElementById(`step-${i}-num`)?.setProperties({ color: STEP_BADGES[lesson.status].number });
+      document.getElementById(`step-${i}-title`)?.setProperties({ text: ascii(lesson.title) });
       document.getElementById(`step-${i}-state`)?.setProperties({ text: modelling && lesson.status === 'pending' ? 'Waits for the 3D model' : STEP_STATES[lesson.status] });
     }
   }
@@ -334,24 +349,24 @@ class LessonPickerSystem extends createSystem({
     if (!isListening()) {
       try {
         await startListening(() => void this.toggleVoice());
-        this.setVoice("Listening... pinch here when you're done", '#7a2333');
+        this.setVoice("Listening... pinch here when you're done", 'listening');
       } catch {
-        this.setVoice('Microphone blocked: allow it for this site, then try again.', '#3a3d44');
+        this.setVoice('Microphone blocked: allow it for this site, then try again.', 'off');
       }
       return;
     }
     this.voiceBusy = true;
-    this.setVoice('Understanding...', '#3d3215');
+    this.setVoice('Understanding...', 'working');
     try {
       const text = await stopAndTranscribe();
       if (!text) {
-        this.setVoice("I didn't catch that. Pinch here and try again.", '#1f3354');
+        this.setVoice("I didn't catch that. Pinch here and try again.", 'ready');
       } else {
-        this.setVoice(`Planning a course on: "${ascii(text)}"`, '#1f3354');
+        this.setVoice(`Planning a course on: "${ascii(text)}"`, 'working');
         await this.requestCourse(text);
       }
     } catch (err) {
-      this.setVoice(`Voice failed: ${ascii((err as Error).message)}`, '#3a3d44');
+      this.setVoice(`Voice failed: ${ascii((err as Error).message)}`, 'off');
     } finally {
       this.voiceBusy = false;
     }
@@ -359,9 +374,9 @@ class LessonPickerSystem extends createSystem({
 
   private voiceBusy = false;
 
-  private setVoice(text: string, background: string) {
+  private setVoice(text: string, tone: VoiceTone) {
     this.document?.getElementById('voice-label')?.setProperties({ text });
-    this.document?.getElementById('voice')?.setProperties({ backgroundColor: background });
+    this.document?.getElementById('voice-circle')?.setProperties({ backgroundColor: VOICE_TONES[tone] });
   }
 
   private applySize() {
@@ -372,6 +387,7 @@ class LessonPickerSystem extends createSystem({
     const course = this.courses.find((c) => c.id === this.shown);
     this.document?.getElementById('hint')?.setProperties({ display: this.docked || course ? 'none' : 'flex' });
     this.document?.getElementById('heading')?.setProperties({ text: course ? ascii(course.title) : this.docked ? 'Pick another lesson' : 'What do you want to learn?' });
+    this.document?.getElementById('eyebrow')?.setProperties({ text: course ? 'COURSE' : 'LESSONS ON YOUR DESK' });
   }
 
   /**
@@ -416,7 +432,7 @@ class LessonPickerSystem extends createSystem({
     // The chosen card stays marked while it is being written and once it is showing.
     EXAMPLE_LESSONS.forEach((lesson, i) => {
       const chosen = lesson.prompt === prompt && phase !== 'idle' && phase !== 'failed';
-      document.getElementById(`lesson-${i}`)?.setProperties({ borderColor: chosen ? PHASES[phase].dot : '#4a4e57' });
+      document.getElementById(`lesson-${i}`)?.setProperties({ borderColor: chosen ? PHASES[phase].dot : 'rgba(255, 255, 255, 0)' });
     });
   }
 }

@@ -633,6 +633,12 @@ Added on Nov 14, after a headset session:
 - **Flash cards** (`kit.flashcards`): a quick pinch turns the card, a drop on "Got it" or "Again" sorts it.
   Courses are now planned as 2-3 lessons to explore, a flash-card review, then the quiz. One flash-card
   lesson written live, first try, 18 s; flip and sorting checked in the emulator with an emulated hand.
+- **Meta Horizon OS look** (from the Meta Horizon OS UI Set in Figma, the Reality Labs Design System): the
+  picker is rebuilt from the Horizon kit (`@pmndrs/uikit-horizon`: Panel, Button) with tiles, grouped list
+  cells, numbered lesson badges, course progress bars and Lucide icons in the set's dark-mode colours; every
+  lesson's root panel is turned into a Horizon `Panel` when it opens and the shared theme (`kit.theme`)
+  uses the set's colours and pill buttons, so saved lessons change too; cards, trays and move bars use the
+  same palette. Checked in the emulator and a production build; not yet seen in the headset.
 - **Sizing fix:** a lesson is measured after its first `update()`, so parts sized there (a beam drawn by
   stretching a unit cylinder) no longer shrink the whole lesson.
 

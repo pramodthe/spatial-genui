@@ -22,7 +22,7 @@ import {
   type World,
 } from '@iwsdk/core';
 import { captureLesson, expandByMesh, type CaptureOptions } from './capture';
-import { createMoveHandle, MOVE_HANDLE_RADIUS_M, worldYaw, type MoveHandle } from './handle';
+import { createMoveHandle, MOVE_HANDLE_RADIUS_M, setFloorHeight, worldYaw, type MoveHandle } from './handle';
 import { createGlow, glowOnHover, tickGlows, type Glow } from './hover';
 import { assetHandle, assetIdsIn, creditsFor, preloadAssets } from './library';
 import type { TeachingRig } from './rig';
@@ -159,6 +159,9 @@ const SPOT_STORAGE_KEY = 'genui.lessonSpot.v1';
 // A card stays at least this far from the eyes (along the floor), and its bar this far below it.
 const CARD_MIN_DISTANCE_M = 0.45;
 const CARD_HANDLE_GAP_M = 0.025;
+// A card's corner grip resizes it between these multiples of its size.
+const CARD_MIN_SCALE = 0.6;
+const CARD_MAX_SCALE = 2;
 // A panel's top edge stays within this slope above the eye line (10 degrees): no reading upwards.
 const PANEL_TOP_RISE = Math.tan((10 * Math.PI) / 180);
 // Two hands scale a grabbed object between these multiples of its size.
@@ -189,6 +192,8 @@ export function initGenUIHost(w: World, handlers: { onRuntimeError: (message: st
   onRuntimeError = handlers.onRuntimeError;
   // Library models' cut-away view uses per-material clipping planes.
   w.renderer.localClippingEnabled = true;
+  // Nothing the learner drags goes below the floor.
+  setFloorHeight(() => floorHeight(w.camera.getWorldPosition(new Vector3())));
   w.registerSystem(GenUISystem);
 }
 
@@ -827,7 +832,7 @@ function placeInSeatedReach(anchor: Group, front: number, bottom: number): strin
  * The floor's height in the world: the lowest surface the headset labels floor, or failing that the lowest
  * horizontal one well below the eyes; without scene data, y = 0 of the floor-level reference space.
  */
-function floorHeight(head: Vector3): number {
+export function floorHeight(head: Vector3): number {
   let floor: number | null = null;
   for (const entity of planeEntities?.() ?? []) {
     const plane = entity.getValue(XRPlaneComponent, '_plane') as { orientation?: string; semanticLabel?: string } | undefined;
@@ -1150,7 +1155,8 @@ function keepPanelsInView(mounted: Mounted) {
 
 /**
  * Horizon-style bars under a lesson's cards (panels with something to press, standing in the lesson): the
- * learner pinches one and drags that card on its own; the lesson's own bar still moves everything.
+ * learner pinches one and drags that card on its own (the lesson's own bar still moves everything), or pinches
+ * the grip at the card's lower right corner and pulls it out or in to make the card bigger or smaller.
  */
 function addCardHandles(mounted: Mounted) {
   if (!world || !mounted.root) return;
@@ -1165,6 +1171,11 @@ function addCardHandles(mounted: Mounted) {
     const handle = createMoveHandle(world, panel.holder, { offset: offset.toArray() as [number, number, number] });
     handle.setShown(true);
     mounted.cardHandles.push(handle);
+    // The card's right edge: its width is what the lesson asked for, at the scale it stands at.
+    const halfWidth = (panel.width * panel.holder.getWorldScale(new Vector3()).x) / 2;
+    const grip = createMoveHandle(world, panel.holder, { offset: [halfWidth + CARD_HANDLE_GAP_M, offset.y, offset.z], resize: [CARD_MIN_SCALE, CARD_MAX_SCALE] });
+    grip.setShown(true);
+    mounted.cardHandles.push(grip);
   }
 }
 

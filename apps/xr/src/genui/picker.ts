@@ -16,8 +16,8 @@ import { cancelListening, isListening, microphoneState, startListening, stopAndT
 import { TutorUnavailable, VoiceTutor } from './voice-agent';
 import type { LessonStatus } from './overlay';
 import { courseProgress, createCourse, fetchCourseLesson, listCourses, polishCourseLesson, type CourseSummary } from './courses';
-import { capture, lessonPosition, roomFrame } from './host';
-import { createMoveHandle, worldYaw, type MoveHandle } from './handle';
+import { capture, floorHeight, lessonPosition, roomFrame } from './host';
+import { boxAround, createMoveHandle, worldYaw, type MoveHandle } from './handle';
 
 /**
  * In-headset lesson picker. The desktop prompt box is a DOM overlay, which an immersive session doesn't
@@ -49,6 +49,9 @@ const DOCKED = { width: 0.36, distance: 0.5, belowEyes: 0.3, yaw: (60 * Math.PI)
 const SETTLE_FRAMES = 20;
 // The move handle stands this far outside the panel's right edge.
 const HANDLE_GAP_M = 0.035;
+// The picker's lowest edge stays this far above the floor (its half height is a guess until it has laid out).
+const PICKER_FLOOR_CLEARANCE_M = 0.05;
+const PICKER_FALLBACK_HALF_HEIGHT_M = 0.3;
 const SHELF_ROWS = 3;
 // The "See all" list: every saved course, newest first, up to this many.
 const ALL_ROWS = 10;
@@ -522,7 +525,10 @@ class LessonPickerSystem extends createSystem({
     this.forward.normalize().applyAxisAngle(Object3DUp, spot.yaw);
     // Worked out in the world, then put in the room's frame (anchored to the room, so it can differ).
     const at = this.head.clone().addScaledVector(this.forward, spot.distance);
-    at.y = this.head.y - spot.belowEyes;
+    // Below the eyes, but never into the floor: a learner lying down or sitting on the floor has little room.
+    const box = boxAround(this.holder);
+    const below = box.isEmpty() ? PICKER_FALLBACK_HALF_HEIGHT_M : this.holder.getWorldPosition(new Vector3()).y - box.min.y;
+    at.y = Math.max(this.head.y - spot.belowEyes, floorHeight(this.head) + PICKER_FLOOR_CLEARANCE_M + below);
     const frame = this.holder.parent;
     frame?.updateWorldMatrix(true, false);
     this.holder.position.copy(frame ? frame.worldToLocal(at.clone()) : at);

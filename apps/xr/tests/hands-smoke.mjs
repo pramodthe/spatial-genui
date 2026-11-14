@@ -1,7 +1,7 @@
 // Room placement and hand features, in the managed browser's emulated XR session (hand input):
 // - the lesson stands in the anchored room frame and its spot is saved;
 // - a lesson built below its origin, for a learner sitting low, stays above the floor;
-// - a card's own bar moves that card and not the lesson;
+// - a card's own bar moves that card and not the lesson, never below the floor; its corner grip resizes it;
 // - two hands on a model scale it;
 // - a pointer over a pressable object makes it glow.
 // Returns the measurements; fails (ok: false) listing any check that didn't hold.
@@ -81,7 +81,8 @@ export default async function run({ frame, page }) {
 
       // Card bar: shown with the chrome (the host adds it once the card has laid out), dragged 10 cm to the right.
       genui.setOverlayHidden(false);
-      const cardBar = () => genui.inspectMoveHandles().find((h) => h.target === 'GenUI Panel' && h.visible);
+      const cardBar = () => genui.inspectMoveHandles().find((h) => h.target === 'GenUI Panel' && h.kind === 'move' && h.visible);
+      const cardGrip = () => genui.inspectMoveHandles().find((h) => h.target === 'GenUI Panel' && h.kind === 'resize' && h.visible);
       for (let i = 0; i < 25 && !cardBar(); i++) await sleep(200);
       const bar = cardBar();
       out.cardBar = Boolean(bar);
@@ -102,6 +103,40 @@ export default async function run({ frame, page }) {
         const cardAfter = worldOf(card);
         out.cardMovedM = round(Math.hypot(cardAfter[0] - cardBefore[0], cardAfter[1] - cardBefore[1], cardAfter[2] - cardBefore[2]));
         out.lessonStayedPut = anchor.position.distanceTo(lessonBefore) < 0.001;
+
+        // Drag the card's bar 1.5 m down: the card stops above the floor.
+        const low = cardBar().position;
+        await r.dispatch('set_transform', { device: 'hand-right', position: { x: low[0] + 0.05, y: low[1] + 0.1, z: low[2] + 0.3 } });
+        await r.dispatch('look_at', { device: 'hand-right', target: at(low) });
+        await sleep(200);
+        await r.dispatch('set_select_value', { device: 'hand-right', value: 1, duration: 0.1 });
+        await sleep(150);
+        await r.dispatch('animate_to', { device: 'hand-right', position: { x: low[0] + 0.05, y: low[1] - 1.4, z: low[2] + 0.3 }, duration: 0.4 });
+        await sleep(200);
+        await r.dispatch('set_select_value', { device: 'hand-right', value: 0, duration: 0.1 });
+        await sleep(200);
+        // The card's bar sits 2.5 cm below its lower edge (panel text is instanced, so its meshes' own boxes mislead).
+        out.cardLowestM = round(cardBar().position[1] + 0.025);
+
+        // The corner grip: pinch it and pull it 10 cm further out.
+        await r.dispatch('set_transform', { device: 'hand-right', position: { x: 0.35, y: 0.6, z: 0.1 } });
+        await sleep(200);
+        const grip = cardGrip();
+        out.cardGrip = Boolean(grip);
+        if (grip) {
+          const scaleBefore = grip.targetScale;
+          const g = grip.position;
+          await r.dispatch('set_transform', { device: 'hand-right', position: { x: g[0] + 0.05, y: g[1] + 0.1, z: g[2] + 0.3 } });
+          await r.dispatch('look_at', { device: 'hand-right', target: at(g) });
+          await sleep(200);
+          await r.dispatch('set_select_value', { device: 'hand-right', value: 1, duration: 0.1 });
+          await sleep(150);
+          await r.dispatch('animate_to', { device: 'hand-right', position: { x: g[0] + 0.15, y: g[1] + 0.05, z: g[2] + 0.3 }, duration: 0.3 });
+          await sleep(150);
+          await r.dispatch('set_select_value', { device: 'hand-right', value: 0, duration: 0.1 });
+          await sleep(200);
+          out.cardScaleRatio = round(cardGrip().targetScale / scaleBefore);
+        }
       }
       genui.setOverlayHidden(true);
       await r.dispatch('set_transform', { device: 'hand-right', position: { x: 0.35, y: 0.6, z: 0.1 } });
@@ -135,6 +170,9 @@ export default async function run({ frame, page }) {
       cardBar: out.cardBar === true,
       cardMovedM: out.cardMovedM >= 0.05,
       lessonStayedPut: out.lessonStayedPut === true,
+      cardLowestM: out.cardLowestM >= 0,
+      cardGrip: out.cardGrip === true,
+      cardScaleRatio: out.cardScaleRatio > 1.1,
       heldByTwo: out.heldByTwo === true,
       scaleRatio: out.scaleRatio > 1.05,
     };

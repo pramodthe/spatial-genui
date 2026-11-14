@@ -1,5 +1,5 @@
 {
-  "_note": "Benchmark candidates (enabled = in the run). IDs/prices for OpenRouter-listed models from its public catalog on 2026-11-12; DeepSeek V4.1 Flash runs on Fireworks, priced here at OpenRouter's listing for the same model version (estimate). Muse Spark (Meta API) has no listed price. Anthropic models reuse the app's key. Kimi K3.1 Pro runs on Fireworks, priced at OpenRouter's listing for the same model (estimate). Muse Ember's reasoning_effort must be confirmed against Meta's API. Muse Ember is priced from Meta's pricing page (Nov 2026): $0.10 in / $0.50 out per million tokens up to 200K input tokens.",
+  "_note": "Benchmark candidates (enabled = in the run). IDs/prices for OpenRouter-listed models from its public catalog on 2026-11-12; DeepSeek V4.1 Flash runs on Fireworks, priced here at OpenRouter's listing for the same model version (estimate). Muse Spark (Meta API) has no listed price. Anthropic models reuse the app's key. Kimi K3.1 Pro runs on Fireworks, priced at OpenRouter's listing for the same model (estimate). Muse Ember's reasoning_effort must be confirmed against Meta's API. Muse Ember is priced from Meta's pricing page (Nov 2026): $0.10 in / $0.50 out per million tokens up to 200K input tokens. gpt-6.1-sol is called on OpenAI directly (from 2026-11-14 the app's own model), priced at its OpenRouter listing.",
   "models": [
     {
       "id": "claude-opus-5-5",
@@ -170,10 +170,9 @@
     {
       "id": "gpt-6.1-sol",
       "family": "OpenAI",
-      "baseURL": "https://openrouter.ai/api/v1/",
-      "apiKeyEnv": "OPENROUTER_API_KEY",
-      "model": "openai/gpt-6.1-sol",
-      "maxTokensParam": "max_tokens",
+      "baseURL": "https://api.openai.com/v1/",
+      "apiKeyEnv": "OPENAI_API_KEY",
+      "model": "gpt-6.1-sol",
       "priceIn": 2,
       "priceOut": 10,
       "enabled": false

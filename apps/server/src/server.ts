@@ -9,7 +9,7 @@ import type { LlmTarget } from './llm.js';
 import { loadModel } from './models.js';
 import { EXAMPLE_MODULE } from './prompt.js';
 import { admit, admitVoice, recordSpend, spendToday, visitorOf } from './guard.js';
-import { transcribe } from './voice.js';
+import { transcribe, voiceAgentToken } from './voice.js';
 import { getCourse, listCourses, openLesson, polishLesson, startCourse, summary } from './courses.js';
 
 const MAX_BODY_BYTES = 200_000;
@@ -89,6 +89,14 @@ const server = createServer(async (req, res) => {
       const audio = await readBytes(req, MAX_AUDIO_BYTES);
       const result = await transcribe(audio);
       return send(res, result.ok ? 200 : 502, result);
+    }
+    // The voice tutor: a 60-second Deepgram token for the browser's Voice Agent connection.
+    if (req.method === 'POST' && req.url === '/api/voice-agent/token') {
+      const refusal = admitVoice(visitorOf(req));
+      if (refusal) return send(res, refusal.status, { ok: false, error: refusal.error, reason: refusal.reason });
+      const result = await voiceAgentToken();
+      // 501: no tutor on this server (the headset stops asking); 503: try again later.
+      return send(res, result.ok ? 200 : result.configured ? 503 : 501, result);
     }
     // Saved courses (courses.ts): planned at once, lessons written in the background and kept on disk.
     if (req.method === 'POST' && req.url === '/api/courses') {

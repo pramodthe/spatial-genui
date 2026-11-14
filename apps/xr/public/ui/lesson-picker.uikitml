@@ -333,8 +333,8 @@
         <Mic class="ask-icon"></Mic>
       </div>
       <div class="ask-text">
-        <span class="ask-title">Ask for a course</span>
-        <span id="voice-label" class="ask-sub">Pinch here, then say any subject</span>
+        <span class="ask-title">Talk to the tutor</span>
+        <span id="voice-label" class="ask-sub">Pinch, then ask for a course or about a lesson</span>
       </div>
       <ChevronRight class="ask-chevron"></ChevronRight>
     </div>
@@ -371,7 +371,9 @@
     <div id="shelf-label" class="block" style="display: none">
       <div class="section-header">
         <span class="section-title">My courses</span>
-        <span class="section-note">Saved for you</span>
+        <Button id="see-all" variant="tertiary" size="sm">
+          <ButtonLabel id="see-all-label">See all</ButtonLabel>
+        </Button>
       </div>
       <div class="list">
         <div id="course-0" class="cell" style="display: none">
@@ -401,6 +403,110 @@
           </div>
           <ChevronRight class="chevron"></ChevronRight>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="all" class="section" style="display: none">
+    <div class="toolbar">
+      <Button id="all-back" variant="secondary" size="sm">
+        <ButtonIcon>
+          <ArrowLeft></ArrowLeft>
+        </ButtonIcon>
+        <ButtonLabel>All lessons</ButtonLabel>
+      </Button>
+      <span id="all-note" class="toolbar-note">...</span>
+    </div>
+    <div class="list">
+      <div id="all-0" class="cell" style="display: none">
+        <Library class="cell-icon"></Library>
+        <div class="cell-text">
+          <span id="all-0-title" class="cell-primary">Course</span>
+          <span id="all-0-state" class="cell-secondary">...</span>
+          <div class="track"><div id="all-0-fill" class="fill"></div></div>
+        </div>
+        <ChevronRight class="chevron"></ChevronRight>
+      </div>
+      <div id="all-1" class="cell" style="display: none">
+        <Library class="cell-icon"></Library>
+        <div class="cell-text">
+          <span id="all-1-title" class="cell-primary">Course</span>
+          <span id="all-1-state" class="cell-secondary">...</span>
+          <div class="track"><div id="all-1-fill" class="fill"></div></div>
+        </div>
+        <ChevronRight class="chevron"></ChevronRight>
+      </div>
+      <div id="all-2" class="cell" style="display: none">
+        <Library class="cell-icon"></Library>
+        <div class="cell-text">
+          <span id="all-2-title" class="cell-primary">Course</span>
+          <span id="all-2-state" class="cell-secondary">...</span>
+          <div class="track"><div id="all-2-fill" class="fill"></div></div>
+        </div>
+        <ChevronRight class="chevron"></ChevronRight>
+      </div>
+      <div id="all-3" class="cell" style="display: none">
+        <Library class="cell-icon"></Library>
+        <div class="cell-text">
+          <span id="all-3-title" class="cell-primary">Course</span>
+          <span id="all-3-state" class="cell-secondary">...</span>
+          <div class="track"><div id="all-3-fill" class="fill"></div></div>
+        </div>
+        <ChevronRight class="chevron"></ChevronRight>
+      </div>
+      <div id="all-4" class="cell" style="display: none">
+        <Library class="cell-icon"></Library>
+        <div class="cell-text">
+          <span id="all-4-title" class="cell-primary">Course</span>
+          <span id="all-4-state" class="cell-secondary">...</span>
+          <div class="track"><div id="all-4-fill" class="fill"></div></div>
+        </div>
+        <ChevronRight class="chevron"></ChevronRight>
+      </div>
+      <div id="all-5" class="cell" style="display: none">
+        <Library class="cell-icon"></Library>
+        <div class="cell-text">
+          <span id="all-5-title" class="cell-primary">Course</span>
+          <span id="all-5-state" class="cell-secondary">...</span>
+          <div class="track"><div id="all-5-fill" class="fill"></div></div>
+        </div>
+        <ChevronRight class="chevron"></ChevronRight>
+      </div>
+      <div id="all-6" class="cell" style="display: none">
+        <Library class="cell-icon"></Library>
+        <div class="cell-text">
+          <span id="all-6-title" class="cell-primary">Course</span>
+          <span id="all-6-state" class="cell-secondary">...</span>
+          <div class="track"><div id="all-6-fill" class="fill"></div></div>
+        </div>
+        <ChevronRight class="chevron"></ChevronRight>
+      </div>
+      <div id="all-7" class="cell" style="display: none">
+        <Library class="cell-icon"></Library>
+        <div class="cell-text">
+          <span id="all-7-title" class="cell-primary">Course</span>
+          <span id="all-7-state" class="cell-secondary">...</span>
+          <div class="track"><div id="all-7-fill" class="fill"></div></div>
+        </div>
+        <ChevronRight class="chevron"></ChevronRight>
+      </div>
+      <div id="all-8" class="cell" style="display: none">
+        <Library class="cell-icon"></Library>
+        <div class="cell-text">
+          <span id="all-8-title" class="cell-primary">Course</span>
+          <span id="all-8-state" class="cell-secondary">...</span>
+          <div class="track"><div id="all-8-fill" class="fill"></div></div>
+        </div>
+        <ChevronRight class="chevron"></ChevronRight>
+      </div>
+      <div id="all-9" class="cell" style="display: none">
+        <Library class="cell-icon"></Library>
+        <div class="cell-text">
+          <span id="all-9-title" class="cell-primary">Course</span>
+          <span id="all-9-state" class="cell-secondary">...</span>
+          <div class="track"><div id="all-9-fill" class="fill"></div></div>
+        </div>
+        <ChevronRight class="chevron"></ChevronRight>
       </div>
     </div>
   </div>

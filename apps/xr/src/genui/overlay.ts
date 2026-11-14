@@ -4,9 +4,9 @@ import { inspectPicker, pickerCourses, setPickerHidden } from './picker.js';
 import { inspectMoveHandles, setMoveHandlesHidden } from './handle.js';
 
 /**
- * Desktop/emulator prompt box, and the lesson state both it and the in-headset picker (picker.ts) drive.
- * DOM overlays are not visible inside an immersive session; the picker follows the lesson through
- * onLessonStatus.
+ * The developer prompt box (folded into the start page, start-page.ts), and the lesson state the start
+ * page, the box and the in-headset picker (picker.ts) all follow through onLessonStatus. DOM is not visible
+ * inside an immersive session.
  */
 
 /** Where the current lesson is, for the in-headset picker. */
@@ -68,6 +68,12 @@ const state: GenUIState = {
 
 let lessonStatus: LessonStatus = { phase: 'idle', prompt: null, message: '', since: performance.now() };
 const statusListeners = new Set<(status: LessonStatus) => void>();
+const chromeListeners = new Set<(hidden: boolean) => void>();
+
+/** Follow genui.setOverlayHidden (the benchmark hides all chrome before its screenshots). */
+export function onChromeHidden(listener: (hidden: boolean) => void) {
+  chromeListeners.add(listener);
+}
 
 /** The current lesson's request (for "Make a new one"). */
 export function lessonPrompt(): string | null {
@@ -94,17 +100,15 @@ let repairButton: HTMLButtonElement;
 let rebuildButton: HTMLButtonElement;
 let assetWatch = 0;
 
-export function createOverlay() {
+/** The developer prompt box: write any lesson live, repair, see the code. Returns it for the start page to hold. */
+export function createOverlay(): HTMLElement {
   const root = document.createElement('div');
-  root.style.cssText =
-    // Above IWER's emulated-XR layer (z-index 999) and clear of its corner Pose/Pinch panels.
-    'position:fixed;left:12px;bottom:96px;width:min(440px,calc(100vw - 24px));z-index:10000;' +
-    'font:14px/1.4 system-ui,sans-serif;color:#eef0f3;background:rgba(20,22,27,.92);' +
-    'border:1px solid #3a3d44;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;';
+  root.className = 'sp-panel';
+  root.style.cssText = 'display:flex;flex-direction:column;gap:10px;font-size:14px;line-height:20px;';
   root.innerHTML = `
-    <div style="font-weight:700">Generative UI</div>
-    <textarea rows="2" placeholder="e.g. Teach me the solar system with a short quiz"
-      style="resize:vertical;font:inherit;color:inherit;background:#0f1114;border:1px solid #3a3d44;border-radius:8px;padding:8px"></textarea>
+    <div class="sp-title" style="margin:0">Write a lesson live</div>
+    <textarea rows="2" placeholder="e.g. Teach me the solar system with a short quiz" class="sp-input"
+      style="resize:vertical;padding:12px 16px;min-height:72px"></textarea>
     <div data-role="examples" style="display:flex;gap:6px;flex-wrap:wrap">
       ${EXAMPLE_LESSONS.map((lesson) => `<button data-prompt="${lesson.prompt}">${lesson.title}</button>`).join('')}
     </div>
@@ -118,13 +122,9 @@ export function createOverlay() {
     <div data-role="status" style="white-space:pre-wrap;color:#b8bec8"></div>
     <div data-role="assets" style="white-space:pre-wrap;color:#9fd3a8"></div>
     <pre data-role="code" hidden style="max-height:40vh;overflow:auto;margin:0;font:12px/1.4 ui-monospace,monospace;background:#0f1114;padding:8px;border-radius:8px"></pre>`;
-  for (const button of root.querySelectorAll('button')) {
-    button.style.cssText =
-      'font:inherit;color:#fff;background:#2f6fdb;border:0;border-radius:8px;padding:6px 12px;cursor:pointer';
-  }
-  // Example lessons (one tap, for trying the app in a headset without typing): quieter than the actions.
-  for (const button of root.querySelectorAll<HTMLButtonElement>('[data-prompt]')) button.style.background = '#3a3d44';
-  document.body.appendChild(root);
+  for (const button of root.querySelectorAll('button')) button.className = 'sp-btn sp-secondary';
+  root.querySelector('[data-action="generate"]')!.className = 'sp-btn sp-primary';
+  for (const pre of root.querySelectorAll<HTMLElement>('[data-role="status"], [data-role="assets"]')) pre.style.color = 'rgba(255, 255, 255, 0.7)';
 
   const input = root.querySelector('textarea')!;
   statusEl = root.querySelector('[data-role="status"]')!;
@@ -181,11 +181,12 @@ export function createOverlay() {
     aimPoint,
     // Hides all chrome, the in-headset picker too (the benchmark's screenshots show the lesson only).
     setOverlayHidden: (hidden: boolean) => {
-      root.style.display = hidden ? 'none' : 'flex';
+      for (const listener of chromeListeners) listener(hidden);
       setPickerHidden(hidden);
       setMoveHandlesHidden(hidden);
     },
   };
+  return root;
 }
 
 export function reportRuntimeError(message: string) {

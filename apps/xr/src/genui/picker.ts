@@ -12,7 +12,8 @@ import {
   type World,
 } from '@iwsdk/core';
 import { EXAMPLE_LESSONS } from './lessons';
-import { cancelListening, isListening, startListening, stopAndTranscribe, voiceAvailable } from './voice';
+import { cancelListening, isListening, microphoneState, startListening, stopAndTranscribe, voiceAvailable } from './voice';
+import { TutorUnavailable, VoiceTutor } from './voice-agent';
 import type { LessonStatus } from './overlay';
 import { courseProgress, createCourse, fetchCourseLesson, listCourses, polishCourseLesson, type CourseSummary } from './courses';
 import { capture, lessonPosition } from './host';
@@ -49,6 +50,8 @@ const SETTLE_FRAMES = 20;
 // The move handle stands this far outside the panel's right edge.
 const HANDLE_GAP_M = 0.035;
 const SHELF_ROWS = 3;
+// The "See all" list: every saved course, newest first, up to this many.
+const ALL_ROWS = 10;
 const COURSE_STEPS = 5;
 // How often the shelf asks the server while a course is being planned or written.
 const COURSE_POLL_MS = 4000;
@@ -64,7 +67,7 @@ const STEP_BADGES = {
 } as const;
 // The voice row's microphone circle: ready, listening, working (understanding, planning), missed (try again),
 // unavailable.
-const VOICE_TONES = { ready: '#272727', listening: '#e5343e', working: '#31a8f3', missed: '#fc9435', off: '#8a8a8a' } as const;
+const VOICE_TONES = { ready: '#272727', listening: '#e5343e', working: '#31a8f3', speaking: '#0f7a2a', missed: '#fc9435', off: '#8a8a8a' } as const;
 type VoiceTone = keyof typeof VOICE_TONES;
 
 // Status colours from the Reality Labs Design System: none, poor (working), good, bad.
@@ -102,6 +105,7 @@ export function inspectPicker() {
 export const pickerCourses = {
   request: (subject: string) => picker?.requestCourse(subject),
   show: (id: string | null) => picker?.showCourse(id),
+  all: (on: boolean) => picker?.showAll(on),
   step: (index: number) => picker?.openStep(index),
   refresh: () => picker?.refreshCourses(),
 };
@@ -122,8 +126,10 @@ class LessonPickerSystem extends createSystem({
   private placeIn = -1;
   private ticker = 0;
   private courses: CourseSummary[] = [];
-  /** The course whose lessons are listed (null: the home view). */
+  /** The course whose lessons are listed (null: the home view, or the list of all courses). */
   private shown: string | null = null;
+  /** The list of every saved course is showing. */
+  private listingAll = false;
   private coursePoll = 0;
   /** Titles of course lessons opened here, by their request, for the status line. */
   private readonly titles = new Map<string, string>();
@@ -165,6 +171,7 @@ class LessonPickerSystem extends createSystem({
       () => clearInterval(this.ticker),
       () => clearTimeout(this.coursePoll),
       () => cancelListening(),
+      () => this.tutor.stop(),
       () => this.handle.dispose(),
       () => (picker = null),
     );
@@ -235,6 +242,9 @@ class LessonPickerSystem extends createSystem({
     document.getElementById('voice')?.addEventListener('click', () => void this.toggleVoice());
     if (!voiceAvailable()) this.setVoice('Voice input is not available in this browser.', 'off');
     for (let i = 0; i < SHELF_ROWS; i++) document.getElementById(`course-${i}`)?.addEventListener('click', () => this.showCourse(this.courses[i]?.id ?? null));
+    for (let i = 0; i < ALL_ROWS; i++) document.getElementById(`all-${i}`)?.addEventListener('click', () => this.showCourse(this.courses[i]?.id ?? null));
+    document.getElementById('see-all')?.addEventListener('click', () => this.showAll(true));
+    document.getElementById('all-back')?.addEventListener('click', () => this.showAll(false));
     for (let i = 0; i < COURSE_STEPS; i++) document.getElementById(`step-${i}`)?.addEventListener('click', () => void this.openStep(i));
     document.getElementById('back')?.addEventListener('click', () => this.showCourse(null));
     void this.refreshCourses();
@@ -254,6 +264,14 @@ class LessonPickerSystem extends createSystem({
 
   showCourse(id: string | null) {
     this.shown = id && this.courses.some((c) => c.id === id) ? id : null;
+    // Back from a course returns to where it was opened from (the home view or the list of all courses).
+    this.applySize();
+    this.renderCourses();
+  }
+
+  showAll(on: boolean) {
+    this.listingAll = on;
+    this.shown = null;
     this.applySize();
     this.renderCourses();
   }
@@ -314,18 +332,27 @@ class LessonPickerSystem extends createSystem({
     const document = this.document;
     if (!document) return;
     const course = this.courses.find((c) => c.id === this.shown);
-    document.getElementById('home')?.setProperties({ display: course ? 'none' : 'flex' });
+    const listing = !course && this.listingAll;
+    document.getElementById('home')?.setProperties({ display: course || listing ? 'none' : 'flex' });
+    document.getElementById('all')?.setProperties({ display: listing ? 'flex' : 'none' });
     document.getElementById('course')?.setProperties({ display: course ? 'flex' : 'none' });
     document.getElementById('shelf-label')?.setProperties({ display: this.courses.length ? 'flex' : 'none' });
-    for (let i = 0; i < SHELF_ROWS; i++) {
+    document.getElementById('see-all')?.setProperties({ display: this.courses.length > SHELF_ROWS ? 'flex' : 'none' });
+    document.getElementById('see-all-label')?.setProperties({ text: `See all ${this.courses.length}` });
+    document.getElementById('all-note')?.setProperties({
+      text: this.courses.length > ALL_ROWS ? `The ${ALL_ROWS} newest of ${this.courses.length} courses` : `${this.courses.length} saved courses, newest first`,
+    });
+    const fillRow = (prefix: string, i: number) => {
       const row = this.courses[i];
-      document.getElementById(`course-${i}`)?.setProperties({ display: row ? 'flex' : 'none' });
-      if (!row) continue;
-      document.getElementById(`course-${i}-title`)?.setProperties({ text: ascii(row.title) });
-      document.getElementById(`course-${i}-state`)?.setProperties({ text: courseProgress(row) });
+      document.getElementById(`${prefix}-${i}`)?.setProperties({ display: row ? 'flex' : 'none' });
+      if (!row) return;
+      document.getElementById(`${prefix}-${i}-title`)?.setProperties({ text: ascii(row.title) });
+      document.getElementById(`${prefix}-${i}-state`)?.setProperties({ text: courseProgress(row) });
       const ready = row.lessons.filter((l) => l.status === 'ready').length;
-      document.getElementById(`course-${i}-fill`)?.setProperties({ width: `${row.lessons.length ? Math.round((100 * ready) / row.lessons.length) : 0}%` });
-    }
+      document.getElementById(`${prefix}-${i}-fill`)?.setProperties({ width: `${row.lessons.length ? Math.round((100 * ready) / row.lessons.length) : 0}%` });
+    };
+    for (let i = 0; i < SHELF_ROWS; i++) fillRow('course', i);
+    if (listing) for (let i = 0; i < ALL_ROWS; i++) fillRow('all', i);
     if (!course) return;
     const modelling = course.model?.status === 'building';
     document.getElementById('course-sub')?.setProperties({
@@ -344,15 +371,100 @@ class LessonPickerSystem extends createSystem({
     }
   }
 
-  /** Pinch once to start talking, again to finish; the request is then written live. */
+  /**
+   * The voice tutor (voice-agent.ts): a spoken conversation that can plan courses and open lessons. Pinch to
+   * start, pinch again to end. Where the tutor is unavailable, voice falls back to a one-shot request: pinch,
+   * say a subject, pinch, and it becomes a course.
+   */
+  private readonly tutor = new VoiceTutor(
+    {
+      createCourse: async (subject) => {
+        const course = await createCourse(subject);
+        this.courses = [course, ...this.courses.filter((c) => c.id !== course.id)];
+        this.showCourse(course.id);
+        this.pollCourses();
+        return { ok: true, title: course.title, note: 'Planned. The lessons are being written now, the first in a few minutes; a course about one object first builds its 3D model (about 20 minutes).' };
+      },
+      listCourses: async () => {
+        await this.refreshCourses();
+        return { courses: this.courses.map((c) => ({ title: c.title, lessons: c.lessons.map((l, i) => `${i + 1}. ${l.title} (${l.status})`) })) };
+      },
+      openLesson: async (name, number) => {
+        await this.refreshCourses();
+        const course = findCourse(this.courses, name);
+        if (!course) return { ok: false, error: `No course matches "${name}".`, courses: this.courses.map((c) => c.title) };
+        const lesson = course.lessons[number - 1];
+        if (!lesson) return { ok: false, error: `"${course.title}" has ${course.lessons.length} lessons.` };
+        this.showCourse(course.id);
+        await this.openStep(number - 1);
+        return { ok: true, course: course.title, lesson: lesson.title, state: lesson.status === 'ready' ? 'opened on the desk' : 'being written; it takes a few minutes' };
+      },
+      currentLesson: () => {
+        const prompt = this.status.prompt;
+        if (!prompt || this.status.phase === 'idle') return { open: false };
+        const title = EXAMPLE_LESSONS.find((l) => l.prompt === prompt)?.title ?? this.titles.get(prompt) ?? null;
+        return { open: true, title, request: prompt.split('\n(This is lesson')[0], state: this.status.phase };
+      },
+    },
+    {
+      onText: (role, text) => {
+        this.tutorHeard = true;
+        this.setVoice(`${role === 'user' ? 'You' : 'Tutor'}: ${ascii(text)}`, role === 'user' ? 'listening' : 'speaking');
+      },
+      onState: (state, detail) => {
+        if (state === 'connecting') this.setVoice('Connecting to the tutor...', 'working');
+        else if (state === 'thinking') this.setVoice('Thinking...', 'working');
+        else if (state === 'stopped') this.setVoice(detail ? ascii(detail) : 'Pinch, then ask for a course or about a lesson', detail ? 'off' : 'ready');
+        else if (state === 'listening' && !this.tutorHeard) this.setVoice('Listening: ask anything. Pinch here to stop.', 'listening');
+        if (state === 'stopped') this.tutorHeard = false;
+      },
+    },
+  );
+  private tutorHeard = false;
+  private tutorOff = false;
+
+  /** What the tutor knows at the start: the saved courses and the lesson on the desk. */
+  private async tutorContext(): Promise<string> {
+    await this.refreshCourses();
+    const courses = this.courses.slice(0, 8).map((c) => `- ${c.title}: ${c.lessons.map((l, i) => `${i + 1}. ${l.title} (${l.status})`).join('; ')}`);
+    const open = this.status.prompt && this.status.phase !== 'idle' ? (EXAMPLE_LESSONS.find((l) => l.prompt === this.status.prompt)?.title ?? this.titles.get(this.status.prompt) ?? 'a lesson') : null;
+    return `Saved courses:\n${courses.join('\n') || '(none yet)'}\nOn the desk now: ${open ?? 'nothing'}.`;
+  }
+
+  /** Pinch to talk to the tutor, again to stop. */
   private async toggleVoice() {
     if (!voiceAvailable() || this.voiceBusy) return;
+    if (this.tutor.active) {
+      this.tutor.stop();
+      return;
+    }
     if (!isListening()) {
+      // The browser can't ask for the microphone inside XR: it has to be allowed on the start page first.
+      const allowed = await microphoneState();
+      if (allowed === 'prompt' || allowed === 'denied') {
+        this.setVoice('Allow the microphone first: leave XR and tap "Allow microphone" on the start page.', 'off');
+        return;
+      }
+      if (!this.tutorOff) {
+        // Busy while the tutor connects, so a second pinch can't start a second session.
+        this.voiceBusy = true;
+        try {
+          await this.tutor.start(await this.tutorContext());
+          return;
+        } catch (err) {
+          this.tutor.stop();
+          // No tutor on this server: one-shot voice requests from now on. Anything else (the network, a busy
+          // server): a one-shot request this time, and the tutor again on the next pinch.
+          if (err instanceof TutorUnavailable && err.permanent) this.tutorOff = true;
+        } finally {
+          this.voiceBusy = false;
+        }
+      }
       try {
         await startListening(() => void this.toggleVoice());
         this.setVoice("Listening... pinch here when you're done", 'listening');
       } catch {
-        this.setVoice('Microphone blocked: allow it for this site, then try again.', 'off');
+        this.setVoice('The microphone did not start: leave XR and tap "Allow microphone" on the start page.', 'off');
       }
       return;
     }
@@ -386,8 +498,11 @@ class LessonPickerSystem extends createSystem({
     // Height is generous so the width is what sets the scale (as the host does for lesson panels).
     this.document?.setTargetDimensions(width, width * 4);
     const course = this.courses.find((c) => c.id === this.shown);
-    this.document?.getElementById('hint')?.setProperties({ display: this.docked || course ? 'none' : 'flex' });
-    this.document?.getElementById('heading')?.setProperties({ text: course ? ascii(course.title) : this.docked ? 'Pick another lesson' : 'What do you want to learn?' });
+    const listing = !course && this.listingAll;
+    this.document?.getElementById('hint')?.setProperties({ display: this.docked || course || listing ? 'none' : 'flex' });
+    this.document?.getElementById('heading')?.setProperties({
+      text: course ? ascii(course.title) : listing ? 'My courses' : this.docked ? 'Pick another lesson' : 'What do you want to learn?',
+    });
     this.document?.getElementById('eyebrow')?.setProperties({ text: course ? 'COURSE' : 'LESSONS ON YOUR DESK' });
   }
 
@@ -441,7 +556,22 @@ class LessonPickerSystem extends createSystem({
 const Object3DUp = new Vector3(0, 1, 0);
 
 /** The panel font has plain ASCII only; keep server messages short and printable. */
+/** A course whose title best matches what the learner said (shared words), or none. */
+function findCourse(courses: CourseSummary[], name: string): CourseSummary | undefined {
+  const words = (text: string) => new Set(text.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2 && !['how', 'the', 'and', 'works', 'work'].includes(w)));
+  const wanted = words(name);
+  let best: CourseSummary | undefined;
+  let score = 0;
+  for (const course of courses) {
+    const shared = [...words(course.title)].filter((w) => wanted.has(w)).length;
+    if (shared > score) [best, score] = [course, shared];
+  }
+  return best;
+}
+
+const TYPOGRAPHY: Record<string, string> = { '\u2014': ' - ', '\u2013': '-', '\u2018': "'", '\u2019': "'", '\u201c': '"', '\u201d': '"', '\u2026': '...' };
+
 function ascii(text: string) {
-  const plain = text.replace(/[^\x20-\x7e]/g, '').trim();
+  const plain = text.replace(/[\u2013\u2014\u2018\u2019\u201c\u201d\u2026]/g, (ch) => TYPOGRAPHY[ch]).replace(/[^\x20-\x7e]/g, '').replace(/\s+/g, ' ').trim();
   return plain.length > 90 ? `${plain.slice(0, 87)}...` : plain || 'unknown error';
 }

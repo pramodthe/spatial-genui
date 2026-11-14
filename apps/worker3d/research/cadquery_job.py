@@ -1,6 +1,6 @@
 """Run one agent-written CadQuery script in the sandbox and print the result as one JSON line.
 
-Usage: python cadquery_job.py <job_dir> <script.py> <out.glb>
+Usage: python research/cadquery_job.py <job_dir> <script.py> <out.glb>
 This wrapper is trusted code; only cadquery_runner.py (and the script it executes) is sandboxed.
 """
 
@@ -9,14 +9,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-from sandbox import VENV_PYTHON, WORKER_DIR, sandboxed
+from sandbox import HERE, VENV_PYTHON, sandboxed
 
 TIMEOUT_S = 120
 
 
 def main() -> None:
     job_dir, script, out = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
-    argv, env = sandboxed(job_dir, [str(VENV_PYTHON), str(WORKER_DIR / "cadquery_runner.py"), str(script), str(out)])
+    argv, env = sandboxed(job_dir, [str(VENV_PYTHON), str(HERE / "cadquery_runner.py"), str(script), str(out)])
     try:
         proc = subprocess.run(argv, env=env, cwd=job_dir, capture_output=True, text=True, timeout=TIMEOUT_S)
     except subprocess.TimeoutExpired:

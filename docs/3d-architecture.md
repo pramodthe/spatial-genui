@@ -519,7 +519,7 @@ reference picture: Ember briefs it, Muse Image draws it, Ember checks it (redraw
 - **Fixes made for the agent:**
   - Each P3-SAM region is its own piece under its part (`retrieved.py --split-regions`).
   - Every piece's measurements are in the first message.
-  - A helper kit is preloaded in Blender (`apps/worker3d/repair_kit.py`: list parts, split loose pieces, cut at a plane, assign, rotate, move, join).
+  - A helper kit is preloaded in Blender (`apps/worker3d/research/repair_kit.py`: list parts, split loose pieces, cut at a plane, assign, rotate, move, join).
   - A `look` tool shows the agent the model as the critic sees it.
   - A step with no reply in 6 minutes is retried.
   - Meta's prompt cache served 93% of the input.

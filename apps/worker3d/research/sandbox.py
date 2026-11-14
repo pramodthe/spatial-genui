@@ -12,7 +12,8 @@ import os
 import sys
 from pathlib import Path
 
-WORKER_DIR = Path(__file__).resolve().parent
+HERE = Path(__file__).resolve().parent  # research/: the sandboxed runner and bridge scripts
+WORKER_DIR = HERE.parent  # apps/worker3d: its code and Python environment, which the sandbox may read
 VENV_PYTHON = WORKER_DIR / ".venv" / "bin" / "python3"
 BLENDER = Path(os.environ.get("BLENDER_BIN", "/Applications/Blender.app/Contents/MacOS/Blender"))
 

@@ -1,6 +1,6 @@
 """Blender MCP server (stdio): an LLM agent builds 3D models in a sandboxed, headless Blender.
 
-Usage: python blender_mcp_server.py --job <dir>
+Usage: python research/blender_mcp_server.py --job <dir>
 Unlike the popular Blender MCP add-on, which needs a Blender window open and a click to connect, this
 server starts Blender in background mode inside the sandbox (sandbox.py), so many jobs can run in
 parallel on a server. One server = one job = one persistent Blender scene.
@@ -15,7 +15,7 @@ from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
 
-from sandbox import BLENDER, WORKER_DIR, sandboxed
+from sandbox import BLENDER, HERE, sandboxed
 
 REPLY = "@@BRIDGE@@ "
 EXEC_TIMEOUT_S = 90
@@ -37,7 +37,7 @@ class Bridge:
 
     async def start(self) -> None:
         argv, env = sandboxed(JOB_DIR, [str(BLENDER), "-b", "--factory-startup", "--python-exit-code", "1",
-                                        "--python", str(WORKER_DIR / "blender_bridge.py")])
+                                        "--python", str(HERE / "blender_bridge.py")])
         self.proc = await asyncio.create_subprocess_exec(
             *argv, env=env, cwd=JOB_DIR, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL, limit=16 * 1024 * 1024,

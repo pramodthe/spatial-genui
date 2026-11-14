@@ -1,6 +1,6 @@
 """Spatial GenUI 3D backend on Modal: CadQuery jobs and Blender MCP sessions in Modal Sandboxes.
 
-Deploy:  modal deploy modal_app.py   (needs the Modal secret "genui-worker3d" with WORKER3D_TOKEN)
+Deploy:  modal deploy research/modal_app.py   (needs the Modal secret "genui-worker3d" with WORKER3D_TOKEN)
 Routes (all need `Authorization: Bearer $WORKER3D_TOKEN`):
   POST /cadquery  {"script": "..."}  -> {"ok", "parts", "glb_base64"} or {"ok": false, "error"}
   /mcp            Blender MCP server (streamable HTTP); each MCP session gets its own Blender sandbox

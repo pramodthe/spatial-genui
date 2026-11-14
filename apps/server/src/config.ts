@@ -24,7 +24,7 @@ export const config = {
   // or generate a model in the background. Off unless ASSETS_ON_DEMAND=1: each model costs a reference
   // picture and a minute or two of Modal GPU time.
   onDemandAssets: process.env.ASSETS_ON_DEMAND === '1',
-  // Python 3D backend (apps/worker3d/modal_app.py on Modal). Unset: run the 3D workers locally.
+  // Python 3D backend for the research pipelines (apps/worker3d/research/modal_app.py on Modal). Unset: run the 3D workers locally.
   worker3dUrl: process.env.WORKER3D_URL || '',
   worker3dToken: process.env.WORKER3D_TOKEN || '',
 };

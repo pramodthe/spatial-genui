@@ -54,6 +54,7 @@ if (!existsSync(casesFile)) {
   console.error(`${cases.length} lessons to test: ${SOURCES.map(([s]) => `${s} ${cases.filter((c) => c.source === s).length}`).join(', ')}`);
 }
 
+let remaining = null;
 for (let batch = 1; batch <= 200; batch++) {
   const res = spawnSync('npx', ['@iwsdk/cli', 'browser', 'run', 'tests/interaction-matrix.mjs', '--timeout', '108000'], {
     cwd: app, env: { ...process.env, MATRIX_DIR: dir }, encoding: 'utf8',
@@ -71,11 +72,17 @@ for (let batch = 1; batch <= 200; batch++) {
     process.exit(1);
   }
   console.error(`batch ${batch}: ${result.processed} processed, ${result.remaining} remaining`);
-  if (result.remaining === 0) break;
+  remaining = result.remaining;
+  if (remaining === 0) break;
   if (result.processed === 0) {
     console.error('No progress in this batch; stopping.');
     process.exit(1);
   }
+}
+
+if (remaining !== 0) {
+  console.error(`Stopped after 200 batches with ${remaining} lessons still untested; not writing a summary that would undercount.`);
+  process.exit(1);
 }
 
 // --- Summary --------------------------------------------------------------------------------------------------

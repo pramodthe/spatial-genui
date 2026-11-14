@@ -244,9 +244,8 @@ function installProbes(HEAD) {
 
     // Explode: a model's parts move apart when the learner asks, in lessons that offer it (call the rig's
     // explode()). Buttons that say so first, then any button.
-    if (info.rigs.length && /\.explode\(/.test(code)) {
+    if (info.rigs.length && /\.explode\(/.test(code) && (await mount(code)).ok) {
       const spread = () => genui.inspect().rigs.reduce((sum, rig) => sum + rig.spread, 0);
-      await mount(code);
       const order = [...ids.filter((id) => EXPLODE_WORDS.test(id)), ...ids.filter((id) => !EXPLODE_WORDS.test(id))].slice(0, 8);
       p.explode = { worked: false, tried: [] };
       for (const id of order) {
@@ -264,27 +263,27 @@ function installProbes(HEAD) {
     }
 
     // Grabs, each on a freshly mounted lesson so an earlier grab can't leave the hand or the object out of place.
+    // A remount that fails leaves its probe unset rather than losing the lesson's other results.
     const firstOf = (mode) => genui.inspect().grabbables.findIndex((g) => g.mode === mode);
     for (const mode of ['touch', 'ray']) {
-      if (!info.grabbables.some((g) => g.mode === mode)) continue;
-      await mount(code);
+      if (!info.grabbables.some((g) => g.mode === mode) || !(await mount(code)).ok) continue;
       p[mode === 'touch' ? 'touchGrab' : 'rayGrab'] = await grab(firstOf(mode));
     }
     // A single part of a model: the first grabbable that is one of a rig's parts.
-    if (info.rigs.length) {
-      await mount(code);
+    if (info.rigs.length && (await mount(code)).ok) {
       const partNames = new Set(genui.inspect().rigs.flatMap((rig) => rig.names));
       const index = genui.inspect().grabbables.findIndex((g) => partNames.has(g.name));
       if (index >= 0) p.partGrab = await grab(index);
     }
 
     // The move bar, shown with the rest of the chrome.
-    await mount(code);
-    genui.setOverlayHidden(false);
-    await sleep(300);
-    p.moveBar = await dragBar(0.1);
-    if (p.moveBar.worked) p.moveBar.back = (await dragBar(-0.1)).worked;
-    genui.setOverlayHidden(true);
+    if ((await mount(code)).ok) {
+      genui.setOverlayHidden(false);
+      await sleep(300);
+      p.moveBar = await dragBar(0.1);
+      if (p.moveBar.worked) p.moveBar.back = (await dragBar(-0.1)).worked;
+      genui.setOverlayHidden(true);
+    }
 
     genui.clear();
     await rest();

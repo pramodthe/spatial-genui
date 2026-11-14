@@ -397,8 +397,8 @@ export async function mountGenerated(code: string): Promise<MountReport> {
         set(id: string, props: ElementProps) {
           const onValueChange = props.onValueChange;
           if (typeof onValueChange === 'function') {
-            // Counted like a click handler, so tests can tell a slider drag landed.
-            props = { ...props, onValueChange: (value) => (mounted.handlerCalls++, onValueChange(value)) };
+            // Guarded and counted like a click handler, so tests can tell a slider drag landed.
+            props = { ...props, onValueChange: guard(mounted, onValueChange) };
             if (!record.valueIds.includes(id)) record.valueIds.push(id);
           }
           if (record.document) applyProps(record.document, id, props);
@@ -753,11 +753,11 @@ function contentBox(root: Object3D, panelHolders: Set<Object3D>): Box3 {
   return box;
 }
 
-function guard(mounted: Mounted, fn: () => void): () => void {
-  return () => {
+function guard<A extends unknown[]>(mounted: Mounted, fn: (...args: A) => void): (...args: A) => void {
+  return (...args) => {
     mounted.handlerCalls++;
     try {
-      fn();
+      fn(...args);
     } catch (err) {
       onRuntimeError?.(`Interaction handler threw: ${describe(err)}`);
     }

@@ -8,6 +8,7 @@
 .iwsdk
 **/.iwsdk
 apps/server/runs
+apps/server/research
 apps/server/.sandbox*
 apps/worker3d
 apps/xr/src

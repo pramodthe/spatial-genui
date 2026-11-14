@@ -7,10 +7,10 @@ import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseCli } from '../args.js';
-import { MODELS_FILE, type ModelEntry } from '../models.js';
+import { MODELS_FILE, type ModelEntry } from '../../src/models.js';
 import type { JobRow, Round } from './bench3d.js';
 import type { JudgeRow } from './judge3d.js';
-import { PIPELINES, type AssetRequest, type Pipeline } from './prompts.js';
+import { PIPELINES, type AssetRequest, type Pipeline } from '../../src/three-d/prompts.js';
 
 const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 const cli = parseCli(process.argv.slice(2), {

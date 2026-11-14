@@ -9,12 +9,12 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseCli } from '../args.js';
-import { LIBRARY_DIR } from '../library.js';
-import { complete, type ChatMessage, type ContentPart } from '../llm.js';
-import { loadModel } from '../models.js';
-import type { AssetRequest } from './prompts.js';
-import { closeRenderer, renderGlb } from './render.js';
-import { dataUrl } from './review.js';
+import { LIBRARY_DIR } from '../../src/library.js';
+import { complete, type ChatMessage, type ContentPart } from '../../src/llm.js';
+import { loadModel } from '../../src/models.js';
+import type { AssetRequest } from '../../src/three-d/prompts.js';
+import { closeRenderer, renderGlb } from '../../src/three-d/render.js';
+import { dataUrl } from '../../src/three-d/review.js';
 
 const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 const WORKER = join(repoRoot, 'apps/worker3d');

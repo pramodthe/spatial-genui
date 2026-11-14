@@ -11,9 +11,9 @@ import { existsSync } from 'node:fs';
 import { appendFile, copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { parseCli } from '../args.js';
-import type { AssetRequest } from './prompts.js';
-import { closeRenderer } from './render.js';
-import { ember, repoRoot, retrieveModel } from './stages.js';
+import type { AssetRequest } from '../../src/three-d/prompts.js';
+import { closeRenderer } from '../../src/three-d/render.js';
+import { ember, repoRoot, retrieveModel } from '../../src/three-d/stages.js';
 
 const cli = parseCli(process.argv.slice(2), {
   values: ['objects', 'refs', 'out', 'only', 'top'],

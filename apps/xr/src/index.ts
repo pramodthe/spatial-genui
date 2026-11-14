@@ -12,15 +12,11 @@ import { initGenUIHost } from './genui/host.js';
 import { createStartPage } from './genui/start-page.js';
 import { createOverlay, generate, onLessonStatus, repair, reportRuntimeError, startLesson, lessonPrompt, openWritten } from './genui/overlay.js';
 import { initLessonPicker } from './genui/picker.js';
-import { PanelSystem } from './panel.js';
-import { RobotSystem } from './robot.js';
 
 World.create(
   document.getElementById('scene-container') as HTMLDivElement,
   projectOptions,
 ).then((world) => {
-  world.registerSystem(RobotSystem);
-  world.registerSystem(PanelSystem);
   initMoveHandles(world);
   initGenUIHost(world, { onRuntimeError: reportRuntimeError });
   // In XR the prompt box is not visible; the picker is how a lesson starts there (hands only).

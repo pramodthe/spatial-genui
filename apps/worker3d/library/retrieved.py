@@ -5,7 +5,7 @@ Step 1  python library/retrieved.py prepare <model.glb> <work dir>
         seams don't split a piece), merges small pieces into the nearest large one (at most 12 groups),
         and writes <work>/group_<n>.glb for each group (that group solid red, the rest faint, to be named
         from a render) and <work>/groups.npz (the group of every face of every mesh). Prints the groups.
-Step 2  apps/server/src/three-d/ingest-retrieved.ts renders each group and asks Muse Ember to name the
+Step 2  apps/server/research/three-d/ingest-retrieved.ts renders each group and asks Muse Ember to name the
         groups, pick the view a learner should see first, and give the object's real size; it writes
         <work>/names.json and <work>/meta.json.
 Step 3  python library/retrieved.py ingest <model.glb> <work dir> [--out data/library]

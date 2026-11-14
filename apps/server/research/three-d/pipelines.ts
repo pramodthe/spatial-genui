@@ -6,19 +6,19 @@ import type OpenAI from 'openai';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { config } from '../config.js';
-import { complete, completeWithTools, type ChatMessage, type Completion, type ContentPart, type LlmTarget } from '../llm.js';
-import { dryRun } from '../sandbox.js';
-import { extractCode, validateModule } from '../validate.js';
-import { repairText, systemPrompt, type Pipeline } from './prompts.js';
-import { exportModuleToGlb } from './render.js';
+import { config } from '../../src/config.js';
+import { complete, completeWithTools, type ChatMessage, type Completion, type ContentPart, type LlmTarget } from '../../src/llm.js';
+import { dryRun } from '../../src/sandbox.js';
+import { extractCode, validateModule } from '../../src/validate.js';
+import { repairText, systemPrompt, type Pipeline } from '../../src/three-d/prompts.js';
+import { exportModuleToGlb } from '../../src/three-d/render.js';
 
 /**
  * The three Phase 3 pipelines behind one interface: build a model from a request, then revise it
  * from feedback. P1 and P2 are code-writing conversations (Three.js, CadQuery); P3 is a tool-using
  * agent working in a live Blender scene through the Blender MCP server.
  *
- * Agent-written Python runs on the 3D backend: the Python service on Modal (apps/worker3d/modal_app.py,
+ * Agent-written Python runs on the 3D backend: the Python service on Modal (apps/worker3d/research/modal_app.py,
  * one Modal Sandbox per job) when WORKER3D_URL is set, otherwise local workers in a macOS sandbox.
  */
 
@@ -133,7 +133,7 @@ class CodeSession implements Session {
     if (this.backend === 'modal') return this.runCadQueryRemote(code);
     const stdout = await new Promise<string>((resolve) => {
       // The wrapper is trusted; it runs the script itself inside the sandbox with a time limit.
-      const child = spawn(PYTHON, [join(WORKER, 'cadquery_job.py'), this.jobDir, script, out], {
+      const child = spawn(PYTHON, [join(WORKER, 'research/cadquery_job.py'), this.jobDir, script, out], {
         cwd: WORKER, env: { PATH: '/usr/bin:/bin' }, stdio: ['ignore', 'pipe', 'pipe'],
       });
       let text = '';
@@ -173,7 +173,7 @@ function extractPython(reply: string): string | null {
   return /def\s+build\s*\(/.test(reply) ? reply.trim() : null;
 }
 
-/** P3: an agent with Blender tools, served by the Blender MCP server (apps/worker3d). */
+/** P3: an agent with Blender tools, served by the Blender MCP server (apps/worker3d/research). */
 /**
  * Options for a Blender agent session. Defaults are Phase 3's P3 (build a model from scratch).
  * - system: the agent's instructions.
@@ -206,7 +206,7 @@ export class BlenderSession implements Session {
     // in the macOS sandbox. Modal: the hosted MCP server gives this session its own Blender sandbox.
     const transport = backend === 'modal'
       ? new StreamableHTTPClientTransport(new URL(`${config.worker3dUrl}/mcp`), { requestInit: { headers: authHeaders() } })
-      : new StdioClientTransport({ command: PYTHON, args: [join(WORKER, 'blender_mcp_server.py'), '--job', jobDir], cwd: WORKER, stderr: 'ignore' });
+      : new StdioClientTransport({ command: PYTHON, args: [join(WORKER, 'research/blender_mcp_server.py'), '--job', jobDir], cwd: WORKER, stderr: 'ignore' });
     const client = new Client({ name: 'spatial-genui-3d', version: '0.1.0' });
     await client.connect(transport);
     const listed = await client.listTools();

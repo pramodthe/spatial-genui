@@ -7,9 +7,9 @@ import { appendFile, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseCli } from '../args.js';
-import { loadModel } from '../models.js';
-import type { AssetRequest } from './prompts.js';
-import { judge, type Verdict } from './review.js';
+import { loadModel } from '../../src/models.js';
+import type { AssetRequest } from '../../src/three-d/prompts.js';
+import { judge, type Verdict } from '../../src/three-d/review.js';
 import type { JobRow } from './bench3d.js';
 
 const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));

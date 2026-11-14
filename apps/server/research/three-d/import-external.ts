@@ -8,8 +8,8 @@ import { basename, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseCli } from '../args.js';
 import type { JobRow } from './bench3d.js';
-import { missingParts, type AssetRequest, type Pipeline } from './prompts.js';
-import { closeRenderer, renderGlb } from './render.js';
+import { missingParts, type AssetRequest, type Pipeline } from '../../src/three-d/prompts.js';
+import { closeRenderer, renderGlb } from '../../src/three-d/render.js';
 
 const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 const cli = parseCli(process.argv.slice(2), {

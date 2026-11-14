@@ -7,10 +7,10 @@ import { appendFile, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseCli } from '../args.js';
-import { complete, type ContentPart } from '../llm.js';
-import { loadModel } from '../models.js';
-import { closeRenderer, renderGlb } from './render.js';
-import { dataUrl } from './review.js';
+import { complete, type ContentPart } from '../../src/llm.js';
+import { loadModel } from '../../src/models.js';
+import { closeRenderer, renderGlb } from '../../src/three-d/render.js';
+import { dataUrl } from '../../src/three-d/review.js';
 
 const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 const cli = parseCli(process.argv.slice(2), { values: ['dir', 'tag', 'judge'], usage: 'npm run bench3d:judge-parts -- --dir <dir> --tag <name> [--judge id]' });

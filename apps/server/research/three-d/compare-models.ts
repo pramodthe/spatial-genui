@@ -9,12 +9,12 @@ import { existsSync } from 'node:fs';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { parseCli } from '../args.js';
-import { complete } from '../llm.js';
-import { loadModel } from '../models.js';
-import type { AssetRequest } from './prompts.js';
-import { closeRenderer, renderGlb } from './render.js';
-import { dataUrl } from './review.js';
-import { parseJson, repoRoot } from './stages.js';
+import { complete } from '../../src/llm.js';
+import { loadModel } from '../../src/models.js';
+import type { AssetRequest } from '../../src/three-d/prompts.js';
+import { closeRenderer, renderGlb } from '../../src/three-d/render.js';
+import { dataUrl } from '../../src/three-d/review.js';
+import { parseJson, repoRoot } from '../../src/three-d/stages.js';
 
 const cli = parseCli(process.argv.slice(2), {
   values: ['a', 'b', 'labels', 'objects', 'only', 'out', 'judge'],

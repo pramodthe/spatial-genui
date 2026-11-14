@@ -1,4 +1,4 @@
-"""Helpers for the repair agent (bench3d:repair, apps/server/src/three-d/repair.ts), loaded into the
+"""Helpers for the repair agent (bench3d:repair, apps/server/research/three-d/repair.ts), loaded into the
 sandboxed Blender's Python namespace before the agent's first turn.
 
 They cover the routine steps of a repair (listing the parts with their measurements, splitting a piece,

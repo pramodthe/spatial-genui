@@ -1,7 +1,7 @@
 [project]
 name = "worker3d"
 version = "0.1.0"
-description = "3D workers for Spatial GenUI: CadQuery runner and a headless Blender MCP server"
+description = "3D worker for Spatial GenUI: course models (TRELLIS.2, Blender part splitting, library ingest); research/ holds the CadQuery and Blender MCP experiments"
 requires-python = ">=3.12,<3.13"
 dependencies = [
   "cadquery>=2.5",

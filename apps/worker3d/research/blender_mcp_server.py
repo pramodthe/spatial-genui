@@ -1,6 +1,6 @@
 """Blender MCP server (stdio): an LLM agent builds 3D models in a sandboxed, headless Blender.
 
-Usage: python blender_mcp_server.py --job <dir>
+Usage: python research/blender_mcp_server.py --job <dir>
 Unlike the popular Blender MCP add-on, which needs a Blender window open and a click to connect, this
 server starts Blender in background mode inside the sandbox (sandbox.py), so many jobs can run in
 parallel on a server. One server = one job = one persistent Blender scene.
@@ -15,7 +15,7 @@ from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
 
-from sandbox import BLENDER, WORKER_DIR, sandboxed
+from sandbox import BLENDER, HERE, sandboxed
 
 REPLY = "@@BRIDGE@@ "
 EXEC_TIMEOUT_S = 90
@@ -28,6 +28,14 @@ JOB_DIR: Path = args.job.resolve()
 mcp = MCPServer("blender")
 
 
+def _failure(err: Exception, timeout: float) -> str:
+    if isinstance(err, asyncio.TimeoutError):
+        return f"timed out after {timeout:.0f} s"
+    if isinstance(err, ValueError):
+        return "sent a reply that could not be read (over 16 MB or not JSON)"
+    return "crashed"
+
+
 class Bridge:
     """One headless Blender process running blender_bridge.py, restarted if it hangs or dies."""
 
@@ -37,7 +45,7 @@ class Bridge:
 
     async def start(self) -> None:
         argv, env = sandboxed(JOB_DIR, [str(BLENDER), "-b", "--factory-startup", "--python-exit-code", "1",
-                                        "--python", str(WORKER_DIR / "blender_bridge.py")])
+                                        "--python", str(HERE / "blender_bridge.py")])
         self.proc = await asyncio.create_subprocess_exec(
             *argv, env=env, cwd=JOB_DIR, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL, limit=16 * 1024 * 1024,
@@ -63,12 +71,14 @@ class Bridge:
             await self.proc.stdin.drain()
             try:
                 return await asyncio.wait_for(self._read_reply(), timeout=timeout)
-            except (asyncio.TimeoutError, RuntimeError) as err:
+            except (asyncio.TimeoutError, RuntimeError, ValueError) as err:
+                # ValueError: a reply line over the stream limit, or not JSON. Either way the pipe is out of step
+                # with the requests, so Blender is restarted as after a crash.
                 self.proc.kill()
                 await self.proc.wait()
                 self.proc = None
-                reason = f"timed out after {timeout:.0f} s" if isinstance(err, asyncio.TimeoutError) else "crashed"
-                return {"ok": False, "error": f"Blender {reason}; it was restarted and the scene is now empty."}
+                error = f"Blender {_failure(err, timeout)}; it was restarted and the scene is now empty."
+                return {"ok": False, "error": error}
 
 
 bridge = Bridge()

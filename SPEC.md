@@ -47,9 +47,9 @@ Spatial GenUI is **not empty territory**. The closest work:
 1. Nobody compares the GenUI types (open, declarative, controlled; see Phase 1) for spatial UI on one runtime, and nobody uses the GenUI protocols (AG-UI, A2UI) in XR. The prior work maps onto these types: three-live, XR Blocks and LLMR are open GenUI; LLMER is declarative.
 2. No benchmark compares several providers with scoring for hand interaction and comfort layout.
 3. No real A2UI renderer exists for XR (only a 7-star browser demo).
-4. No end-user runtime GenUI product exists on Quest.
+4. AI tutors with 3D models already exist on Quest (CuriosityXR, since 2023); we found none that writes the lesson for the request. Not verified for CuriosityXR yet.
 
-**Revised novelty claim:** an A2UI-compatible spatial GenUI runtime for WebXR on Quest, with hand interactions built into every component, plus the first multi-provider benchmark that compares output formats for runtime spatial UI. **Don't claim "first GenUI in VR."**
+**Novelty claim (Nov 14):** a WebXR system on Quest in which an agent writes each hands-on lesson for any request at runtime (behaviour, panels and the 3D it builds as code; models it can't build come from image-to-3D generation or, where accuracy needs it, a licensed library), plus the first controlled comparison we know of between open, declarative and controlled GenUI on one XR runtime (open code was the most reliable and the best) and a five-model benchmark with real grabs and button presses. The Nov 12 claim led with the A2UI runtime; RQ1 put A2UI second of three. **Don't claim "first GenUI in VR"** or the first AI tutor on Quest. Reasons and sources in `docs/paper/prior-art.md`.
 
 ## 5. Architecture overview
 

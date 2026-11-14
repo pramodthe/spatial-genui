@@ -28,4 +28,5 @@ Each catalogue entry carries its full provenance; this table is made from them. 
 | `saturn-nasa` | Saturn with its main rings and Titan | NASA Planetary Fact Sheets (NSSDCA) | public domain data. |
 | `skull-bp3d` | Human skull (22 bones, colour-coded) | BodyParts3D, © The Database Center for Life Science licensed under CC Attribution 4.0 International | CC BY 4.0. |
 | `solar-system` | The Solar System: the Sun, eight planets and their orbits | NASA Planetary Fact Sheets (NSSDCA) | public domain data. |
+| `space-rocket-trellis` | Space Rocket | Generated with TRELLIS.2 (Microsoft, MIT) from a Muse Image reference picture | generated (TRELLIS.2, MIT). |
 | `volcano-objaverse` | Volcano (3D model by shooogp) | shooogp (Sketchfab), "Volcano - البركان", https://sketchfab.com/3d-models/f53dad6cb99844e98753a41035373560 | CC BY 4.0. |

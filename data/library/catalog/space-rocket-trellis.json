@@ -1,0 +1,256 @@
+{
+  "id": "space-rocket-trellis",
+  "title": "Space Rocket",
+  "tier": "D",
+  "kind": "astronomy",
+  "concept": "A tall, slender white-and-grey launch vehicle with a pointed nose cone on top, a long cylindrical body with a few visible seams, small swept fins near the base, and a bell-shaped engine nozzle at the bottom.",
+  "detail": "split",
+  "keywords": [
+    "space rocket",
+    "launch vehicle",
+    "rocket engine",
+    "nose cone"
+  ],
+  "glb": "assets/space-rocket-trellis.glb",
+  "sizeM": [
+    0.1243,
+    0.4,
+    0.1249
+  ],
+  "triangles": 100832,
+  "parts": [
+    {
+      "node": "upper_fuel_tank",
+      "name": "upper fuel tank",
+      "group": null,
+      "color": "#e6194b",
+      "triangles": 9068,
+      "centroid": [
+        -0.0016,
+        0.2131,
+        -0.0015
+      ],
+      "labelAnchor": [
+        -0.0149,
+        0.2625,
+        -0.0141
+      ],
+      "explodeDir": [
+        -0.123,
+        0.9861,
+        -0.1119
+      ]
+    },
+    {
+      "node": "payload_bay",
+      "name": "payload bay",
+      "group": null,
+      "color": "#3cb44b",
+      "triangles": 12299,
+      "centroid": [
+        0.0001,
+        0.2964,
+        -0.0005
+      ],
+      "labelAnchor": [
+        0.0007,
+        0.3325,
+        -0.0176
+      ],
+      "explodeDir": [
+        0.0009,
+        1.0,
+        -0.0057
+      ]
+    },
+    {
+      "node": "nose_cone",
+      "name": "nose cone",
+      "group": null,
+      "color": "#4363d8",
+      "triangles": 3989,
+      "centroid": [
+        -0.0001,
+        0.3542,
+        0.0002
+      ],
+      "labelAnchor": [
+        0.0003,
+        0.4,
+        -0.0001
+      ],
+      "explodeDir": [
+        -0.0004,
+        1.0,
+        0.001
+      ]
+    },
+    {
+      "node": "lower_fuel_tank",
+      "name": "lower fuel tank",
+      "group": null,
+      "color": "#ffe119",
+      "triangles": 16822,
+      "centroid": [
+        -0.0008,
+        0.097,
+        0.0022
+      ],
+      "labelAnchor": [
+        -0.0327,
+        0.0325,
+        0.0305
+      ],
+      "explodeDir": [
+        -0.0082,
+        -0.9997,
+        0.0214
+      ]
+    },
+    {
+      "node": "launch_pad_base",
+      "name": "launch pad base",
+      "group": null,
+      "color": "#f58231",
+      "triangles": 46362,
+      "centroid": [
+        -0.0032,
+        0.0117,
+        0.0007
+      ],
+      "labelAnchor": [
+        -0.0506,
+        0.0,
+        0.0258
+      ],
+      "explodeDir": [
+        -0.0171,
+        -0.9998,
+        0.0036
+      ]
+    },
+    {
+      "node": "fin_right",
+      "name": "fin right",
+      "group": null,
+      "color": "#911eb4",
+      "triangles": 1691,
+      "centroid": [
+        0.0219,
+        0.0605,
+        0.0002
+      ],
+      "labelAnchor": [
+        0.0208,
+        0.051,
+        0.0001
+      ],
+      "explodeDir": [
+        0.1552,
+        -0.9879,
+        0.0012
+      ]
+    },
+    {
+      "node": "fin_left",
+      "name": "fin left",
+      "group": null,
+      "color": "#42d4f4",
+      "triangles": 2016,
+      "centroid": [
+        -0.0222,
+        0.0603,
+        -0.0
+      ],
+      "labelAnchor": [
+        -0.0367,
+        0.0522,
+        0.0005
+      ],
+      "explodeDir": [
+        -0.1572,
+        -0.9876,
+        -0.0002
+      ]
+    },
+    {
+      "node": "fin_front",
+      "name": "fin front",
+      "group": null,
+      "color": "#f032e6",
+      "triangles": 1846,
+      "centroid": [
+        0.0002,
+        0.0602,
+        -0.022
+      ],
+      "labelAnchor": [
+        -0.0001,
+        0.0488,
+        -0.0361
+      ],
+      "explodeDir": [
+        0.0011,
+        -0.9878,
+        -0.1556
+      ]
+    },
+    {
+      "node": "fin_back",
+      "name": "fin back",
+      "group": null,
+      "color": "#bfef45",
+      "triangles": 1910,
+      "centroid": [
+        0.0002,
+        0.0602,
+        0.0217
+      ],
+      "labelAnchor": [
+        0.0001,
+        0.0488,
+        0.0355
+      ],
+      "explodeDir": [
+        0.0012,
+        -0.9881,
+        0.1537
+      ]
+    },
+    {
+      "node": "engine_nozzle",
+      "name": "engine nozzle",
+      "group": null,
+      "color": "#fabed4",
+      "triangles": 4829,
+      "centroid": [
+        0.0004,
+        0.0475,
+        0.0
+      ],
+      "labelAnchor": [
+        0.0138,
+        0.0325,
+        -0.0002
+      ],
+      "explodeDir": [
+        0.0027,
+        -1.0,
+        0.0001
+      ]
+    }
+  ],
+  "licence": "generated (TRELLIS.2, MIT)",
+  "credit": "Generated with TRELLIS.2 (Microsoft, MIT) from a Muse Image reference picture",
+  "provenance": {
+    "built": "2026-11-14",
+    "source": "trellis",
+    "request": "A tall, slender white-and-grey launch vehicle with a pointed nose cone on top, a long cylindrical body with a few visible seams, small swept fins near the base, and a bell-shaped engine nozzle at the bottom.",
+    "notes": [
+      "Generated by TRELLIS.2 from a reference picture made by Muse Image (checked by Muse Ember: 3/5); not checked by a subject expert.",
+      "Parts were cut out of the generated model by an agent working in Blender (Muse Spark), by eye: where one part ends and the next begins is approximate.",
+      "It is the outside only, a hollow shell with nothing inside: do not use cutaway() or xray() on it, and show what happens inside with your own shapes.",
+      "Not real size: the real space rocket is about 35 m across."
+    ]
+  }
+}

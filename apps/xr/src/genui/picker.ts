@@ -524,6 +524,7 @@ class LessonPickerSystem extends createSystem({
     const at = this.head.clone().addScaledVector(this.forward, spot.distance);
     at.y = this.head.y - spot.belowEyes;
     const frame = this.holder.parent;
+    frame?.updateWorldMatrix(true, false);
     this.holder.position.copy(frame ? frame.worldToLocal(at.clone()) : at);
     // Panels face +Z: yaw toward the head.
     this.holder.rotation.set(0, Math.atan2(this.head.x - at.x, this.head.z - at.z) - worldYaw(frame), 0);

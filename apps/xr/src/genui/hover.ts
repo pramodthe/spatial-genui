@@ -38,7 +38,7 @@ export function createGlow(object: Object3D, scene: Object3D): Glow {
       if (next === on) return;
       on = next;
       if (on && !material) {
-        if (!layer) {
+        if (layer?.parent !== scene) {
           layer = new Group();
           layer.name = 'Hover glow';
           scene.add(layer);
@@ -58,7 +58,7 @@ export function createGlow(object: Object3D, scene: Object3D): Glow {
           copy.name = 'hover glow';
           copy.matrixAutoUpdate = false;
           copy.raycast = () => {};
-          layer.add(copy);
+          layer!.add(copy);
           state.pairs.push([mesh, copy]);
         }
       }
@@ -72,6 +72,11 @@ export function createGlow(object: Object3D, scene: Object3D): Glow {
       for (const [, copy] of state.pairs) copy.removeFromParent();
       state.pairs.length = 0;
       material?.dispose();
+      // The layer goes with the last glow, so the next lesson makes it again under the scene it is given.
+      if (layer && layer.children.length === 0) {
+        layer.removeFromParent();
+        layer = null;
+      }
     },
   };
 }

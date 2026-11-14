@@ -995,7 +995,8 @@ export function createKit(THREE, options = {}) {
   // --- Cards and quizzes ----------------------------------------------------------------------------------
 
   const CARD = { width: 0.1, height: 0.044, depth: 0.007 };
-  const CARD_COLORS = { idle: '#2a2f38', right: '#1f7a3a', wrong: '#a32a3a' };
+  // Meta Horizon OS (Reality Labs Design System) tones, dark enough for white text: neutral, positive, negative.
+  const CARD_COLORS = { idle: '#414141', right: '#0f7a2a', wrong: '#c22f42' };
 
   /** Text drawn on a canvas, wrapped and shrunk to fit: the face of a card. Dry runs have no canvas. */
   function textFace(text, width, height, color) {
@@ -1205,7 +1206,7 @@ export function createKit(THREE, options = {}) {
 
   const makeCard = card;
   const FLASH = { width: 0.16, height: 0.1 };
-  const TRAY = { width: 0.13, depth: 0.09, again: '#b7791f', known: '#1f7a3a' };
+  const TRAY = { width: 0.13, depth: 0.09, again: '#b8641a', known: '#0f7a2a' };
 
   /**
    * A deck of flash cards to revise with. One card stands in front of the learner showing its front (a term
@@ -1235,7 +1236,7 @@ export function createKit(THREE, options = {}) {
 
     // One card that is picked up and sorted again and again: it takes the next card's two faces each time.
     // (A stack of grabbable cards would sit so close together that the host makes them ray-only grabs.)
-    const faces = cards.map((c) => ({ front: textFace(c.front, FLASH.width, FLASH.height, '#fafaf7'), back: textFace(c.back, FLASH.width, FLASH.height, '#ffe9b0') }));
+    const faces = cards.map((c) => ({ front: textFace(c.front, FLASH.width, FLASH.height, '#f2f2f2'), back: textFace(c.back, FLASH.width, FLASH.height, '#fcd29a') }));
     const body = own(new THREE.MeshStandardMaterial({ color: CARD_COLORS.idle, roughness: 0.6 }));
     const card = new THREE.Group();
     card.name = 'flash card';
@@ -1255,7 +1256,7 @@ export function createKit(THREE, options = {}) {
     // The two trays, each with its name standing behind it and a pile of the cards sorted onto it.
     const trays = { again: { x: -spread, color: TRAY.again, name: 'Again', pile: [] }, known: { x: spread, color: TRAY.known, name: 'Got it', pile: [] } };
     const slab = own(roundedBox(FLASH.width * 0.6, 0.004, FLASH.height * 0.6, 0.002));
-    const slabMaterial = material('plastic', { color: '#3a4250' });
+    const slabMaterial = material('plastic', { color: '#5a5a5a' });
     for (const tray of Object.values(trays)) {
       tray.at = new THREE.Vector3(home.x + tray.x, home.y - 0.07, home.z);
       const pad = new THREE.Mesh(own(roundedBox(TRAY.width, 0.008, TRAY.depth, 0.004)), own(new THREE.MeshStandardMaterial({ color: tray.color, roughness: 0.7 })));
@@ -1369,34 +1370,39 @@ export function createKit(THREE, options = {}) {
     const accent = `#${colorBytes(o.accent ?? '#5aa9ff').map((c) => c.toString(16).padStart(2, '0')).join('')}`;
     const [r, g, b] = colorBytes(accent);
     const onAccent = 0.299 * r + 0.587 * g + 0.114 * b > 150 ? '#0e1013' : '#ffffff';
-    const lighter = `#${[r, g, b].map((c) => Math.round(c + (255 - c) * 0.25).toString(16).padStart(2, '0')).join('')}`;
     const pad = (v, h) => `padding-top: ${v}px; padding-bottom: ${v}px; padding-left: ${h}px; padding-right: ${h}px;`;
+    // Reality Labs Design System, dark mode (the Meta Horizon OS UI Set): the panel itself is drawn by the
+    // headset as a Horizon panel (grey gradient); text in white at 90% and 70%; buttons are pills, the main
+    // one light on dark; cards are recessed groups. The accent marks the lesson (bar, eyebrow, badges). Font
+    // sizes stay as they were: the server checks that the smallest text is readable in the headset.
     return `
-      .panel { width: 500px; flex-direction: column; gap: 14px; ${pad(24, 26)} border-radius: 24px; background-color: #14171c; border-width: 2px; border-color: #2a3038; }
-      .bar { width: 56px; height: 6px; border-radius: 3px; background-color: ${accent}; }
-      .eyebrow { color: ${accent}; font-size: 20px; font-weight: 700; }
-      .title { color: #ffffff; font-size: 34px; font-weight: 700; }
-      .subtitle { color: #e8ebef; font-size: 26px; font-weight: 600; }
-      .body { color: #c5cbd5; font-size: 24px; }
-      .small { color: #99a2af; font-size: 20px; }
-      .good { color: #4ade80; font-size: 24px; font-weight: 600; }
-      .bad { color: #f87171; font-size: 24px; font-weight: 600; }
+      .panel { width: 500px; flex-direction: column; gap: 14px; ${pad(24, 26)} border-radius: 24px; background-color: #333333; }
+      .bar { width: 44px; height: 5px; border-radius: 3px; background-color: ${accent}; }
+      .eyebrow { color: ${accent}; font-size: 20px; font-weight: 700; letter-spacing: 0.5px; }
+      .title { color: rgba(255, 255, 255, 0.9); font-size: 34px; font-weight: 700; letter-spacing: -0.5px; }
+      .subtitle { color: rgba(255, 255, 255, 0.9); font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
+      .body { color: rgba(255, 255, 255, 0.9); font-size: 24px; font-weight: 500; }
+      .small { color: rgba(255, 255, 255, 0.7); font-size: 20px; font-weight: 500; }
+      .good { color: #2ad116; font-size: 24px; font-weight: 700; }
+      .bad { color: #f7818c; font-size: 24px; font-weight: 700; }
       .row { flex-direction: row; gap: 10px; align-items: center; }
       .col { flex-direction: column; gap: 10px; }
       .grow { flex-grow: 1; flex-shrink: 1; }
-      .card { flex-direction: column; gap: 8px; ${pad(14, 16)} border-radius: 16px; background-color: #1d2128; }
-      .btn { ${pad(12, 20)} border-radius: 14px; background-color: ${accent}; align-items: center; justify-content: center; cursor: pointer; }
-      .btn:hover { background-color: ${lighter}; }
-      .btn-text { color: ${onAccent}; font-size: 24px; font-weight: 700; }
-      .btn2 { ${pad(12, 20)} border-radius: 14px; background-color: #272c35; align-items: center; justify-content: center; cursor: pointer; }
-      .btn2:hover { background-color: #353c48; }
-      .btn2-text { color: #eef1f5; font-size: 24px; font-weight: 600; }
-      .chip { ${pad(6, 14)} border-radius: 18px; background-color: #222730; }
-      .chip-text { color: #cfd5de; font-size: 20px; font-weight: 600; }
+      .card { flex-direction: column; gap: 8px; ${pad(14, 16)} border-radius: 16px; background-color: rgba(0, 0, 0, 0.14); }
+      .btn { ${pad(12, 24)} border-radius: 1000px; background-color: rgba(255, 255, 255, 0.9); align-items: center; justify-content: center; cursor: pointer; }
+      .btn:hover { background-color: #d9d9d9; }
+      .btn:active { background-color: #c0c0c0; }
+      .btn-text { color: #272727; font-size: 24px; font-weight: 700; }
+      .btn2 { ${pad(12, 24)} border-radius: 1000px; background-color: rgba(255, 255, 255, 0.1); align-items: center; justify-content: center; cursor: pointer; }
+      .btn2:hover { background-color: rgba(255, 255, 255, 0.16); }
+      .btn2:active { background-color: rgba(255, 255, 255, 0.22); }
+      .btn2-text { color: rgba(255, 255, 255, 0.9); font-size: 24px; font-weight: 700; }
+      .chip { ${pad(6, 14)} border-radius: 1000px; background-color: rgba(255, 255, 255, 0.1); }
+      .chip-text { color: rgba(255, 255, 255, 0.9); font-size: 20px; font-weight: 500; }
       .badge { width: 40px; height: 40px; border-radius: 20px; background-color: ${accent}; align-items: center; justify-content: center; flex-shrink: 0; }
       .badge-text { color: ${onAccent}; font-size: 22px; font-weight: 700; }
-      .divider { height: 2px; background-color: #2a3038; }
-      .stat { color: #ffffff; font-size: 44px; font-weight: 700; }
+      .divider { height: 2px; background-color: rgba(255, 255, 255, 0.1); }
+      .stat { color: rgba(255, 255, 255, 0.9); font-size: 44px; font-weight: 700; letter-spacing: -1px; }
     `;
   }
 

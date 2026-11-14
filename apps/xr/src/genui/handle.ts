@@ -42,7 +42,7 @@ type Record = { entity: Entity; bar: Mesh; material: MeshBasicMaterial; target: 
 
 const BAR_LENGTH_M = 0.16;
 const BAR_RADIUS_M = 0.014;
-const COLORS = ['#c9ced8', '#ffffff', '#5aa9ff'] as const; // resting, pointed at, held
+const COLORS = ['#c0c0c0', '#ffffff', '#31a8f3'] as const; // resting, pointed at, held (Horizon greys, selection blue)
 const UP = new Vector3(0, 1, 0);
 
 const records = new Set<Record>();

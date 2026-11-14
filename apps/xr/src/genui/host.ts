@@ -104,6 +104,21 @@ const GLYPH_FALLBACKS: Record<string, string> = {
   ' ': ' ', ' ': ' ', ' ': ' ',
 };
 
+/**
+ * A lesson panel whose root is the theme's `<div class="panel">` becomes the Horizon kit's `<Panel>`, so it
+ * is drawn with the Meta Horizon OS panel background (a grey gradient) like the rest of the app. Saved
+ * lessons get it too: the markup is rewritten here, when the lesson opens. Anything else is left alone.
+ */
+function asHorizonPanel(markup: string): string {
+  const body = markup.lastIndexOf('</style>');
+  const start = body < 0 ? 0 : body + '</style>'.length;
+  const open = /^(\s*)<div(\s[^>]*\bclass="(?:[^"]*\s)?panel(?:\s[^"]*)?"[^>]*)>/.exec(markup.slice(start));
+  const end = markup.trimEnd();
+  if (!open || !end.endsWith('</div>')) return markup;
+  const rest = markup.slice(start + open[0].length, end.length - '</div>'.length);
+  return `${markup.slice(0, start)}${open[1]}<Panel${open[2]}>${rest}</Panel>`;
+}
+
 /** Safety net for text that slipped past the server checks: swap or drop characters the font lacks. */
 function toPanelText(text: string): string {
   let out = '';
@@ -334,7 +349,7 @@ export async function mountGenerated(code: string): Promise<MountReport> {
       return object;
     },
     ui(markup: string, options: PanelOptions = {}) {
-      const record = createPanelRecord(toPanelText(String(markup)), options);
+      const record = createPanelRecord(asHorizonPanel(toPanelText(String(markup))), options);
       panels.push(record);
       return {
         object3D: record.holder,

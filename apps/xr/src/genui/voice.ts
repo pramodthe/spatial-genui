@@ -17,13 +17,51 @@ export function voiceAvailable(): boolean {
   return Boolean(navigator.mediaDevices?.getUserMedia) && typeof MediaRecorder !== 'undefined';
 }
 
+export type MicrophoneState = 'granted' | 'denied' | 'prompt' | 'unknown';
+
+/**
+ * Whether the page may use the microphone. Quest Browser cannot show its permission prompt inside an
+ * immersive session, so the start page asks for it before XR (askForMicrophone) and the picker checks here.
+ */
+export async function microphoneState(): Promise<MicrophoneState> {
+  try {
+    const status = await navigator.permissions?.query({ name: 'microphone' as PermissionName });
+    return status ? (status.state as MicrophoneState) : 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+/** Show the browser's microphone prompt (outside XR) and release the microphone at once. */
+export async function askForMicrophone(): Promise<MicrophoneState> {
+  try {
+    const probe = await navigator.mediaDevices.getUserMedia({ audio: true });
+    for (const track of probe.getTracks()) track.stop();
+    return 'granted';
+  } catch {
+    return (await microphoneState()) === 'granted' ? 'granted' : 'denied';
+  }
+}
+
 export function isListening(): boolean {
   return recorder !== null;
 }
 
+// A permission prompt that cannot be shown (inside XR) leaves getUserMedia waiting forever: give up after this.
+const MICROPHONE_WAIT_MS = 6000;
+
 /** Start recording; `onTimeout` runs if the learner doesn't stop within MAX_LISTEN_MS. */
 export async function startListening(onTimeout: () => void): Promise<void> {
-  stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+  const asked = navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+  let waited = 0;
+  const gaveUp = new Promise<never>((_, reject) => {
+    waited = window.setTimeout(() => reject(new Error('The microphone did not start.')), MICROPHONE_WAIT_MS);
+  });
+  try {
+    stream = await Promise.race([asked, gaveUp]);
+  } finally {
+    clearTimeout(waited);
+  }
   chunks = [];
   recorder = new MediaRecorder(stream);
   recorder.addEventListener('dataavailable', (event) => {

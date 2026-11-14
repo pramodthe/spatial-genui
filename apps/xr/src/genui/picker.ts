@@ -12,7 +12,7 @@ import {
   type World,
 } from '@iwsdk/core';
 import { EXAMPLE_LESSONS } from './lessons';
-import { cancelListening, isListening, startListening, stopAndTranscribe, voiceAvailable } from './voice';
+import { cancelListening, isListening, microphoneState, startListening, stopAndTranscribe, voiceAvailable } from './voice';
 import type { LessonStatus } from './overlay';
 import { courseProgress, createCourse, fetchCourseLesson, listCourses, polishCourseLesson, type CourseSummary } from './courses';
 import { capture, lessonPosition } from './host';
@@ -348,11 +348,17 @@ class LessonPickerSystem extends createSystem({
   private async toggleVoice() {
     if (!voiceAvailable() || this.voiceBusy) return;
     if (!isListening()) {
+      // The browser can't ask for the microphone inside XR: it has to be allowed on the start page first.
+      const allowed = await microphoneState();
+      if (allowed === 'prompt' || allowed === 'denied') {
+        this.setVoice('Allow the microphone first: leave XR and tap "Allow microphone" on the start page.', 'off');
+        return;
+      }
       try {
         await startListening(() => void this.toggleVoice());
         this.setVoice("Listening... pinch here when you're done", 'listening');
       } catch {
-        this.setVoice('Microphone blocked: allow it for this site, then try again.', 'off');
+        this.setVoice('The microphone did not start: leave XR and tap "Allow microphone" on the start page.', 'off');
       }
       return;
     }

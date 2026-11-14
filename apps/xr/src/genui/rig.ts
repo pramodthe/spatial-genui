@@ -48,8 +48,8 @@ const XRAY_OPACITY = 0.14;
 const labelMarkup = (text: string) => `
   <style>
     .l { width: 320px; padding-left: 14px; padding-right: 14px; padding-top: 7px; padding-bottom: 7px;
-         border-radius: 12px; background-color: #15181d; }
-    .t { color: #ffffff; font-size: 28px; font-weight: 600; }
+         border-radius: 1000px; background-color: #333333; }
+    .t { color: rgba(255, 255, 255, 0.9); font-size: 28px; font-weight: 600; }
   </style>
   <div class="l"><span class="t" id="text">${text.replace(/[<>&]/g, ' ')}</span></div>`;
 

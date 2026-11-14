@@ -627,6 +627,14 @@ Added on Nov 14, after a headset session:
 - **Database** (`apps/server/src/db.ts`): courses, lessons and an index of course models in one SQLite
   file (`data/app.db`). A second course about the same object reuses the saved model (checked once).
 - **The model library is in git** (`data/library/`, 24 models, 55 MB, credits in `CREDITS.md`).
+- **Second model run under the 40-turn cap** (a space rocket, 10 parts): 1,213 s for the model (reference
+  picture 112 s over four tries, TRELLIS.2 73 s, split 1,010 s in 24 calls and 137,701 tokens); lesson 1
+  then took 21 s. Two runs are not a measurement of the cap's effect: the objects differ.
+- **Flash cards** (`kit.flashcards`): a quick pinch turns the card, a drop on "Got it" or "Again" sorts it.
+  Courses are now planned as 2-3 lessons to explore, a flash-card review, then the quiz. One flash-card
+  lesson written live, first try, 18 s; flip and sorting checked in the emulator with an emulated hand.
+- **Sizing fix:** a lesson is measured after its first `update()`, so parts sized there (a beam drawn by
+  stretching a unit cylinder) no longer shrink the whole lesson.
 
 Open: a measured comparison over more objects (needed before any claim in the paper), a looks score on the
 benchmark (`bench:judge --looks` exists, not yet run), capping cut faces of split parts, the latency

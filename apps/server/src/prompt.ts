@@ -108,6 +108,18 @@ Cards and quizzes.
     });
   Use 3 to 6 items with targets at least 0.07 m apart. Do not make the model itself grabbable in a quiz
   (the targets must stay put). quiz.reset() starts over (wire it to a button).
+- kit.flashcards({ root, traits, isGrabbed, cards, at, onChange }): a deck of flash cards for revision.
+  One card stands at \`at\` showing its front; a quick pinch turns it over; the user then drops it on the
+  "Got it" tray (right) or the "Again" tray (left), which the kit makes 0.2 m either side of the card.
+  "Again" cards come round once more. Call deck.update(time, delta) in update().
+    const deck = kit.flashcards({
+      root, traits, isGrabbed,
+      cards: [{ front: 'Turbine', back: 'Hot gas spins it; it drives the compressor.' }, ...],  // 4 to 8, plain ASCII
+      at: [0, 0.14, 0.1],                                          // keep 0.25 m clear on both sides for the trays
+      onChange({ known, again, left, total, done, side }) { panel.set('state', { text: known + ' of ' + total + ' known' }); },
+    });
+  deck.flip() turns the current card (wire it to a "Flip" button), deck.reset() starts over. Put the
+  panel above or behind the trays, not beside the card.
 Panels.
 - kit.theme({ accent }) returns CSS for ui(), so all panels share one look. Use it as
   <style>\${kit.theme({ accent: '#ffb347' })}</style><div class="panel">...</div> with ui width 0.3-0.36.

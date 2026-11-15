@@ -74,6 +74,8 @@ def _prompt(kind: str) -> str:
         "Do not delegate to model-maker unless the player asked for one realistic scanned object."
         if kind == "game"
         else "Delegate the main realistic 3D model to model-maker with task(), then place what it returns. "
+        "When the request names a look, follow the styles skill: start the module with its new-lesson.mjs script and "
+        "check it with its check-lesson.mjs."
     )
     return (
         f"You write one JavaScript module for a mixed-reality {subject} and save it at /work/module.js. "

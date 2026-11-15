@@ -3,6 +3,7 @@
 - **Status:** Draft for review, November 12, 2026
 - **Replaces:** the Phase 3 approach of having the LLM build every object's geometry as code
 - **Inputs:** the Phase 3 benchmark (`bench/results/3d-run-1`), the X-Ray Mirror example, SceneCraft (arXiv 2403.01248), the `setout` project, and the sources in section 10
+- **App server (Nov 15):** courses and lessons are served by `apps/api` (Python). Molecule builds call `apps/worker3d` in process. Vision and render stages of an on-demand model still go through `apps/gate/acquire-bridge.ts`. The dry run is `apps/gate`, not the API process.
 
 ---
 
@@ -292,7 +293,7 @@ Rebuild the assets: download BodyParts3D into `data/bodyparts3d/` (see the build
 - Open: in one skull lesson all panel presses fail even with labels removed, the per-frame explode removed and the layout pass disabled, so the cause is in that lesson's own panel. `tests/debug-buttons.mjs` (with `genui.debugRay`) reproduces it.
 
 **M3 router, data-driven builders and retrieval (Nov 13).** This covers M3 and the data half of M4.
-- **Router** (`apps/server/src/router.ts`): before a lesson is written, one quick Muse Ember call (low reasoning, about 1 s) reads a compact catalogue and picks the models the request needs (at most 4), and names any chemical compounds it needs that the library lacks. Only the chosen models go into the agent's prompt, so the prompt stays small as the library grows. If the call fails, keyword matching takes over.
+- **Router** (`apps/api/app/router.py`; the benchmark harness keeps the original in `apps/gate/src/router.ts`): before a lesson is written, one quick Muse Ember call (low reasoning, about 1 s) reads a compact catalogue and picks the models the request needs (at most 4), and names any chemical compounds it needs that the library lacks. Only the chosen models go into the agent's prompt, so the prompt stays small as the library grows. If the call fails, keyword matching takes over.
 - **Data-driven builders** (tier B, `apps/worker3d/library/`):
   - From NASA Planetary Fact Sheet numbers: Saturn with its rings and Titan, the eight planets at true relative size, and a compressed solar system. Each model's provenance notes say what is and isn't to scale, and the agent is told to repeat them in the lesson.
   - From PubChem 3D conformers: ball-and-stick molecules with one named part per atom. They are built on demand when a lesson needs a compound the library lacks; ethanol and oxygen were built this way during the evaluation, in a few seconds each.
@@ -452,7 +453,7 @@ Rebuild the assets: download BodyParts3D into `data/bodyparts3d/` (see the build
   - **Biology ties on fidelity** but loses clarity because the real-size flower (10 cm) sits small and far away with tiny labels. Next: scale small models up further in lessons.
   - Library lessons are still faster and cheaper.
 
-**On-demand path (Nov 13).** One job now takes a real-world object from "not in the library" to a library model with named parts (`apps/server/src/three-d/acquire.ts`; the stages are shared with the benchmarks through `stages.ts`):
+**On-demand path (Nov 13).** One job now takes a real-world object from "not in the library" to a library model with named parts (`apps/gate/src/three-d/acquire.ts`, driven by the Python API through `apps/gate/acquire-bridge.ts`; the stages are shared with the benchmarks through `stages.ts`):
 
 ```
 reference picture: Ember briefs it, Muse Image draws it, Ember checks it (redrawn up to 3 times)

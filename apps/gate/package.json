@@ -1,0 +1,55 @@
+{
+  "name": "genui-gate",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Node half of the backend: the lesson gate (static check and locked-down dry run with three.js and kit.js) and the course 3D model pipeline the Python API drives; plus the research harness: the published one-call agent loop and the benchmark, judge and 3D scripts the paper's numbers come from.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "gate": "tsx gate.ts",
+    "test": "tsx test-gate.ts",
+    "acquire": "tsx acquire-bridge.ts",
+    "typecheck": "tsc --noEmit",
+    "bench": "tsx research/bench.ts",
+    "bench:report": "tsx research/bench-report.ts",
+    "bench:combine": "tsx research/bench-combine.ts",
+    "bench:rq4": "tsx research/bench-rq4.ts",
+    "batch": "tsx research/batch.ts",
+    "review": "tsx research/review.ts",
+    "bench:judge": "tsx research/judge.ts",
+    "bench:gallery": "tsx research/bench-gallery.ts",
+    "bench3d": "tsx research/three-d/bench3d.ts",
+    "bench3d:judge": "tsx research/three-d/judge3d.ts",
+    "bench3d:report": "tsx research/three-d/report3d.ts",
+    "bench3d:import": "tsx research/three-d/import-external.ts",
+    "bench3d:retrieve": "tsx research/three-d/retrieve.ts",
+    "bench3d:ingest": "tsx research/three-d/ingest-retrieved.ts",
+    "bench3d:segment": "tsx research/three-d/segment-parts.ts",
+    "bench3d:judge-parts": "tsx research/three-d/judge-parts.ts",
+    "bench3d:name-regions": "tsx research/three-d/name-regions.ts",
+    "bench3d:verify-parts": "tsx research/three-d/verify-parts.ts",
+    "bench3d:repair": "tsx research/three-d/repair.ts",
+    "assets:acquire": "tsx research/three-d/acquire-cli.ts",
+    "bench3d:check-refs": "tsx research/three-d/check-references.ts",
+    "bench3d:compare": "tsx research/three-d/compare-models.ts"
+  },
+  "dependencies": {
+    "@drawcall/uikitml": "^0.1.8",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "acorn": "^8.19.0",
+    "acorn-walk": "^8.3.5",
+    "esbuild": "0.28.2",
+    "openai": "^7.55.0",
+    "three": "npm:super-three@^0.185.0",
+    "undici": "6.29.1",
+    "tsx": "^4.23.15",
+    "playwright": "1.65.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/three": "^0.185.0",
+    "typescript": "^7.0.2"
+  }
+}

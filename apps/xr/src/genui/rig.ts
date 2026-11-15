@@ -19,7 +19,7 @@ import {
 /**
  * Teaching rig for a library model: the tools lessons need (labels, explode, cut-away, X-ray,
  * highlight, reset), done by host code so the agent states intent instead of computing geometry.
- * Mirrored by the server's dry-run stand-in (apps/server/src/dryrun.ts), which applies the same
+ * Mirrored by the server's dry-run stand-in (apps/gate/src/dryrun.ts), which applies the same
  * label panel checks.
  *
  * Labels follow SceneCraft's idea: the lesson names the parts, code places them. Labels sit in two

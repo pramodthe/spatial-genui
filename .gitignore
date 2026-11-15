@@ -1,6 +1,8 @@
 .env
 node_modules/
 dist/
+.venv/
+apps/gate/.cache/
 .DS_Store
 
 # Personal Claude Code settings
@@ -19,3 +21,11 @@ bench/results/*/refs/
 /data/*
 # ...except the app's 3D models, so a fresh clone or a hosted copy has them without generating them again
 !/data/library/
+
+# Python API: generation run logs (JSONL, the benchmark's raw material) and a local server log
+apps/api/runs/
+apps/api/server.log
+
+# Python caches
+__pycache__/
+.pytest_cache/

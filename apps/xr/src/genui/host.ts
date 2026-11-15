@@ -127,7 +127,7 @@ type Layered = {
   shown: boolean;
 };
 
-/** The paintbox for generated lessons, served by the agent server (apps/server/src/kit/kit.js). */
+/** The paintbox for generated lessons, served by the agent server (apps/gate/src/kit/kit.js). */
 type Kit = { finalize(root: Object3D): void; pump(budgetMs?: number): number; dispose(): void };
 let kitModule: Promise<{ createKit(three: unknown): Kit } | null> | null = null;
 function loadKit() {
@@ -149,9 +149,9 @@ let mountTicket = 0;
 const SUPERSEDED: MountReport = { ok: false, error: 'Another lesson was opened while this one loaded.', superseded: true };
 
 // The panel font (Inter atlas in @pmndrs/msdfonts) has plain ASCII plus these; anything else renders
-// as an empty box. Keep in sync with apps/server/src/glyphs.ts, which makes the agent fix its text.
+// as an empty box. Keep in sync with apps/gate/src/glyphs.ts, which makes the agent fix its text.
 const PANEL_GLYPHS = new Set([...Array.from({ length: 95 }, (_, i) => String.fromCharCode(32 + i)), ...'§°ÄÖÜßäöü\n\r\t']);
-// Copied from REPLACEMENTS in apps/server/src/glyphs.ts.
+// Copied from REPLACEMENTS in apps/gate/src/glyphs.ts.
 const GLYPH_FALLBACKS: Record<string, string> = {
   '–': '-', '—': '-', '−': '-', '‐': '-', '‑': '-',
   '‘': "'", '’': "'", '“': '"', '”': '"', '…': '...', '·': '-', '•': '-', '×': 'x', '÷': '/',
@@ -223,6 +223,13 @@ const GAME_ZOOM_STEP = 1.25;
 const GAME_ZOOM_RANGE = [0.5, 2.5] as const;
 // A game's move and turn handles stand this far outside its playfield.
 const GAME_HANDLE_OUTSET_M = 0.04;
+// A lesson's handles stand this far outside its box: beyond the 3 cm a fingertip pinch reaches for a part (a
+// model's base sits on the bottom edge) and out of the line of a ray aimed at the model.
+const LESSON_HANDLE_OUTSET_M = 0.035;
+// A pinch counts as play over the playfield and the space around it where the player's hand is (in front of the
+// board, above it). A pinch out at the picker or the far side of the room does not.
+const PLAY_PINCH_MARGIN_XZ_M = 0.25;
+const PLAY_PINCH_MARGIN_Y_M = 0.6;
 // The real-size view is offered for subjects between these sizes (a grain of rice to a tall building); outside them
 // the pill only tells the scale. At real size the subject stands on the floor. A small one stays at arm's length.
 // A person, a house, or a rocket comes in close enough that its base is on the floor in front of the learner,
@@ -271,6 +278,7 @@ let lessonSpot: { position: Vector3; surface: string | null } | null = null;
 let room: { group: Group; entity: Entity } | null = null;
 const tmpHead = new Vector3();
 const tmpForward = new Vector3();
+const playTip = new Vector3();
 
 export function initGenUIHost(w: World, handlers: { onRuntimeError: (message: string) => void }) {
   world = w;
@@ -711,13 +719,15 @@ export async function mountGenerated(code: string, options: { kind?: 'lesson' | 
   // Measured before the anchor is placed, so the box is in the lesson's own frame (+Z toward the learner).
   const panelHolders = new Set(panels.map((p) => p.holder));
   const layers = splitLayers(mounted, anchor, root, panels, new Set(traitRequests.map((r) => r.object)));
-  // A game's hidden pieces (a pool of enemies waiting off the board) don't count toward its size.
-  fitToBox(mounted, root, panels, game ? { boxM: GAME_FIT_BOX_M, skipHidden: true } : {});
+  // Hidden pieces don't count toward the size: a pool of enemies waiting off the board, or effects kept hidden at
+  // their build size until they play (a lesson's splash rings, 2 m across until scaled to a few centimetres,
+  // shrank its whole scene to a fifth). The frame measures what is visible too.
+  fitToBox(mounted, root, panels, game ? { boxM: GAME_FIT_BOX_M, skipHidden: true } : { skipHidden: true });
   fitCards(mounted);
   syncLayers(mounted);
   const declared = Number(result.real?.size);
   mounted.realSizeM = Number.isFinite(declared) && declared > 0 ? declared : null;
-  const extent = contentBox(root, panelHolders);
+  const extent = contentBox(root, panelHolders, true);
   for (const panel of panels) extent.expandByPoint(panel.holder.getWorldPosition(new Vector3()));
   for (const item of mounted.layered) extent.expandByPoint(item.object.getWorldPosition(new Vector3()));
   const front = extent.isEmpty() ? 0 : Math.max(0, extent.max.z);
@@ -730,7 +740,7 @@ export async function mountGenerated(code: string, options: { kind?: 'lesson' | 
   // a little outside its playfield (no lines, no corners: its size is the game bar's - and +).
   mounted.bounds = createLessonBounds(world, anchor, anchorEntity, root, {
     onMoved: () => setLessonSpot({ position: anchor.position.clone(), surface: null }),
-    ...(game ? { frame: false, outset: GAME_HANDLE_OUTSET_M } : {}),
+    ...(game ? { frame: false, outset: GAME_HANDLE_OUTSET_M, pointing: false } : { outset: LESSON_HANDLE_OUTSET_M }),
   });
   track(mounted, world.createTransformEntity(root, { parent: anchorEntity }), root);
   for (const layer of [layers.cards, layers.annotations]) track(mounted, world.createTransformEntity(layer, { parent: anchorEntity }), layer);
@@ -934,6 +944,16 @@ class GenUISystem extends createSystem({
     if (mounted.update) {
       try {
         if (mounted.root) updateGameHands(mounted.hands, this.world.input, mounted.root);
+        // A pinch beside the playfield is not a move in the game. The hand can still hover over it.
+        if (mounted.game && mounted.bounds && mounted.root) {
+          for (const side of ['left', 'right'] as const) {
+            const hand = mounted.hands[side];
+            if (!hand.pinching) continue;
+            if (mounted.bounds.inside(mounted.root.localToWorld(playTip.copy(hand.tip)), PLAY_PINCH_MARGIN_XZ_M, PLAY_PINCH_MARGIN_Y_M)) continue;
+            hand.pinching = false;
+            hand.pinched = false;
+          }
+        }
         // A hand moving or turning the game by its handles is not playing it.
         const dragging = mounted.bounds?.dragging();
         if (dragging) Object.assign(mounted.hands[dragging], { pinching: false, pinched: false });

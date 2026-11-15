@@ -4,6 +4,8 @@ import { Vector3, type Object3D } from '@iwsdk/core';
  * Play: the player's hands, handed to a game's code as `hands` and refreshed every frame before its update().
  * Positions are in the game root's own coordinates (the units the game is built in, whatever the host's fit
  * scale), so a paddle can simply follow `hands.right.tip`. With controllers, tip and palm are the grip.
+ * For a game, the host clears `pinching` and `pinched` when the fingertip is well away from the playfield (out at
+ * the menu), and while that hand is moving or turning the game by its handles.
  */
 export type GameHand = {
   /** The hand (or controller) is seen this frame. */

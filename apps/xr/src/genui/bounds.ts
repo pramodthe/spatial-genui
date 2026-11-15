@@ -18,18 +18,22 @@ import {
 /**
  * The frame around a lesson's 3D: thin lines along its box, measured in the lesson's own frame so they turn with
  * it. Handles sit on the lines:
- *   - the four bottom edges move the lesson (point at one, or touch it, then pinch and drag);
+ *   - the four bottom edges move the lesson (pinch the rod, then drag);
  *   - a knob in the middle of each upright edge turns it about the vertical;
- *   - a pinch at a corner scales the 3D about the opposite corner.
- * The frame is faint until a hand comes near; a handle thickens and turns blue when pointed at and while held.
- * Handles only take a pinch that starts on them, so a pinch on a part or a button inside still lands there.
- * A game gets the handles only (no lines, no corners), set a little outside its playfield, where play isn't.
+ *   - a pinch on a corner scales the 3D about the opposite corner.
+ * The frame is faint until a hand comes near; a handle thickens and turns blue when a pinch would take it, and
+ * while held. A pinch takes a handle when the fingertip is on it, or (lessons) when the hand points at it.
+ * The handles stand a little outside the box, so a pinch on the model's own parts (a base on the bottom edge)
+ * or a ray aimed at them doesn't land on a handle instead. A game gets the handles only (no lines, no corners)
+ * and no pointing: its play is pinching in the air, which must never take a handle the ray happens to cross.
  */
 export type LessonBounds = {
   /** `held`: a part of the lesson is in a hand (the frame then stays out of the way). `floor`: world y of the floor. */
   tick(input: unknown, held: boolean, floor: number): void;
   /** The hand dragging a handle, if any (a game doesn't count that hand's pinch as play). */
   dragging(): 'left' | 'right' | null;
+  /** World `point` is over the 3D's box: within `marginXZ` of its footprint and `marginY` of its height. */
+  inside(point: Vector3, marginXZ: number, marginY: number): boolean;
   /** For tests: the handles and what is being dragged. */
   inspect(): { handles: { kind: HandleKind; center: number[]; hovered: boolean }[]; drag: HandleKind | 'scale' | null; near: boolean };
   dispose(): void;
@@ -46,11 +50,13 @@ const ROD_M = 0.004;
 const ROD_HIT_M = 0.016;
 const KNOB_M = 0.011;
 const KNOB_HIT_M = 0.03;
-// Curling the fingers to pinch moves the hand ray: a pinch this soon after a handle was pointed at still takes it.
-const POINT_GRACE_MS = 350;
-// A fingertip this close to a handle (or a corner) can pinch it without pointing.
-const TOUCH_REACH_M = 0.05;
-const CORNER_REACH_M = 0.05;
+// A fingertip this close to a handle (or a corner) takes it with a pinch. It is measured where the fingertip was
+// just before the pinch: closing a pinch pulls the index tip a few centimetres toward the thumb.
+const TOUCH_REACH_M = 0.04;
+const CORNER_REACH_M = 0.04;
+const PRE_PINCH_MS = 120;
+// Lessons: a pinch this soon after a handle was pointed at still takes it (closing the pinch moves the ray).
+const POINT_GRACE_MS = 200;
 // A hand this close to the box brightens the frame.
 const NEAR_M = 0.22;
 const FLOOR_CLEARANCE_M = 0.02;
@@ -96,10 +102,13 @@ export function createLessonBounds(
     frame?: boolean;
     /** How far outside the box the handles sit, in metres (default 0: on its lines). */
     outset?: number;
+    /** A pinch while pointing at a handle takes it (default true; a game's handles take only a fingertip). */
+    pointing?: boolean;
   } = {},
 ): LessonBounds {
   const withFrame = options.frame ?? true;
   const outset = options.outset ?? 0;
+  const pointing = options.pointing ?? true;
   const group = new Group();
   group.name = 'Lesson bounds';
   const lineMat = new MeshBasicMaterial({ color: '#e8eef7', transparent: true, opacity: LINE_OPACITY[0], depthWrite: false });
@@ -143,7 +152,9 @@ export function createLessonBounds(
     look.renderOrder = 12;
     hit.add(look);
     const entity = world.createTransformEntity(hit, { parent: anchorEntity });
-    entity.addComponent(RayInteractable, {});
+    // Without pointing, a handle doesn't catch rays at all (they go on to what is behind it).
+    if (pointing) entity.addComponent(RayInteractable, {});
+    else hit.raycast = () => {};
     handles.push({ kind, hit, look, material, entity, edge, state: 0 });
   };
   for (const edge of BOTTOM_EDGES) makeHandle('move', edge);
@@ -158,10 +169,13 @@ export function createLessonBounds(
   const meshBox = new Box3();
   const v = [new Vector3(), new Vector3(), new Vector3()];
   const tipNow = new Vector3();
+  const insidePoint = new Vector3();
   const wasPinching: Record<Side, boolean> = { left: false, right: false };
+  // Each fingertip's recent places (world), for where it was just before a pinch closed.
+  const trail: Record<Side, { at: number; tip: Vector3 }[]> = { left: [], right: [] };
   let drag: Drag | null = null;
   let near = false;
-  /** The handle last pointed at, and when (for POINT_GRACE_MS). */
+  /** Lessons: the handle last pointed at, and when (for POINT_GRACE_MS). */
   let lastPointed: { handle: Handle; at: number } | null = null;
 
   /** The visible 3D's box in the anchor's frame (so it turns with the lesson instead of growing as it turns). */
@@ -250,45 +264,61 @@ export function createLessonBounds(
     return found;
   }
 
-  /** The handle a pinch starting at `tip` takes: one pointed at, else one within touching reach. */
-  function handleFor(tip: Vector3): Handle | null {
-    // A ray on a knob can graze a rod beside it too: the knob is the smaller target, so it was the one aimed at.
-    const pointed = handles.filter((h) => h.entity.hasComponent(Hovered));
-    if (pointed.length) return pointed.find((h) => h.kind === 'turn') ?? pointed[0]!;
-    if (lastPointed && performance.now() - lastPointed.at < POINT_GRACE_MS) return lastPointed.handle;
+  /** Distance from `tip` to a handle: to the rod's segment, or to the knob's centre. */
+  function distanceToHandle(handle: Handle, tip: Vector3): number {
+    handle.hit.updateWorldMatrix(true, false);
+    if (handle.kind === 'move') {
+      // A unit length along its own x, stretched to the rod's length.
+      const a = handle.hit.localToWorld(v[0]!.set(-0.5, 0, 0));
+      const b = handle.hit.localToWorld(v[1]!.set(0.5, 0, 0));
+      b.sub(a);
+      const t = Math.min(1, Math.max(0, v[2]!.subVectors(tip, a).dot(b) / Math.max(b.lengthSq(), 1e-9)));
+      return tip.distanceTo(v[2]!.copy(a).addScaledVector(b, t));
+    }
+    return tip.distanceTo(handle.hit.getWorldPosition(v[2]!));
+  }
+
+  /** Where `side`'s fingertip was PRE_PINCH_MS ago (or the oldest place kept), in the world. */
+  function tipBefore(side: Side, now: number): Vector3 | null {
+    const kept = trail[side];
+    for (let i = kept.length - 1; i >= 0; i--) if (now - kept[i]!.at >= PRE_PINCH_MS) return kept[i]!.tip;
+    return kept[0]?.tip ?? null;
+  }
+
+  /** The handle a fingertip at `tips` (now, and just before the pinch) is on, if any. */
+  function touched(tips: Vector3[]): Handle | null {
     let best: Handle | null = null;
     let bestDist = TOUCH_REACH_M;
     for (const handle of handles) {
-      let dist: number;
-      handle.hit.updateWorldMatrix(true, false);
-      if (handle.kind === 'move') {
-        // Distance to the rod: a unit length along its own x, stretched to the rod's length.
-        const a = handle.hit.localToWorld(v[0]!.set(-0.5, 0, 0));
-        const b = handle.hit.localToWorld(v[1]!.set(0.5, 0, 0));
-        b.sub(a);
-        const t = Math.min(1, Math.max(0, v[2]!.subVectors(tip, a).dot(b) / Math.max(b.lengthSq(), 1e-9)));
-        dist = tip.distanceTo(v[2]!.copy(a).addScaledVector(b, t));
-      } else {
-        dist = tip.distanceTo(handle.hit.getWorldPosition(v[2]!));
-      }
-      if (dist < bestDist) [best, bestDist] = [handle, dist];
+      const dist = Math.min(...tips.map((t) => distanceToHandle(handle, t)));
+      if (dist <= bestDist) [best, bestDist] = [handle, dist];
     }
     return best;
   }
 
+  /** Lessons: the handle pointed at now, or a moment ago. A ray on a knob can graze the rod beside it: take the knob. */
+  function pointed(now: number): Handle | null {
+    if (!pointing) return null;
+    const on = handles.filter((h) => h.entity.hasComponent(Hovered));
+    if (on.length) return on.find((h) => h.kind === 'turn') ?? on[0]!;
+    return lastPointed && now - lastPointed.at < POINT_GRACE_MS ? lastPointed.handle : null;
+  }
 
-  function nearestCorner(tip: Vector3): number {
+
+  function nearestCorner(tips: Vector3[]): number {
     let best = -1;
     let bestDist = CORNER_REACH_M;
     for (let n = 0; n < 8; n++) {
-      const dist = tip.distanceTo(worldCorner[n]!);
+      const dist = Math.min(...tips.map((t) => t.distanceTo(worldCorner[n]!)));
       if (dist < bestDist) [best, bestDist] = [n, dist];
     }
     return best;
   }
 
-  function begin(pose: HandPose, tip: Vector3) {
-    const handle = handleFor(tip);
+  function begin(pose: HandPose, tip: Vector3, now: number) {
+    const before = tipBefore(pose.side, now);
+    const tips = before ? [tip, before] : [tip];
+    const handle = touched(tips) ?? pointed(now);
     if (handle?.kind === 'move') {
       drag = { kind: 'move', side: pose.side, last: tip.clone(), handle };
       return;
@@ -299,7 +329,7 @@ export function createLessonBounds(
       return;
     }
     if (!withFrame) return;
-    const corner = nearestCorner(tip);
+    const corner = nearestCorner(tips);
     if (corner < 0 || !root.parent) return;
     const opposite = corner ^ 7;
     root.updateWorldMatrix(true, false);
@@ -361,16 +391,24 @@ export function createLessonBounds(
   return {
     tick(input, held, floor) {
       measure();
-      const now = handles.filter((h) => h.entity.hasComponent(Hovered));
-      if (now.length) lastPointed = { handle: now.find((h) => h.kind === 'turn') ?? now[0]!, at: performance.now() };
+      const now = performance.now();
       const poses = hands(input);
       const tip = tipNow;
       if (held) drag = null;
+      if (pointing) {
+        const on = handles.filter((h) => h.entity.hasComponent(Hovered));
+        if (on.length) lastPointed = { handle: on.find((h) => h.kind === 'turn') ?? on[0]!, at: now };
+      }
       // Start: a pinch that begins on a handle or a corner (never one that began elsewhere and slid over).
       for (const pose of poses) {
         pose.tip.getWorldPosition(tip);
-        if (!held && !drag && pose.pinching && !wasPinching[pose.side] && !box.isEmpty()) begin(pose, tip);
+        if (!held && !drag && pose.pinching && !wasPinching[pose.side] && !box.isEmpty()) begin(pose, tip, now);
+        // Keep this fingertip's last few places (after the start check, so "before" is never this frame).
+        const kept = trail[pose.side];
+        kept.push({ at: now, tip: tip.clone() });
+        while (kept.length > 2 && now - kept[0]!.at > PRE_PINCH_MS * 3) kept.shift();
       }
+      for (const side of SIDES) if (!poses.some((p) => p.side === side)) trail[side].length = 0;
       for (const side of SIDES) wasPinching[side] = poses.some((p) => p.side === side && p.pinching);
       // Follow the hand that started the drag; let go when it stops pinching or is lost.
       const active = drag;
@@ -413,13 +451,25 @@ export function createLessonBounds(
       const show = near || drag !== null;
       lineMat.opacity = LINE_OPACITY[show ? 1 : 0];
       cornerMat.opacity = drag?.kind === 'scale' ? 1 : LINE_OPACITY[show ? 1 : 0];
+      // Blue means a pinch now would take it: pointed at (lessons) or a fingertip on it.
+      const fingertips = poses.map((p) => p.tip.getWorldPosition(new Vector3()));
+      const onHandle = held || !fingertips.length ? null : touched(fingertips);
       for (const handle of handles) {
         const dragging = drag !== null && drag.kind !== 'scale' && drag.handle === handle;
-        setLook(handle, dragging ? 3 : handle.entity.hasComponent(Hovered) && !held ? 2 : show ? 1 : 0);
+        const ready = !held && (handle === onHandle || (pointing && handle.entity.hasComponent(Hovered)));
+        setLook(handle, dragging ? 3 : ready ? 2 : show ? 1 : 0);
       }
     },
     dragging() {
       return drag && drag.kind !== 'scale' ? drag.side : null;
+    },
+    inside(point, marginXZ, marginY) {
+      if (box.isEmpty()) return false;
+      anchor.updateWorldMatrix(true, false);
+      const p = anchor.worldToLocal(insidePoint.copy(point));
+      return p.x >= box.min.x - marginXZ && p.x <= box.max.x + marginXZ
+        && p.y >= box.min.y - marginY && p.y <= box.max.y + marginY
+        && p.z >= box.min.z - marginXZ && p.z <= box.max.z + marginXZ;
     },
     inspect() {
       return {

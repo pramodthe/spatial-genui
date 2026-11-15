@@ -2,7 +2,8 @@
 // - the lesson stands in the anchored room frame and its spot is saved;
 // - a lesson built below its origin, for a learner sitting low, stays above the floor;
 // - a card held by its frame moves (not the lesson, and not when its button is pressed), two hands resize it,
-//   and let go below the floor it comes back up; the picker is held by its frame too;
+//   and let go below the floor it comes back up; a card with nothing to press moves by its frame too; the picker
+//   is held by its frame too;
 // - two hands hold a model (and don't resize it: the view pill sizes lessons);
 // - a pointer over a pressable object makes it glow.
 // Returns the measurements; fails (ok: false) listing any check that didn't hold.
@@ -28,6 +29,9 @@ const LESSON = `export default function build({ THREE, traits, kit, ui }) {
   traits(button, { onPress: () => {} });
   const panel = kit.panel(ui, { width: 0.36, position: [0, 0.38, -0.05], title: 'Card', items: [{ buttons: [{ label: 'One', onPress: () => {} }] }] });
   root.add(panel.object3D);
+  const info = kit.panel(ui, { width: 0.3, position: [0.62, 0.3, -0.05], title: 'About', items: [{ text: 'A column, a box and a button.' }] });
+  info.object3D.name = 'info card';
+  root.add(info.object3D);
   return { root };
 }`;
 
@@ -41,7 +45,8 @@ export default async function run({ frame, page }) {
     const at = (c) => ({ x: c[0], y: c[1], z: c[2] });
     const find = (name) => {
       let found = null;
-      genui.debugRoot()?.traverse((o) => { if (!found && o.name === name) found = o; });
+      // The lesson's anchor: its 3D (root), cards and name tags.
+      genui.debugRoot()?.parent?.traverse((o) => { if (!found && o.name === name) found = o; });
       return found;
     };
     const worldOf = (o) => { const v = o.getWorldPosition(o.position.clone()); return [v.x, v.y, v.z]; };
@@ -81,7 +86,7 @@ export default async function run({ frame, page }) {
       out.glowAfter = glowing();
 
       // Cards: held by the frame around them (set up once the card has laid out).
-      const card = genui.debugRoot().children.find((o) => o.name === 'GenUI Panel');
+      const card = anchor.getObjectByName('GenUI Cards').children.find((o) => o.name === 'GenUI Panel');
       const frameOf = () => { let f = null; card.traverse((o) => { if (!f && o.name === 'Card frame') f = o; }); return f; };
       for (let i = 0; i < 25 && !frameOf(); i++) await sleep(200);
       const frame = frameOf();
@@ -159,6 +164,34 @@ export default async function run({ frame, page }) {
         await sleep(300);
         frame.updateWorldMatrix(true, false);
         out.cardLowestM = round(frame.localToWorld(fb.min.clone()).y);
+        for (const hand of ['hand-left', 'hand-right']) await r.dispatch('set_transform', { device: hand, position: { x: hand === 'hand-left' ? -0.35 : 0.35, y: 0.6, z: 0.1 } });
+        await sleep(200);
+
+        // A card with nothing to press (an info card) is held by its frame the same way.
+        const info = find('info card');
+        let infoFrame = null;
+        info.traverse((o) => { if (!infoFrame && o.name === 'Card frame') infoFrame = o; });
+        out.infoCardFrame = Boolean(infoFrame);
+        if (infoFrame) {
+          infoFrame.geometry.computeBoundingBox();
+          const ib = infoFrame.geometry.boundingBox;
+          infoFrame.updateWorldMatrix(true, false);
+          const q = worldOfLocal(infoFrame, infoFrame.position.clone().set(ib.max.x - 0.012, (ib.min.y + ib.max.y) / 2, 0));
+          const infoBefore = worldOf(info);
+          await r.dispatch('set_transform', { device: 'hand-right', position: { x: q[0] + 0.05, y: q[1] + 0.05, z: q[2] + 0.3 } });
+          await r.dispatch('look_at', { device: 'hand-right', target: at(q) });
+          await sleep(350); // the pointer settles on the frame before the pinch
+          await r.dispatch('set_select_value', { device: 'hand-right', value: 1, duration: 0.1 });
+          await sleep(150);
+          await r.dispatch('animate_to', { device: 'hand-right', position: { x: q[0] + 0.15, y: q[1] + 0.05, z: q[2] + 0.3 }, duration: 0.3 });
+          await sleep(150);
+          await r.dispatch('set_select_value', { device: 'hand-right', value: 0, duration: 0.1 });
+          await sleep(250);
+          const infoAfter = worldOf(info);
+          out.infoCardMovedM = round(Math.hypot(infoAfter[0] - infoBefore[0], infoAfter[1] - infoBefore[1], infoAfter[2] - infoBefore[2]));
+        }
+        await r.dispatch('set_transform', { device: 'hand-right', position: { x: 0.35, y: 0.6, z: 0.1 } });
+        await sleep(300);
       }
       // The picker (in the room frame beside the lesson): its course rows still open with a pointed pinch, and it is
       // held by its frame too.
@@ -174,6 +207,8 @@ export default async function run({ frame, page }) {
         await r.dispatch('select', { device: 'hand-right', duration: 0.2 });
         await sleep(800);
         out.pickerCourseOpens = (genui.inspectPicker()?.shown ?? null) !== shownBefore;
+        // What stood in the way, if anything.
+        if (!out.pickerCourseOpens) out.pickerRay = genui.debugRay([p.x + 0.05, p.y - 0.05, p.z + 0.35], [p.x, p.y, p.z]).slice(0, 3).map((h) => h.chain);
         genui.courses.show(null);
         await r.dispatch('set_transform', { device: 'hand-right', position: { x: 0.35, y: 0.6, z: 0.1 } });
         await sleep(400);
@@ -238,6 +273,8 @@ export default async function run({ frame, page }) {
       cardStillOnPress: out.cardStillOnPress === true,
       cardScaleRatio: out.cardScaleRatio > 1.1,
       cardLowestM: out.cardLowestM >= 0,
+      infoCardFrame: out.infoCardFrame === true,
+      infoCardMovedM: out.infoCardMovedM >= 0.05,
       pickerCourseOpens: out.pickerCourseOpens === true,
       pickerFrame: out.pickerFrame === true,
       pickerMovedM: out.pickerMovedM >= 0.05,

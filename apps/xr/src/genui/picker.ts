@@ -97,6 +97,11 @@ export function setPickerHidden(hidden: boolean) {
   picker?.refreshVisibility();
 }
 
+/** Starting over: the picker docks beside the next lesson again, even if the learner had moved it. */
+export function redockPicker() {
+  picker?.redock();
+}
+
 /** For tests: where the picker is and what it shows. */
 export function inspectPicker() {
   if (!picker) return null;
@@ -514,6 +519,11 @@ class LessonPickerSystem extends createSystem({
    * Stand the picker in front of where the learner is looking or, docked, to the left of the lesson (not of
    * their gaze: they are often looking at the picker itself when the next lesson arrives), facing them.
    */
+  redock() {
+    this.moved = false;
+    this.placeIn = SETTLE_FRAMES;
+  }
+
   private place() {
     if (this.moved) return;
     const spot = this.docked ? DOCKED : CENTRE;

@@ -1,13 +1,16 @@
 // The view pill, in the managed browser's emulated XR session:
+// - a lesson's cards and name tags leave its 3D for layers of their own, so the views scale the 3D only;
 // - a lesson's 3D is fitted into the 0.5 m box and its card keeps its size;
 // - the pill offers the real size with the scale ("1:16" for an 8 m house shown 0.5 m tall);
 // - pressed, the house stands 8 m tall on the floor ahead while its cards stay put at their size, wherever the lesson
-//   attached them, and a name tag on the house keeps its size; pressed again, back to fit;
+//   attached them, and the name tags stay on their spots on the house at their size; pressed again, back to fit;
+// - hiding a group of the lesson hides the card the lesson put in it, and a tag the lesson hides stays hidden;
+// - a tag the learner can grab stays in the 3D;
 // - a subject too small to see at its real size (a bacterium) only shows the scale.
 // Returns the measurements; fails (ok: false) listing any check that didn't hold.
 // Usage: npx @iwsdk/cli browser run tests/view-smoke.mjs --timeout 60000
 
-const HOUSE = `export default function build({ THREE, kit, ui }) {
+const HOUSE = `export default function build({ THREE, kit, ui, traits }) {
   const root = new THREE.Group();
   const house = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.4, 0.3), new THREE.MeshStandardMaterial({ color: '#c98a5a' }));
   house.name = 'house';
@@ -27,6 +30,21 @@ const HOUSE = `export default function build({ THREE, kit, ui }) {
   tag.object3D.name = 'tag';
   tag.object3D.position.set(0, 0.25, 0.16);
   house.add(tag.object3D);
+  // A name tag drawn in 3D, as kit.card draws them, standing in root by the door.
+  const door = new THREE.Group();
+  door.name = 'door tag';
+  door.userData.nameTag = true;
+  door.add(new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.02), new THREE.MeshBasicMaterial({ color: '#222222' })));
+  door.position.set(0, 0.05, 0.17);
+  root.add(door);
+  // A tag the learner drags (a game piece): it stays in the 3D.
+  const piece = new THREE.Group();
+  piece.name = 'movable tag';
+  piece.userData.nameTag = true;
+  piece.add(new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.02), new THREE.MeshBasicMaterial({ color: '#333333' })));
+  piece.position.set(0.1, 0.02, 0.14);
+  root.add(piece);
+  traits(piece, { grab: true });
   return { root, real: { size: 8 } };
 }`;
 const CELL = HOUSE.replace("real: { size: 8 }", 'real: undefined');
@@ -50,10 +68,22 @@ export default async function run({ frame, page }) {
       await genui.mount(house);
       await sleep(2500);
       const root = genui.debugRoot();
-      const find = (name) => { let f = null; root.traverse((o) => { if (!f && o.name === name) f = o; }); return f; };
+      const anchor = root.parent;
+      const find = (name) => { let f = null; anchor.traverse((o) => { if (!f && o.name === name) f = o; }); return f; };
       const mesh = find('house');
-      const card = root.children.find((o) => o.name === 'GenUI Panel');
+      const card = anchor.getObjectByName('GenUI Cards').children.find((o) => o.name === 'GenUI Panel');
       const V = mesh.position.constructor;
+      // Layers: nothing but the 3D (and the pins the cards and tags left) is in root.
+      const layers = genui.inspect().layers;
+      out.layers = `${layers.cards.join('+')} | ${layers.annotations.join('+')}`;
+      let inRoot = 0;
+      root.traverse((o) => { if (['GenUI Panel', 'nested card', 'tag', 'door tag'].includes(o.name)) inRoot++; });
+      out.panelsInRoot = inRoot;
+      let movableInRoot = false;
+      root.traverse((o) => { if (o.name === 'movable tag') movableInRoot = true; });
+      out.movableTagInRoot = movableInRoot;
+      // A tag stays on its spot on the house (0.25 up, 0.16 in front of its centre) at its own size.
+      const tagGap = () => { const spot = mesh.localToWorld(new V(0, 0.25, 0.16)); return round(find('tag').getWorldPosition(new V()).distanceTo(spot)); };
       // The house's world height and lowest point, from its box's corners.
       const extent = () => {
         mesh.geometry.computeBoundingBox();
@@ -72,7 +102,22 @@ export default async function run({ frame, page }) {
       const worldOf = (o) => { const v = o.getWorldPosition(new V()); return { at: [v.x, v.y, v.z].map(round), scale: round(o.getWorldScale(new V()).x) }; };
       const nestedFit = worldOf(nested);
       const tagFit = worldOf(tag);
+      const doorFit = worldOf(find('door tag'));
+      out.tagScaleFit = tagFit.scale;
+      out.doorScaleFit = doorFit.scale;
+      out.tagGapFitM = tagGap();
       out.cardScale = cardFit.scale;
+      // The lesson hides the group its nested card is in: the card goes too, and comes back with it.
+      find('side').visible = false;
+      await sleep(100);
+      out.nestedHidesWithGroup = !nested.visible;
+      find('side').visible = true;
+      await sleep(100);
+      out.nestedShowsWithGroup = nested.visible;
+      find('door tag').visible = false;
+      await sleep(100);
+      out.doorStaysHidden = !find('door tag').visible;
+      find('door tag').visible = true;
       const pill = genui.inspectPill();
       out.pill = pill && `${pill.label} ${pill.detail}`;
       out.pillVisible = Boolean(pill?.visible);
@@ -90,6 +135,8 @@ export default async function run({ frame, page }) {
       out.nestedStayedM = round(Math.hypot(...nestedReal.at.map((v, i) => v - nestedFit.at[i])));
       out.nestedScaleRatio = round(nestedReal.scale / nestedFit.scale);
       out.tagScaleRatio = round(worldOf(tag).scale / tagFit.scale);
+      out.doorScaleRatio = round(worldOf(find('door tag')).scale / doorFit.scale);
+      out.tagGapRealM = tagGap();
 
       genui.pressPill();
       await sleep(300);
@@ -110,6 +157,17 @@ export default async function run({ frame, page }) {
 
     const expect = {
       fitHeightM: Math.abs(out.fitHeightM - 0.5) < 0.01,
+      layers: out.layers === 'GenUI Panel+nested card | tag+door tag',
+      panelsInRoot: out.panelsInRoot === 0,
+      movableTagInRoot: out.movableTagInRoot === true,
+      doorStaysHidden: out.doorStaysHidden === true,
+      tagScaleFit: Math.abs(out.tagScaleFit - 1) < 0.01,
+      doorScaleFit: Math.abs(out.doorScaleFit - 1) < 0.01,
+      tagGapFitM: out.tagGapFitM < 0.005,
+      tagGapRealM: out.tagGapRealM < 0.005,
+      doorScaleRatio: Math.abs(out.doorScaleRatio - 1) < 0.01,
+      nestedHidesWithGroup: out.nestedHidesWithGroup === true,
+      nestedShowsWithGroup: out.nestedShowsWithGroup === true,
       cardScale: Math.abs(out.cardScale - 0.8) < 0.02,
       pill: out.pill === 'Real size 1:16',
       pillVisible: out.pillVisible === true,

@@ -6,6 +6,7 @@ import {
   Grabbed,
   MovementMode,
   Group,
+  Object3D,
   PanelDocument,
   PanelUI,
   PokeInteractable,
@@ -18,7 +19,6 @@ import {
   XRAnchor,
   XRPlane as XRPlaneComponent,
   type Entity,
-  type Object3D,
   type UIKitDocument,
   type World,
 } from '@iwsdk/core';
@@ -91,9 +91,28 @@ type Mounted = {
   /** The subject's real largest dimension in metres (declared by the lesson, or from the size agent), or null. */
   realSizeM: number | null;
   view: 'fit' | 'real';
-  /** The fitted view's root and card transforms, kept while the real-size view is shown. */
-  fitPose: { position: Vector3; scale: Vector3; cards: { holder: Object3D; position: Vector3; quaternion: Quaternion; scale: Vector3 }[]; labelScales: number[] } | null;
+  /** The fitted view's root transform and rig label sizes, kept while the real-size view is shown. */
+  fitPose: { position: Vector3; scale: Vector3; labelScales: number[] } | null;
   handleRest: { offset: Vector3; root: Vector3 } | null;
+  /** The lesson's card and annotation layers, beside root under the anchor (see splitLayers). */
+  layers: { cards: Group; annotations: Group } | null;
+  /** The cards and name tags moved out of the 3D into those layers. */
+  layered: Layered[];
+};
+
+/** A card or name tag moved out of the lesson's 3D into its layer (see splitLayers). */
+type Layered = {
+  object: Object3D;
+  kind: 'card' | 'tag';
+  /** An empty object left where the lesson put it: hidden with the lesson's group, carried with its part. */
+  pin: Object3D;
+  /** The card's panel (null for a tag drawn in 3D). */
+  panel: PanelRecord | null;
+  /** Its scale in root's frame as built: the size it keeps in every view. */
+  size: number;
+  /** Where the lesson put it, in root's frame as built. */
+  at: Vector3;
+  shown: boolean;
 };
 
 /** The paintbox for generated lessons, served by the agent server (apps/server/src/kit/kit.js). */
@@ -285,12 +304,15 @@ export type MountedInspection = {
   rigs: { parts: number; names: string[]; spread: number }[];
   /** Names of the objects and parts glowing because a pointer is over them. */
   glowing: string[];
+  /** What the host moved out of the 3D: cards and name tags (see splitLayers), by name. */
+  layers: { cards: string[]; annotations: string[] };
 };
 
 /** A picture of the mounted lesson from a virtual camera (JPEG data URL), or null when there is none. */
 export function capture(options: CaptureOptions = {}): string | null {
   if (!world || !current?.root) return null;
-  return captureLesson(world, current.root, new Set([...current.panels.values()].map((p) => p.holder)), options);
+  const { root, layers } = current;
+  return captureLesson(world, root, layers ? [layers.annotations, layers.cards] : [], new Set([...current.panels.values()].map((p) => p.holder)), options);
 }
 
 /** Test-only: the mounted lesson's root, for scripts that inspect what was built. */
@@ -394,6 +416,10 @@ export function inspectMounted(): MountedInspection | null {
       }),
     ),
     glowing: [...mounted.glows].filter(([, glow]) => glow.on).map(([target]) => target.name),
+    layers: {
+      cards: mounted.layered.filter((item) => item.kind === 'card').map((item) => item.object.name),
+      annotations: mounted.layered.filter((item) => item.kind === 'tag').map((item) => item.object.name),
+    },
     rigs: mounted.rigs.map((rig) => {
       const parts = rig.partObjects();
       const centers = parts.map(center).map((c) => new Vector3(...c));
@@ -463,6 +489,8 @@ export async function mountGenerated(code: string): Promise<MountReport> {
     view: 'fit',
     fitPose: null,
     handleRest: null,
+    layers: null,
+    layered: [],
   };
   // The last wait: from here to the end, nothing else can run before this lesson is in the scene.
   if (ticket !== mountTicket) {
@@ -547,11 +575,15 @@ export async function mountGenerated(code: string): Promise<MountReport> {
   anchor.add(root);
   // Measured before the anchor is placed, so the box is in the lesson's own frame (+Z toward the learner).
   const panelHolders = new Set(panels.map((p) => p.holder));
+  const layers = splitLayers(mounted, anchor, root, panels, new Set(traitRequests.map((r) => r.object)));
   fitToBox(mounted, root, panels);
+  fitCards(mounted);
+  syncLayers(mounted);
   const declared = Number(result.real?.size);
   mounted.realSizeM = Number.isFinite(declared) && declared > 0 ? declared : null;
   const extent = contentBox(root, panelHolders);
   for (const panel of panels) extent.expandByPoint(panel.holder.getWorldPosition(new Vector3()));
+  for (const item of mounted.layered) extent.expandByPoint(item.object.getWorldPosition(new Vector3()));
   const front = extent.isEmpty() ? 0 : Math.max(0, extent.max.z);
   const bottom = extent.isEmpty() ? 0 : extent.min.y;
   mounted.onSurface = placeInSeatedReach(anchor, front, bottom);
@@ -564,7 +596,8 @@ export async function mountGenerated(code: string): Promise<MountReport> {
   });
   mounted.handle.setShown(true);
   mounted.handleRest = { offset: mounted.handle.offset.clone(), root: root.position.clone() };
-  const rootEntity = track(mounted, world.createTransformEntity(root, { parent: anchorEntity }), root);
+  track(mounted, world.createTransformEntity(root, { parent: anchorEntity }), root);
+  for (const layer of [layers.cards, layers.annotations]) track(mounted, world.createTransformEntity(layer, { parent: anchorEntity }), layer);
 
   // Each object the lesson made interactive keeps its place in the lesson's own hierarchy: a planet stays in
   // the orbit group that turns it, a part in the model that carries it. IWSDK wants an entity's object to be a
@@ -573,7 +606,7 @@ export async function mountGenerated(code: string): Promise<MountReport> {
     const existing = mounted.objectEntities.get(object);
     if (existing) return existing;
     let inLesson = false;
-    for (let o = object.parent; o && !inLesson; o = o.parent) inLesson = o === root;
+    for (let o = object.parent; o && !inLesson; o = o.parent) inLesson = o === root || o === layers.cards || o === layers.annotations;
     if (!inLesson) root.attach(object); // built but never added to the lesson: hang it on the root where it stands
     return track(mounted, world!.createTransformEntity(object, { parent: entityFor(object.parent!) }), object);
   };
@@ -659,7 +692,8 @@ export async function mountGenerated(code: string): Promise<MountReport> {
   }
 
   // Panels with nothing to press (library labels, name tags, captions) are read-only: without interactables they
-  // can't catch a hand ray meant for a button behind them (labels move when a model explodes).
+  // can't catch a hand ray meant for a button behind them (labels move when a model explodes). Cards with nothing
+  // to press get the ray later, for their frames (setUpCards).
   const labelHolders = new Set(mounted.rigs.flatMap((rig) => rig.labelHolders()));
   for (const panel of panels) {
     const entity = entityFor(panel.holder);
@@ -747,14 +781,17 @@ class GenUISystem extends createSystem({
         onRuntimeError?.(`Teaching rig failed: ${describe(err)}`);
       }
     }
-    if (!mounted.update) return;
-    try {
-      mounted.update(performance.now() / 1000 - mounted.startTime, delta);
-    } catch (err) {
-      // Stop calling a broken update; the scene stays, the error goes to the repair loop.
-      mounted.update = undefined;
-      onRuntimeError?.(`update() threw: ${describe(err)}`);
+    if (mounted.update) {
+      try {
+        mounted.update(performance.now() / 1000 - mounted.startTime, delta);
+      } catch (err) {
+        // Stop calling a broken update; the scene stays, the error goes to the repair loop.
+        mounted.update = undefined;
+        onRuntimeError?.(`update() threw: ${describe(err)}`);
+      }
     }
+    // After the lesson has moved its parts: tags stand on them this frame, not the next.
+    syncLayers(mounted);
   }
 }
 
@@ -946,10 +983,106 @@ function findCrowdedGrabbables(objects: Object3D[]): Set<Object3D> {
   return crowded;
 }
 
+/** A name tag drawn in 3D by the kit (kit.card); older kits only named them "card: …". */
+function isNameTag(object: Object3D): boolean {
+  return object.userData?.nameTag === true || object.name.startsWith('card: ');
+}
+
 /**
- * The fitted view: scale the lesson's 3D so its largest side is FIT_BOX_M (up or down), and keep its cards and
- * labels the size they were drawn (they counter-scale; cards move out or in with the model's edges once they have
- * laid out, in fitCards). Only meshes count: panels, labels and leader lines are left out of the box.
+ * The lesson's three layers. build() returns one root with everything in it; the host splits it, so the views
+ * scale the 3D and nothing else:
+ * - root keeps the 3D, and the teaching rigs' labels (the rig sizes and places those itself);
+ * - the cards layer takes the cards: panels with something to press, wherever the lesson attached them, and every
+ *   panel it put straight in root. They are placed beside the 3D once, then they are the learner's to move;
+ * - the annotations layer takes the name tags: the kit's tags, and panels with nothing to press that the lesson hung
+ *   on a part. Each follows its spot on the 3D every frame at its own size (syncLayers).
+ * Both layers stand where root stands, unscaled. Each card and tag leaves a pin where the lesson put it, so hiding a
+ * group of the lesson still hides its cards and tags. What the lesson made grabbable or pressable stays in the 3D,
+ * tag or not: a label the learner drags onto a landscape is a piece of the model.
+ */
+function splitLayers(mounted: Mounted, anchor: Group, root: Object3D, panels: PanelRecord[], interactive: Set<Object3D>): { cards: Group; annotations: Group } {
+  const layers = { cards: new Group(), annotations: new Group() };
+  layers.cards.name = 'GenUI Cards';
+  layers.annotations.name = 'GenUI Annotations';
+  for (const layer of [layers.cards, layers.annotations]) {
+    layer.position.copy(root.position);
+    layer.quaternion.copy(root.quaternion);
+    anchor.add(layer);
+  }
+  anchor.updateMatrixWorld(true);
+  const rigLabels = new Set(mounted.rigs.flatMap((rig) => rig.labelHolders()));
+  const panelOf = new Map<Object3D, PanelRecord>(panels.map((p) => [p.holder, p]));
+  const moving: { object: Object3D; kind: Layered['kind'] }[] = [];
+  const visit = (object: Object3D) => {
+    for (const child of object.children) {
+      const panel = panelOf.get(child);
+      if (interactive.has(child)) visit(child);
+      else if (panel && !rigLabels.has(child)) {
+        const pressable = panel.handlers.length > 0 || panel.valueIds.length > 0;
+        moving.push({ object: child, kind: pressable || object === root ? 'card' : 'tag' });
+      } else if (!panel && isNameTag(child)) moving.push({ object: child, kind: 'tag' });
+      else if (!panel) visit(child);
+    }
+  };
+  visit(root);
+  const rootScale = root.getWorldScale(new Vector3()).x || 1;
+  for (const { object, kind } of moving) {
+    const pin = new Object3D();
+    pin.name = 'GenUI Pin';
+    pin.position.copy(object.position);
+    pin.quaternion.copy(object.quaternion);
+    pin.scale.copy(object.scale);
+    object.parent!.add(pin);
+    pin.updateWorldMatrix(true, false);
+    const size = object.getWorldScale(new Vector3()).x / rootScale;
+    const at = root.worldToLocal(pin.getWorldPosition(new Vector3()));
+    (kind === 'card' ? layers.cards : layers.annotations).attach(object);
+    object.scale.setScalar(size);
+    // The object keeps its own visible flag (the lesson's to set); the pin stands for the groups above it.
+    const shown = pinShown(pin, root);
+    if (!shown) object.visible = false;
+    mounted.layered.push({ object, kind, pin, panel: panelOf.get(object) ?? null, size, at, shown });
+  }
+  mounted.layers = layers;
+  return layers;
+}
+
+/** Whether the lesson shows what `pin` stands for: the pin is still in the lesson, and every group above it is visible. */
+function pinShown(pin: Object3D, root: Object3D): boolean {
+  for (let o: Object3D | null = pin; o; o = o.parent) {
+    if (!o.visible) return false;
+    if (o === root) return true;
+  }
+  return false;
+}
+
+const tmpPinPosition = new Vector3();
+const tmpPinQuaternion = new Quaternion();
+const tmpPinScale = new Vector3();
+const tmpLayerTurn = new Quaternion();
+
+/** Per frame: cards and tags show while the lesson shows their pins; tags stand at their pins, at their own size. */
+function syncLayers(mounted: Mounted) {
+  const { layers, root } = mounted;
+  if (!layers || !root) return;
+  const tags = layers.annotations;
+  tags.updateWorldMatrix(true, false);
+  tags.getWorldQuaternion(tmpLayerTurn).invert();
+  for (const item of mounted.layered) {
+    const now = pinShown(item.pin, root);
+    // Only when a group above it is hidden or shown, so a card or tag the lesson hides itself stays hidden.
+    if (now !== item.shown) item.object.visible = item.shown = now;
+    if (item.kind !== 'tag' || !now) continue;
+    item.pin.updateWorldMatrix(true, false);
+    item.pin.matrixWorld.decompose(tmpPinPosition, tmpPinQuaternion, tmpPinScale);
+    item.object.position.copy(tags.worldToLocal(tmpPinPosition));
+    item.object.quaternion.copy(tmpLayerTurn).multiply(tmpPinQuaternion);
+  }
+}
+
+/**
+ * The fitted view: scale the lesson's 3D so its largest side is FIT_BOX_M (up or down). Only root is scaled: the
+ * cards and tags are in their own layers. Only meshes count: the rigs' labels and leader lines are left out.
  */
 function fitToBox(mounted: Mounted, root: Object3D, panels: PanelRecord[]) {
   const box = contentBox(root, new Set(panels.map((p) => p.holder)));
@@ -961,26 +1094,28 @@ function fitToBox(mounted: Mounted, root: Object3D, panels: PanelRecord[]) {
   if (Math.abs(scale - 1) < 0.02) return;
   mounted.fitScale = scale;
   root.scale.multiplyScalar(scale);
-  for (const panel of panels) if (panel.holder.parent === root) panel.holder.scale.multiplyScalar(1 / scale);
   for (const rig of mounted.rigs) rig.setLabelScale(1 / scale);
 }
 
 /**
- * Drawn lessons put their cards beside or above the model as built; after fitting, keep each card's inner edge
- * where the model's edge now is (scaled with it) while the card keeps its size.
+ * Cards go where the lesson put them beside the 3D, moved with the fitted 3D: each card's inner edge stays where
+ * the model's edge now is, while the card keeps its size. Heights are known once a card has laid out.
  */
 function fitCards(mounted: Mounted) {
+  const { root, layers } = mounted;
+  if (!root || !layers) return;
   const scale = mounted.fitScale;
-  if (!mounted.root || Math.abs(scale - 1) < 0.02) return;
-  for (const panel of mounted.panels.values()) {
-    if (panel.holder.parent !== mounted.root) continue;
-    const box = boxAround(panel.holder);
-    if (box.isEmpty()) continue;
-    const width = panel.width;
-    const height = box.max.y - box.min.y;
-    const at = panel.holder.position;
-    if (Math.abs(at.x) > width / 4) at.x += Math.sign(at.x) * (width / 2) * (1 / scale - 1);
-    if (at.y > 0) at.y += (height / 2) * (1 / scale - 1);
+  root.updateWorldMatrix(true, false);
+  layers.cards.updateWorldMatrix(true, false);
+  for (const item of mounted.layered) {
+    if (item.kind !== 'card') continue;
+    const position = item.object.position.copy(layers.cards.worldToLocal(root.localToWorld(item.at.clone())));
+    if (Math.abs(scale - 1) < 0.02) continue;
+    const box = boxAround(item.object);
+    const width = (item.panel?.width ?? 0) * item.size;
+    const height = box.isEmpty() ? 0 : box.max.y - box.min.y;
+    if (Math.abs(item.at.x) > width / 4) position.x += Math.sign(item.at.x) * (width / 2) * (1 - scale);
+    if (item.at.y > 0) position.y += (height / 2) * (1 - scale);
   }
 }
 
@@ -990,7 +1125,8 @@ function canShowRealSize(mounted: Mounted): boolean {
 
 /**
  * Show the lesson's subject fitted in the box on the desk, or at its real size: standing on the floor, its near side
- * REAL_VIEW_GAP_M ahead, while the cards stay where they were so the learner can still read and use them.
+ * REAL_VIEW_GAP_M ahead. Only the 3D moves and changes size: the cards stay where they are, so the learner can still
+ * read and use them, and the tags go with their parts at their own size. The teaching rig sizes its own labels.
  */
 export function setLessonView(view: 'fit' | 'real') {
   const mounted = current;
@@ -1000,19 +1136,7 @@ export function setLessonView(view: 'fit' | 'real') {
   if (view === 'real' && (!canShowRealSize(mounted) || !mounted.built)) return;
   if (view === 'real') {
     const built = mounted.built!;
-    // Every panel, wherever the lesson attached it: cards (something to press) stay where they are, the size they
-    // are; labels and tags keep their size but go with the parts they name. The teaching rig sizes its own labels.
-    const rigLabels = new Set(mounted.rigs.flatMap((rig) => rig.labelHolders()));
-    const panels = [...mounted.panels.values()].filter((p) => !rigLabels.has(p.holder));
-    const isCard = (p: PanelRecord) => p.handlers.length > 0 || p.valueIds.length > 0;
-    mounted.fitPose = {
-      position: root.position.clone(),
-      scale: root.scale.clone(),
-      cards: panels.map(({ holder }) => ({ holder, position: holder.position.clone(), quaternion: holder.quaternion.clone(), scale: holder.scale.clone() })),
-      labelScales: mounted.rigs.map((rig) => rig.labelScaleNow()),
-    };
-    root.updateMatrixWorld(true);
-    const placed = panels.filter(isCard).map(({ holder }) => ({ holder, position: holder.getWorldPosition(new Vector3()), quaternion: holder.getWorldQuaternion(new Quaternion()), scale: holder.getWorldScale(new Vector3()).x }));
+    mounted.fitPose = { position: root.position.clone(), scale: root.scale.clone(), labelScales: mounted.rigs.map((rig) => rig.labelScaleNow()) };
     // World metres per metre as built, and how much bigger than the fitted view.
     const k = mounted.realSizeM! / built.size;
     const grow = (built.rootScale * k) / (root.scale.x || 1);
@@ -1021,26 +1145,14 @@ export function setLessonView(view: 'fit' | 'real') {
     const box = built.box;
     root.scale.setScalar(built.rootScale * k);
     root.position.set(head.x - k * ((box.min.x + box.max.x) / 2), floor - k * box.min.y, head.z - REAL_VIEW_GAP_M - k * box.max.z);
-    root.updateMatrixWorld(true);
-    for (const card of placed) {
-      const parent = card.holder.parent!;
-      card.holder.position.copy(parent.worldToLocal(card.position));
-      card.holder.quaternion.copy(parent.getWorldQuaternion(new Quaternion()).invert()).multiply(card.quaternion);
-      card.holder.scale.setScalar(card.scale / (parent.getWorldScale(new Vector3()).x || 1));
-    }
-    for (const p of panels) if (!isCard(p)) p.holder.scale.divideScalar(grow);
     mounted.rigs.forEach((rig, i) => rig.setLabelScale(mounted.fitPose!.labelScales[i] / grow));
   } else if (mounted.fitPose) {
     root.position.copy(mounted.fitPose.position);
     root.scale.copy(mounted.fitPose.scale);
-    for (const card of mounted.fitPose.cards) {
-      card.holder.position.copy(card.position);
-      card.holder.quaternion.copy(card.quaternion);
-      card.holder.scale.copy(card.scale);
-    }
     mounted.rigs.forEach((rig, i) => rig.setLabelScale(mounted.fitPose!.labelScales[i]));
     mounted.fitPose = null;
   }
+  syncLayers(mounted);
   mounted.view = view;
   updatePill();
 }
@@ -1130,9 +1242,9 @@ function layoutLessonPanels(mounted: Mounted, again?: { main: Object3D }) {
   const occupied = model.clone();
   for (const label of labels) if (label.visible) occupied.union(boxIn(label));
 
-  const panels = [...mounted.panels.values()]
-    .filter((p) => !labels.has(p.holder) && p.holder.parent === root)
-    .map((p) => ({ holder: p.holder, box: boxIn(p.holder) }))
+  const panels = mounted.layered
+    .filter((item) => item.kind === 'card')
+    .map((item) => ({ holder: item.object, box: boxIn(item.object) }))
     .filter((p) => !p.box.isEmpty());
   if (panels.length === 0) return;
   const gap = 0.025;
@@ -1140,10 +1252,11 @@ function layoutLessonPanels(mounted: Mounted, again?: { main: Object3D }) {
   // Panels stand forward of the model's front face: a hand ray from chest height up to a button
   // behind that plane would pass through the model (and a grabbable model catches it).
   const frontZ = model.max.z + gap;
+  // Cards stand in their own layer, unscaled: a move worked out in root's frame is converted to the card's.
   const moveTo = (panel: { holder: Object3D; box: Box3 }, minX: number, minY: number, z: number) => {
-    panel.holder.position.x += minX - panel.box.min.x;
-    panel.holder.position.y += minY - panel.box.min.y;
-    panel.holder.position.z += z - panel.box.min.z;
+    const parent = panel.holder.parent!;
+    const from = parent.worldToLocal(root.localToWorld(panel.box.min.clone()));
+    panel.holder.position.add(parent.worldToLocal(root.localToWorld(new Vector3(minX, minY, z))).sub(from));
   };
   const { min, max } = occupied;
   const corners = [min.x, max.x].flatMap((x) => [min.y, max.y].flatMap((y) => [min.z, max.z].map((z) => new Vector3(x, y, z))));
@@ -1199,8 +1312,11 @@ function layoutLessonPanels(mounted: Mounted, again?: { main: Object3D }) {
     Object.assign(move, { dy: best.dy, dz: best.dz, misfit: best.cost });
     if (best.dy || best.dz) {
       const target = root.localToWorld(new Vector3(0, -best.dy * metre, -best.dz * metre));
+      const before = root.position.clone();
       root.position.copy(root.parent ? root.parent.worldToLocal(target) : target);
-      root.updateMatrixWorld(true);
+      // The cards move with the lesson (the tags follow their parts by themselves).
+      mounted.layers?.cards.position.add(root.position).sub(before);
+      root.parent?.updateMatrixWorld(true);
       // The move handle stays in front of the lesson's base.
       if (mounted.handle && mounted.handleRest) mounted.handle.offset.copy(mounted.handleRest.offset).add(root.position).sub(mounted.handleRest.root);
     }
@@ -1243,7 +1359,7 @@ function layoutLessonPanels(mounted: Mounted, again?: { main: Object3D }) {
       top -= height + gap;
     }
   }
-  root.updateMatrixWorld(true);
+  root.parent?.updateMatrixWorld(true);
 
   // Labels keep the angular size they were designed for (1.4 cm text read from 55 cm) wherever the
   // framing put the lesson; if that changes their size, lay everything out again around them.
@@ -1266,37 +1382,41 @@ function layoutLessonPanels(mounted: Mounted, again?: { main: Object3D }) {
 function keepPanelsInView(mounted: Mounted) {
   const root = mounted.root;
   if (!root || !world) return;
-  root.updateMatrixWorld(true);
+  root.parent?.updateMatrixWorld(true);
   const eye = world.camera.getWorldPosition(new Vector3());
   const base = root.parent ? root.parent.getWorldPosition(new Vector3()).y : -Infinity;
-  const scale = root.getWorldScale(new Vector3()).y || 1;
   const centre = new Vector3();
-  for (const panel of mounted.panels.values()) {
-    const box = new Box3().setFromObject(panel.holder);
-    if (box.isEmpty() || panel.holder.parent !== root) continue;
+  for (const item of mounted.layered) {
+    const holder = item.object;
+    const parent = holder.parent;
+    const box = boxAround(holder);
+    if (item.kind !== 'card' || !parent || box.isEmpty()) continue;
     box.getCenter(centre);
     const limit = eye.y + PANEL_TOP_RISE * Math.hypot(centre.x - eye.x, centre.z - eye.z);
     const drop = Math.min(box.max.y - limit, box.min.y - (base + 0.02));
-    if (drop > 0.005) panel.holder.position.y -= drop / scale;
+    if (drop > 0.005) holder.position.y -= drop / (parent.getWorldScale(new Vector3()).y || 1);
     // Nor nearer the eyes than a comfortable reading distance: a learner sitting low (on a bed, on the floor)
     // otherwise had the card right in front of their face.
     const flat = new Vector3(centre.x - eye.x, 0, centre.z - eye.z);
     const distance = flat.length();
     if (distance > 1e-3 && distance < CARD_MIN_DISTANCE_M) {
       const away = centre.clone().addScaledVector(flat.normalize(), CARD_MIN_DISTANCE_M - distance);
-      panel.holder.position.add(root.worldToLocal(away).sub(root.worldToLocal(centre.clone())));
+      holder.position.add(parent.worldToLocal(away).sub(parent.worldToLocal(centre.clone())));
     }
   }
 }
 
 /**
- * A lesson's cards (panels with something to press, standing in the lesson) start a little smaller than the lesson
- * drew them, and the learner holds them by their frames: one hand moves a card, two hands make it bigger or smaller.
+ * A lesson's cards (the panels in its cards layer) start a little smaller than the lesson drew them, and the learner
+ * holds them by their frames: one hand moves a card, two hands make it bigger or smaller.
  */
 function setUpCards(mounted: Mounted) {
   if (!world || !mounted.root) return;
+  const cards = new Set(mounted.layered.filter((item) => item.kind === 'card').map((item) => item.object));
   for (const [entity, panel] of mounted.panels) {
-    if (panel.holder.parent !== mounted.root || (panel.handlers.length === 0 && panel.valueIds.length === 0)) continue;
+    if (!cards.has(panel.holder)) continue;
+    // A card with nothing to press (an info card) still takes the hand ray, for its frame.
+    if (!entity.hasComponent(RayInteractable)) entity.addComponent(RayInteractable, {});
     panel.holder.scale.multiplyScalar(CARD_START_SCALE);
     panel.holder.updateWorldMatrix(true, true);
     mounted.cards.push(makeCardGrabbable(panel.holder, entity));

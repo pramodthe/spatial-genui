@@ -10,9 +10,9 @@ export const PIPELINES: Pipeline[] = ['p1-threejs', 'p2-cadquery', 'p3-blender']
 
 const CONTRACT = `The model is a learning object that sits on a desk in mixed reality: people pick it up, look at it from every side, and the app labels and highlights its parts. So:
 - Scale: the real thing shrunk to desk size. Its largest dimension is between 0.20 and 0.35 m.
-- Placement: it stands upright with its bottom at height 0, centred on the origin, front facing the viewer.
+- Placement: it stands upright with its bottom at height 0, centred on the origin, front facing the viewer. The ground contact is the bottom of the bounding box: a house's floor, a person's feet, a car's tyres. Nothing floats above y = 0.
 - Named parts: every listed part is its own separately named object, named exactly as listed (lowercase with underscores). Repeated parts get a number: leg_1, leg_2... Give every other piece a descriptive name too, never a default like "Cube.001" or "mesh_3".
-- Accuracy matters more than decoration: the right parts in the right places with believable proportions and colors, as a good teaching model would show them.
+- Accuracy matters more than decoration: the silhouette must be recognizable at a glance, with the right parts in the right places and believable proportions. A stack of boxes that merely suggests the object is a failure.
 - Like a classroom model, it need not be to scale: shrink distances and enlarge small parts so that every listed part is clearly visible within the size range (a moon sits near its planet, not at its true distance).
 - Budget (it runs on a Quest headset): at most 50,000 triangles and at most 60 separate meshes in total. Use smooth curves where the real object is curved, but no more segments than needed.
 - Materials: plain colors only (base color, plus metalness/roughness if useful). No image textures, no text.`;

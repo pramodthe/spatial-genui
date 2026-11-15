@@ -19,20 +19,25 @@ const PINCH_GRAB_RADIUS_M = 0.03;
 /**
  * Make a near pinch take only what is at the fingertips. IWSDK's grab pointer is pmndrs's default: a 7 cm sphere
  * around the hand's grip point (the palm), so pinching a few centimetres beside an object, fingers clearly
- * outside it, still took it. The sphere now sits on the index fingertip with a 3 cm radius. Reaches into IWSDK's
- * input internals; returns false (change nothing) until they exist, or if they are shaped differently.
+ * outside it, still took it. For a hand the sphere now sits on the index fingertip with a 3 cm radius; a controller
+ * keeps IWSDK's sphere (its "index tip" is the ray origin at the controller's tip). Reaches into IWSDK's input
+ * internals; returns false (change nothing) until they exist, or if they are shaped differently.
  */
 export function pinchAtFingertips(input: unknown): boolean {
-  const pointers = (input as { xr?: { multiPointers?: Record<string, unknown> } } | null)?.xr?.multiPointers;
-  if (!pointers) return false;
+  const xr = (input as { xr?: { multiPointers?: Record<string, unknown>; isPrimary?: (type: string, side: string) => boolean } } | null)?.xr;
+  const pointers = xr?.multiPointers;
+  if (!pointers || typeof xr?.isPrimary !== 'function') return false;
   let done = false;
   for (const hand of ['left', 'right']) {
     const multi = pointers[hand] as { grab?: { pointer?: { intersector?: { space?: unknown; getSphereRadius?: () => number } } }; xrOrigin?: { indexTipSpaces?: Record<string, Object3D> } } | undefined;
     const intersector = multi?.grab?.pointer?.intersector;
     const tip = multi?.xrOrigin?.indexTipSpaces?.[hand];
     if (!intersector || typeof intersector.getSphereRadius !== 'function' || !tip) continue;
-    intersector.space = { current: tip };
-    intersector.getSphereRadius = () => PINCH_GRAB_RADIUS_M;
+    const grip = intersector.space as { current?: unknown } | undefined;
+    const gripRadius = intersector.getSphereRadius.bind(intersector);
+    const onHand = () => xr.isPrimary!('hand', hand);
+    intersector.space = { get current() { return onHand() ? tip : grip?.current; } };
+    intersector.getSphereRadius = () => (onHand() ? PINCH_GRAB_RADIUS_M : gripRadius());
     done = true;
   }
   return done;

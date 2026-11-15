@@ -86,7 +86,7 @@ export default async function run({ frame, page }) {
       out.glowAfter = glowing();
 
       // Cards: held by the frame around them (set up once the card has laid out).
-      const card = anchor.getObjectByName('GenUI Cards').children.find((o) => o.name === 'GenUI Panel');
+      const card = anchor.getObjectByName('GenUI Cards').getObjectByName('GenUI Panel');
       const frameOf = () => { let f = null; card.traverse((o) => { if (!f && o.name === 'Card frame') f = o; }); return f; };
       for (let i = 0; i < 25 && !frameOf(); i++) await sleep(200);
       const frame = frameOf();
@@ -272,7 +272,7 @@ export default async function run({ frame, page }) {
       buttonPressed: out.buttonPressed === true,
       cardStillOnPress: out.cardStillOnPress === true,
       cardScaleRatio: out.cardScaleRatio > 1.1,
-      cardLowestM: out.cardLowestM >= 0,
+      cardLowestM: Math.abs(out.cardLowestM - 0.02) < 0.01, // pulled into the floor, it ends 2 cm above
       infoCardFrame: out.infoCardFrame === true,
       infoCardMovedM: out.infoCardMovedM >= 0.05,
       pickerCourseOpens: out.pickerCourseOpens === true,

@@ -37,6 +37,8 @@ type Options = {
   offset: [number, number, number];
   /** Stand the bar upright (beside a panel) instead of lying flat (in front of a lesson). */
   upright?: boolean;
+  /** What is kept above the floor while dragging (default: the target; a lesson's 3D, not the cards the learner placed). */
+  measure?: Object3D;
   /** The learner let go: the target is where they want it. */
   onMoved?: () => void;
 };
@@ -46,6 +48,7 @@ type Record = {
   bar: Mesh;
   material: MeshBasicMaterial;
   target: Object3D;
+  measure: Object3D;
   offset: Vector3;
   held: boolean;
   shown: boolean;
@@ -112,7 +115,7 @@ export function createMoveHandle(world: World, target: Object3D, options: Option
   entity.addComponent(DistanceGrabbable, { movementMode: MovementMode.MoveAtSource, rotate: false, scale: false });
   const scaleRef = target.scale.x || 1;
   const record: Record = {
-    entity, bar, material, target, offset: new Vector3(...options.offset), held: false, shown: false, drawn: drawn(target), look: 0,
+    entity, bar, material, target, measure: options.measure ?? target, offset: new Vector3(...options.offset), held: false, shown: false, drawn: drawn(target), look: 0,
     onMoved: options.onMoved, scaleRef, grab: null,
   };
   records.add(record);
@@ -207,7 +210,7 @@ class MoveHandleSystem extends createSystem({}) {
       if (held && !record.held) {
         // A grab starts: measure how far the target reaches below its origin, to keep it above the floor.
         const origin = target.getWorldPosition(at);
-        boxAround(target, box);
+        boxAround(record.measure, box);
         record.grab = { bottom: box.isEmpty() ? 0 : origin.y - box.min.y };
       }
       if (held && record.grab) {

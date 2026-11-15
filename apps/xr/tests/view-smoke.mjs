@@ -4,7 +4,9 @@
 // - the pill offers the real size with the scale ("1:16" for an 8 m house shown 0.5 m tall);
 // - pressed, the house stands 8 m tall on the floor ahead while its cards stay put at their size, wherever the lesson
 //   attached them, and the name tags stay on their spots on the house at their size; pressed again, back to fit;
-// - hiding a group of the lesson hides the card the lesson put in it, and a tag the lesson hides stays hidden;
+// - hiding a group of the lesson hides the card the lesson put in it, and a card or tag the lesson hides itself stays
+//   hidden, also when its group is shown again;
+// - the pill waits for the lesson's layout, and a lesson whose root is raised still stands on the floor;
 // - a tag the learner can grab stays in the 3D;
 // - a subject too small to see at its real size (a bacterium) only shows the scale.
 // Returns the measurements; fails (ok: false) listing any check that didn't hold.
@@ -48,11 +50,12 @@ const HOUSE = `export default function build({ THREE, kit, ui, traits }) {
   return { root, real: { size: 8 } };
 }`;
 const CELL = HOUSE.replace("real: { size: 8 }", 'real: undefined');
+const RAISED = HOUSE.replace('const root = new THREE.Group();', 'const root = new THREE.Group();\n  root.position.y = 0.1;');
 
 export default async function run({ frame, page }) {
   const target = frame ?? page;
   await target.waitForFunction(() => Boolean(window.genui?.inspectPill && window.IWER_DEVICE?.remote), null, { timeout: 30000 });
-  return target.evaluate(async ({ house, cell }) => {
+  return target.evaluate(async ({ house, cell, raised }) => {
     const r = window.IWER_DEVICE.remote;
     const genui = window.genui;
     const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
@@ -64,14 +67,17 @@ export default async function run({ frame, page }) {
     genui.clear();
     genui.setOverlayHidden(false);
     await r.dispatch('set_transform', { device: 'headset', position: { x: 0, y: 1.3, z: 0 }, orientation: { x: -0.1736, y: 0, z: 0, w: 0.9848 } });
+    // Whether an object is drawn: it and every group above it visible.
+    const drawn = (o) => { for (; o; o = o.parent) if (!o.visible) return false; return true; };
     try {
       await genui.mount(house);
+      out.pillEarly = genui.inspectPill()?.enabled ?? null;
       await sleep(2500);
       const root = genui.debugRoot();
       const anchor = root.parent;
       const find = (name) => { let f = null; anchor.traverse((o) => { if (!f && o.name === name) f = o; }); return f; };
       const mesh = find('house');
-      const card = anchor.getObjectByName('GenUI Cards').children.find((o) => o.name === 'GenUI Panel');
+      const card = anchor.getObjectByName('GenUI Cards').getObjectByName('GenUI Panel');
       const V = mesh.position.constructor;
       // Layers: nothing but the 3D (and the pins the cards and tags left) is in root.
       const layers = genui.inspect().layers;
@@ -110,13 +116,23 @@ export default async function run({ frame, page }) {
       // The lesson hides the group its nested card is in: the card goes too, and comes back with it.
       find('side').visible = false;
       await sleep(100);
-      out.nestedHidesWithGroup = !nested.visible;
+      out.nestedHidesWithGroup = !drawn(nested);
       find('side').visible = true;
       await sleep(100);
-      out.nestedShowsWithGroup = nested.visible;
+      out.nestedShowsWithGroup = drawn(nested);
+      // The lesson hides the card itself while its group is hidden, then shows the group: the card stays hidden.
+      find('side').visible = false;
+      nested.visible = false;
+      await sleep(100);
+      find('side').visible = true;
+      await sleep(100);
+      out.ownFlagKept = !drawn(nested);
+      nested.visible = true;
+      await sleep(100);
+      out.ownFlagShows = drawn(nested);
       find('door tag').visible = false;
       await sleep(100);
-      out.doorStaysHidden = !find('door tag').visible;
+      out.doorStaysHidden = !drawn(find('door tag'));
       find('door tag').visible = true;
       const pill = genui.inspectPill();
       out.pill = pill && `${pill.label} ${pill.detail}`;
@@ -144,6 +160,16 @@ export default async function run({ frame, page }) {
       out.cardBackM = round(Math.hypot(...cardWorld().at.map((v, i) => v - cardFit.at[i])));
       out.nestedBackRatio = round(worldOf(nested).scale / nestedFit.scale);
 
+      // A lesson that raised its root: at its real size it still stands on the floor.
+      await genui.mount(raised);
+      await sleep(2500);
+      genui.pressPill();
+      await sleep(300);
+      const raisedMesh = genui.debugRoot().getObjectByName('house');
+      raisedMesh.geometry.computeBoundingBox();
+      raisedMesh.updateWorldMatrix(true, false);
+      out.raisedBottomM = round(raisedMesh.localToWorld(raisedMesh.geometry.boundingBox.min.clone()).y);
+
       // A bacterium-sized subject: the pill only tells the scale.
       await genui.mount(cell);
       await sleep(1500);
@@ -166,6 +192,10 @@ export default async function run({ frame, page }) {
       tagGapFitM: out.tagGapFitM < 0.005,
       tagGapRealM: out.tagGapRealM < 0.005,
       doorScaleRatio: Math.abs(out.doorScaleRatio - 1) < 0.01,
+      pillEarly: out.pillEarly === false,
+      raisedBottomM: Math.abs(out.raisedBottomM) < 0.05,
+      ownFlagKept: out.ownFlagKept === true,
+      ownFlagShows: out.ownFlagShows === true,
       nestedHidesWithGroup: out.nestedHidesWithGroup === true,
       nestedShowsWithGroup: out.nestedShowsWithGroup === true,
       cardScale: Math.abs(out.cardScale - 0.8) < 0.02,
@@ -188,5 +218,5 @@ export default async function run({ frame, page }) {
     const failed = Object.entries(expect).filter(([, ok]) => !ok).map(([check]) => `${check} (${JSON.stringify(out[check])})`);
     if (failed.length) throw new Error(`view-smoke failed: ${failed.join(', ')}; measured ${JSON.stringify(out)}`);
     return out;
-  }, { house: HOUSE, cell: CELL });
+  }, { house: HOUSE, cell: CELL, raised: RAISED });
 }

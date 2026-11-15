@@ -86,7 +86,7 @@ type Mounted = {
   /** Hover glows of the lesson's grabbable and pressable objects and parts, by target. */
   glows: Map<Object3D, Glow>;
   /** The fitted view: the 3D's box as built (root's frame, before fitting) and the scale that fits it in the box. */
-  built: { box: Box3; size: number; rootScale: number } | null;
+  built: { box: Box3; size: number; rootScale: number; origin: Vector3 } | null;
   fitScale: number;
   /** The subject's real largest dimension in metres (declared by the lesson, or from the size agent), or null. */
   realSizeM: number | null;
@@ -106,9 +106,12 @@ type Layered = {
   kind: 'card' | 'tag';
   /** An empty object left where the lesson put it: hidden with the lesson's group, carried with its part. */
   pin: Object3D;
+  /** The group holding the object in its layer: it shows while the pin's groups do, so the object's own visible
+   * flag stays the lesson's (as it would nested in its group). */
+  slot: Group;
   /** The card's panel (null for a tag drawn in 3D). */
   panel: PanelRecord | null;
-  /** Its scale in root's frame as built: the size it keeps in every view. */
+  /** Its size as built (in the lesson's frame, before fitting): the size it keeps in every view. */
   size: number;
   /** Where the lesson put it, in root's frame as built. */
   at: Vector3;
@@ -592,6 +595,7 @@ export async function mountGenerated(code: string): Promise<MountReport> {
   // The handle lies on the desk in front of everything, nearest the learner.
   mounted.handle = createMoveHandle(world, anchor, {
     offset: [0, Math.max(-0.1, Math.min(0, extent.isEmpty() ? 0 : extent.min.y)) + MOVE_HANDLE_RADIUS_M, front + 0.07],
+    measure: root,
     onMoved: () => setLessonSpot({ position: anchor.position.clone(), surface: null }),
   });
   mounted.handle.setShown(true);
@@ -771,6 +775,7 @@ class GenUISystem extends createSystem({
           keepPanelsInView(mounted);
         }
         setUpCards(mounted);
+        updatePill();
       }
     }
     for (const rig of mounted.rigs) {
@@ -996,8 +1001,9 @@ function isNameTag(object: Object3D): boolean {
  *   panel it put straight in root. They are placed beside the 3D once, then they are the learner's to move;
  * - the annotations layer takes the name tags: the kit's tags, and panels with nothing to press that the lesson hung
  *   on a part. Each follows its spot on the 3D every frame at its own size (syncLayers).
- * Both layers stand where root stands, unscaled. Each card and tag leaves a pin where the lesson put it, so hiding a
- * group of the lesson still hides its cards and tags. What the lesson made grabbable or pressable stays in the 3D,
+ * Both layers stand where root stands, unscaled. Each card and tag leaves a pin where the lesson put it and stands in
+ * a slot of its own, shown while the pin's groups are, so hiding a group of the lesson still hides its cards and tags
+ * and their own visible flags stay the lesson's. What the lesson made grabbable or pressable stays in the 3D,
  * tag or not: a label the learner drags onto a landscape is a piece of the model.
  */
 function splitLayers(mounted: Mounted, anchor: Group, root: Object3D, panels: PanelRecord[], interactive: Set<Object3D>): { cards: Group; annotations: Group } {
@@ -1025,7 +1031,6 @@ function splitLayers(mounted: Mounted, anchor: Group, root: Object3D, panels: Pa
     }
   };
   visit(root);
-  const rootScale = root.getWorldScale(new Vector3()).x || 1;
   for (const { object, kind } of moving) {
     const pin = new Object3D();
     pin.name = 'GenUI Pin';
@@ -1034,14 +1039,17 @@ function splitLayers(mounted: Mounted, anchor: Group, root: Object3D, panels: Pa
     pin.scale.copy(object.scale);
     object.parent!.add(pin);
     pin.updateWorldMatrix(true, false);
-    const size = object.getWorldScale(new Vector3()).x / rootScale;
+    // The anchor is not placed yet: world is the lesson's own frame.
+    const size = object.getWorldScale(new Vector3()).x;
     const at = root.worldToLocal(pin.getWorldPosition(new Vector3()));
-    (kind === 'card' ? layers.cards : layers.annotations).attach(object);
+    const slot = new Group();
+    slot.name = 'GenUI Slot';
+    (kind === 'card' ? layers.cards : layers.annotations).add(slot);
+    slot.attach(object);
     object.scale.setScalar(size);
-    // The object keeps its own visible flag (the lesson's to set); the pin stands for the groups above it.
     const shown = pinShown(pin, root);
-    if (!shown) object.visible = false;
-    mounted.layered.push({ object, kind, pin, panel: panelOf.get(object) ?? null, size, at, shown });
+    slot.visible = shown;
+    mounted.layered.push({ object, kind, pin, slot, panel: panelOf.get(object) ?? null, size, at, shown });
   }
   mounted.layers = layers;
   return layers;
@@ -1070,8 +1078,7 @@ function syncLayers(mounted: Mounted) {
   tags.getWorldQuaternion(tmpLayerTurn).invert();
   for (const item of mounted.layered) {
     const now = pinShown(item.pin, root);
-    // Only when a group above it is hidden or shown, so a card or tag the lesson hides itself stays hidden.
-    if (now !== item.shown) item.object.visible = item.shown = now;
+    if (now !== item.shown) item.slot.visible = item.shown = now;
     if (item.kind !== 'tag' || !now) continue;
     item.pin.updateWorldMatrix(true, false);
     item.pin.matrixWorld.decompose(tmpPinPosition, tmpPinQuaternion, tmpPinScale);
@@ -1089,7 +1096,7 @@ function fitToBox(mounted: Mounted, root: Object3D, panels: PanelRecord[]) {
   if (box.isEmpty()) return;
   const size = box.getSize(new Vector3());
   const largest = Math.max(size.x, size.y, size.z);
-  mounted.built = { box: box.clone(), size: largest, rootScale: root.scale.x || 1 };
+  mounted.built = { box: box.clone(), size: largest, rootScale: root.scale.x || 1, origin: root.position.clone() };
   const scale = Math.min(FIT_SCALE_RANGE[1], Math.max(FIT_SCALE_RANGE[0], FIT_BOX_M / largest));
   if (Math.abs(scale - 1) < 0.02) return;
   mounted.fitScale = scale;
@@ -1133,7 +1140,8 @@ export function setLessonView(view: 'fit' | 'real') {
   const root = mounted?.root;
   const anchor = root?.parent;
   if (!mounted || !root || !anchor || !world || view === mounted.view) return;
-  if (view === 'real' && (!canShowRealSize(mounted) || !mounted.built)) return;
+  // Not before the one-time layout has placed the cards beside the fitted 3D.
+  if (view === 'real' && (!canShowRealSize(mounted) || !mounted.built || mounted.declutterIn !== null)) return;
   if (view === 'real') {
     const built = mounted.built!;
     mounted.fitPose = { position: root.position.clone(), scale: root.scale.clone(), labelScales: mounted.rigs.map((rig) => rig.labelScaleNow()) };
@@ -1142,7 +1150,8 @@ export function setLessonView(view: 'fit' | 'real') {
     const grow = (built.rootScale * k) / (root.scale.x || 1);
     const head = anchor.worldToLocal(world.camera.getWorldPosition(new Vector3()));
     const floor = floorIn(anchor);
-    const box = built.box;
+    // The box was measured with root where the lesson put it: from root's origin as built.
+    const box = built.box.clone().translate(built.origin.clone().negate());
     root.scale.setScalar(built.rootScale * k);
     root.position.set(head.x - k * ((box.min.x + box.max.x) / 2), floor - k * box.min.y, head.z - REAL_VIEW_GAP_M - k * box.max.z);
     mounted.rigs.forEach((rig, i) => rig.setLabelScale(mounted.fitPose!.labelScales[i] / grow));
@@ -1180,7 +1189,7 @@ function updatePill() {
   if (!mounted?.built || mounted.realSizeM === null) return setPill({ shown: false, label: '', detail: '', enabled: false });
   if (mounted.view === 'real') return setPill({ shown: true, label: 'Fit', detail: '1:1', enabled: true });
   const ratio = mounted.realSizeM / (mounted.built.size * mounted.fitScale);
-  if (canShowRealSize(mounted)) return setPill({ shown: true, label: 'Real size', detail: scaleText(ratio), enabled: true });
+  if (canShowRealSize(mounted)) return setPill({ shown: true, label: 'Real size', detail: scaleText(ratio), enabled: mounted.declutterIn === null });
   setPill({ shown: true, label: 'Scale', detail: scaleText(ratio), enabled: false });
 }
 

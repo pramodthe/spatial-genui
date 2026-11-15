@@ -352,6 +352,7 @@ async function mountPartial(code: string) {
   state.code = code;
   state.runtimeErrors = [];
   codeEl.textContent = code;
+  sizeTicket++;
   const report = await mountGenerated(code);
   if (!report.ok && report.superseded) return; // a later part replaced it
   state.lastMount = report;
@@ -400,6 +401,7 @@ async function mount(code: string) {
   state.runtimeErrors = [];
   codeEl.textContent = code;
   state.mountedAt = performance.now();
+  const sizeFor = ++sizeTicket;
   const report = await mountGenerated(code);
   // A later lesson replaced this one while it loaded: that one reports for itself.
   if (!report.ok && report.superseded) return report;
@@ -408,20 +410,23 @@ async function mount(code: string) {
   // Any lesson in the scene docks the picker, however it was mounted (generate, tests, saved lessons).
   else {
     setPhase('ready');
-    if (state.prompt && !lessonDeclaresRealSize()) void lookUpRealSize(state.prompt, state.mountedAt);
+    if (state.prompt && !lessonDeclaresRealSize()) void lookUpRealSize(state.prompt, sizeFor);
   }
   return state.lastMount;
 }
 
+// Which mount a size answer is for: any mount, a streaming part's too, makes earlier answers stale.
+let sizeTicket = 0;
+
 /** Ask the size agent how big the lesson's subject really is, for the view pill (answers are cached per subject). */
-async function lookUpRealSize(request: string, mountedAt: number) {
+async function lookUpRealSize(request: string, ticket: number) {
   try {
     // The subject comes first; course lesson prompts run past the 500 characters the server takes.
     const res = await fetch('/api/real-size', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ request: request.slice(0, 480) }) });
     if (!res.ok) return;
     const answer = (await res.json()) as { sizeM?: number | null };
     // Only for the lesson still open.
-    if (state.mountedAt === mountedAt) setLessonRealSize(answer.sizeM ?? null);
+    if (sizeTicket === ticket) setLessonRealSize(answer.sizeM ?? null);
   } catch {
     // No size: the pill stays hidden for this lesson.
   }

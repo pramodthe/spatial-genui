@@ -113,8 +113,9 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
 
   const errors: string[] = [];
   const warnings: string[] = [];
-  if (result?.real !== undefined) {
-    const size = Number(result.real?.size);
+  // real: null or real: { size: null } mean no size, as in the headset.
+  if (result?.real?.size != null) {
+    const size = Number(result.real.size);
     if (!(Number.isFinite(size) && size > 0)) errors.push('real.size must be the main subject\'s largest real-world dimension in meters (a house 8), or leave real out.');
   }
 

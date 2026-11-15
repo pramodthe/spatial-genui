@@ -8,8 +8,8 @@ import { assetPath, libraryCatalog, shortCredit } from './library.js';
 import type { LlmTarget } from './llm.js';
 import { loadModel } from './models.js';
 import { EXAMPLE_MODULE } from './prompt.js';
-import { admit, admitLight, admitVoice, recordSpend, spendToday, visitorOf } from './guard.js';
-import { realSizeOf } from './real-size.js';
+import { admit, admitLookup, admitVoice, recordSpend, spendToday, visitorOf } from './guard.js';
+import { knownRealSize, realSizeOf } from './real-size.js';
 import { transcribe, voiceAgentToken } from './voice.js';
 import { getCourse, listCourses, openLesson, polishLesson, startCourse, summary } from './courses.js';
 
@@ -104,7 +104,9 @@ const server = createServer(async (req, res) => {
       const body = await readJson(req);
       const request = typeof body.request === 'string' ? body.request.trim() : '';
       if (!request || request.length > 500) return send(res, 400, { error: 'Send { "request": "…" } (1–500 characters).' });
-      const refusal = admitLight(visitorOf(req));
+      const known = knownRealSize(request);
+      if (known) return send(res, 200, known);
+      const refusal = admitLookup(visitorOf(req));
       if (refusal) return send(res, refusal.status, { ok: false, error: refusal.error, reason: refusal.reason });
       try {
         return send(res, 200, await realSizeOf(request));

@@ -38,6 +38,11 @@ try {
 
 let sizer: Promise<LlmTarget | null> | null = null;
 
+/** The size already known for `request`, if it has been asked before (no model call, nothing to limit). */
+export function knownRealSize(request: string): RealSize | undefined {
+  return cache.get(request.trim().toLowerCase());
+}
+
 /** The real size of the subject of `request` (a lesson's prompt or title), from the cache or the size agent. */
 export async function realSizeOf(request: string): Promise<RealSize> {
   const key = request.trim().toLowerCase();

@@ -134,11 +134,21 @@ export function admitVoice(visitor: string): Refusal | null {
   return null;
 }
 
-/** The rate and budget guards without the content screen, for small requests (a size lookup). */
-export function admitLight(visitor: string): Refusal | null {
-  const refusal = checkRate(visitor) ?? checkBudget();
-  if (!refusal) recent.get(visitor)!.push(Date.now());
-  return refusal;
+// Size lookups (real-size.ts) are small model calls, one for each lesson opened that doesn't give its size: a limit
+// of their own, so opening lessons never uses up the learner's lesson and course requests (they did: six lessons
+// opened, and the next course was refused).
+const LOOKUP_LIMIT = 30;
+const recentLookups = new Map<string, number[]>();
+
+export function admitLookup(visitor: string): Refusal | null {
+  const now = Date.now();
+  const times = (recentLookups.get(visitor) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
+  recentLookups.set(visitor, times);
+  if (times.length >= LOOKUP_LIMIT) return { status: 429, reason: 'rate', error: 'Too many size lookups; try again in a few minutes.' };
+  const budget = checkBudget();
+  if (budget) return budget;
+  times.push(now);
+  return null;
 }
 
 /** Every guard, cheapest first. Null means go ahead (and the request counts toward the visitor's limit). */

@@ -6,22 +6,27 @@ import {
   Grabbed,
   MovementMode,
   Group,
-  OneHandGrabbable,
+  Object3D,
   PanelDocument,
   PanelUI,
   PokeInteractable,
   Pressed,
+  Quaternion,
   RayInteractable,
+  TwoHandsGrabbable,
   Vector3,
   VisibilityState,
+  XRAnchor,
   XRPlane as XRPlaneComponent,
   type Entity,
-  type Object3D,
   type UIKitDocument,
   type World,
 } from '@iwsdk/core';
 import { captureLesson, expandByMesh, type CaptureOptions } from './capture';
-import { createMoveHandle, MOVE_HANDLE_RADIUS_M, type MoveHandle } from './handle';
+import { boxAround, createMoveHandle, MOVE_HANDLE_RADIUS_M, setFloorHeight, type MoveHandle } from './handle';
+import { makeCardGrabbable, pinchAtFingertips, setGrabFilter, type CardGrab } from './grab';
+import { createGlow, glowOnHover, tickGlows, type Glow } from './hover';
+import { initViewPill, setPill } from './hud';
 import { assetHandle, assetIdsIn, creditsFor, preloadAssets } from './library';
 import type { TeachingRig } from './rig';
 
@@ -76,7 +81,41 @@ type Mounted = {
   kit: Kit | null;
   /** The bar the learner drags to move the whole lesson, and where the lesson layout found the root. */
   handle: MoveHandle | null;
+  /** The lesson's cards, held by their frames (set up once the cards have laid out). */
+  cards: CardGrab[];
+  /** Hover glows of the lesson's grabbable and pressable objects and parts, by target. */
+  glows: Map<Object3D, Glow>;
+  /** The fitted view: the 3D's box as built (root's frame, before fitting) and the scale that fits it in the box. */
+  built: { box: Box3; size: number; rootScale: number; origin: Vector3 } | null;
+  fitScale: number;
+  /** The subject's real largest dimension in metres (declared by the lesson, or from the size agent), or null. */
+  realSizeM: number | null;
+  view: 'fit' | 'real';
+  /** The fitted view's root transform and rig label sizes, kept while the real-size view is shown. */
+  fitPose: { position: Vector3; scale: Vector3; labelScales: number[] } | null;
   handleRest: { offset: Vector3; root: Vector3 } | null;
+  /** The lesson's card and annotation layers, beside root under the anchor (see splitLayers). */
+  layers: { cards: Group; annotations: Group } | null;
+  /** The cards and name tags moved out of the 3D into those layers. */
+  layered: Layered[];
+};
+
+/** A card or name tag moved out of the lesson's 3D into its layer (see splitLayers). */
+type Layered = {
+  object: Object3D;
+  kind: 'card' | 'tag';
+  /** An empty object left where the lesson put it: hidden with the lesson's group, carried with its part. */
+  pin: Object3D;
+  /** The group holding the object in its layer: it shows while the pin's groups do, so the object's own visible
+   * flag stays the lesson's (as it would nested in its group). */
+  slot: Group;
+  /** The card's panel (null for a tag drawn in 3D). */
+  panel: PanelRecord | null;
+  /** Its size as built (in the lesson's frame, before fitting): the size it keeps in every view. */
+  size: number;
+  /** Where the lesson put it, in root's frame as built. */
+  at: Vector3;
+  shown: boolean;
 };
 
 /** The paintbox for generated lessons, served by the agent server (apps/server/src/kit/kit.js). */
@@ -138,13 +177,29 @@ function toPanelText(text: string): string {
 // Seated placement: content sits this far in front of and below the viewer's eyes.
 const REACH_DISTANCE_M = 0.55;
 const BELOW_EYES_M = 0.35;
-const MAX_CONTENT_SIZE_M = 0.8;
+// The fitted view: a lesson's 3D is scaled so its largest side is this long (a house shrinks, a bacterium grows),
+// within these limits on the scale.
+const FIT_BOX_M = 0.5;
+const FIT_SCALE_RANGE = [0.2, 5] as const;
+// The real-size view is offered for subjects between these sizes (a grain of rice to a tall building); outside them
+// the pill only tells the scale. At real size the subject stands on the floor, its near side this far ahead.
+const REAL_SIZE_RANGE_M = [0.005, 150] as const;
+const REAL_VIEW_GAP_M = 1.2;
 // Nothing in a lesson starts nearer the eyes than this (measured along the floor): a lesson with cards or
 // parts laid out in front of its model is set further back to make room.
 const MIN_FRONT_GAP_M = 0.3;
 const MAX_SET_BACK_M = 0.45;
-// Lessons keep opening at the session's spot while the learner stays this near it.
+// Lessons keep opening at the saved spot while the learner stays this near it.
 const KEEP_SPOT_WITHIN_M = 1.5;
+// A floating lesson's lowest part stays this far above the floor.
+const FLOOR_CLEARANCE_M = 0.05;
+// An unlabelled horizontal surface at least this far below the eyes counts as floor.
+const FLOOR_DROP_M = 1.0;
+const SPOT_STORAGE_KEY = 'genui.lessonSpot.v1';
+// A card stays at least this far from the eyes (along the floor), and starts at this share of the size the lesson
+// drew it (a card half a metre from the eyes filled the view).
+const CARD_MIN_DISTANCE_M = 0.45;
+const CARD_START_SCALE = 0.8;
 // A panel's top edge stays within this slope above the eye line (10 degrees): no reading upwards.
 const PANEL_TOP_RISE = Math.tan((10 * Math.PI) / 180);
 // A near-hand pinch grabs everything within a few centimetres of the pinch point.
@@ -154,10 +209,16 @@ let world: World | null = null;
 let current: Mounted | null = null;
 let onRuntimeError: ((message: string) => void) | null = null;
 /**
- * Where this session's lessons stand, so they don't land wherever the learner happens to be looking when
- * each one opens: found for the first lesson, moved when the learner drags a lesson by its handle.
+ * Where lessons stand, so they don't land wherever the learner happens to be looking when each one opens:
+ * found for the first lesson, moved when the learner drags a lesson by its handle. It is kept in the room's
+ * frame and saved, so the next session opens lessons at the same place in the room.
  */
 let lessonSpot: { position: Vector3; surface: string | null } | null = null;
+/**
+ * The room: a frame IWSDK keeps on a WebXR anchor (restored across sessions), so lessons stay where they are
+ * in the room when the headset recentres or re-localises. Outside XR, or without anchors, it is the world.
+ */
+let room: { group: Group; entity: Entity } | null = null;
 const tmpHead = new Vector3();
 const tmpForward = new Vector3();
 
@@ -166,12 +227,47 @@ export function initGenUIHost(w: World, handlers: { onRuntimeError: (message: st
   onRuntimeError = handlers.onRuntimeError;
   // Library models' cut-away view uses per-material clipping planes.
   w.renderer.localClippingEnabled = true;
+  // Nothing the learner drags goes below the floor.
+  setFloorHeight(() => floorHeight(w.camera.getWorldPosition(new Vector3())));
+  initViewPill(w, () => current && setLessonView(current.view === 'real' ? 'fit' : 'real'));
   w.registerSystem(GenUISystem);
 }
 
-/** Find a fresh spot for the next lesson (a new XR session, or a test that moved the viewpoint). */
+/** Find a fresh spot for the next lesson (a test that moved the viewpoint, or a learner starting over). */
 export function forgetLessonSpot() {
-  lessonSpot = null;
+  setLessonSpot(null);
+}
+
+function setLessonSpot(spot: { position: Vector3; surface: string | null } | null) {
+  lessonSpot = spot;
+  try {
+    if (spot) localStorage.setItem(SPOT_STORAGE_KEY, JSON.stringify({ position: spot.position.toArray(), surface: spot.surface }));
+    else localStorage.removeItem(SPOT_STORAGE_KEY);
+  } catch {
+    // No storage (private window): the spot lasts for this page only.
+  }
+}
+
+function loadLessonSpot(): { position: Vector3; surface: string | null } | null {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SPOT_STORAGE_KEY) ?? 'null') as { position?: number[]; surface?: string | null } | null;
+    if (saved?.position?.length !== 3 || !saved.position.every(Number.isFinite)) return null;
+    return { position: new Vector3(...saved.position), surface: saved.surface ?? null };
+  } catch {
+    return null;
+  }
+}
+
+/** The room's frame (see `room`), made on first use. The picker stands in it too, so it stays beside the lesson. */
+export function roomFrame(): { group: Group; entity: Entity } {
+  if (!room) {
+    const group = new Group();
+    group.name = 'GenUI Room';
+    const entity = world!.createTransformEntity(group, { persistent: true });
+    entity.addComponent(XRAnchor);
+    room = { group, entity };
+  }
+  return room;
 }
 
 /** Where the mounted lesson stands, in world space, or null when there is none. */
@@ -183,10 +279,13 @@ export function unmountGenerated() {
   if (!current) return;
   current.kit?.dispose();
   current.handle?.dispose();
+  for (const card of current.cards) card.dispose();
+  for (const glow of current.glows.values()) glow.dispose();
   for (const panel of current.panels.values()) URL.revokeObjectURL(panel.url);
   // Children before parents so each entity releases its own resources.
   for (const entity of [...current.entities].reverse()) entity.dispose();
   current = null;
+  updatePill();
 }
 
 export type MountedInspection = {
@@ -206,12 +305,17 @@ export type MountedInspection = {
   sliders: { id: string; center: [number, number, number]; size: [number, number, number] }[];
   /** Each teaching rig: its parts' names and how far apart they are (mean distance from their centre, m). */
   rigs: { parts: number; names: string[]; spread: number }[];
+  /** Names of the objects and parts glowing because a pointer is over them. */
+  glowing: string[];
+  /** What the host moved out of the 3D: cards and name tags (see splitLayers), by name. */
+  layers: { cards: string[]; annotations: string[] };
 };
 
 /** A picture of the mounted lesson from a virtual camera (JPEG data URL), or null when there is none. */
 export function capture(options: CaptureOptions = {}): string | null {
   if (!world || !current?.root) return null;
-  return captureLesson(world, current.root, new Set([...current.panels.values()].map((p) => p.holder)), options);
+  const { root, layers } = current;
+  return captureLesson(world, root, layers ? [layers.annotations, layers.cards] : [], new Set([...current.panels.values()].map((p) => p.holder)), options);
 }
 
 /** Test-only: the mounted lesson's root, for scripts that inspect what was built. */
@@ -314,6 +418,11 @@ export function inspectMounted(): MountedInspection | null {
         return [{ id, center: box.getCenter(new Vector3()).toArray() as [number, number, number], size: box.getSize(new Vector3()).toArray() as [number, number, number] }];
       }),
     ),
+    glowing: [...mounted.glows].filter(([, glow]) => glow.on).map(([target]) => target.name),
+    layers: {
+      cards: mounted.layered.filter((item) => item.kind === 'card').map((item) => item.object.name),
+      annotations: mounted.layered.filter((item) => item.kind === 'tag').map((item) => item.object.name),
+    },
     rigs: mounted.rigs.map((rig) => {
       const parts = rig.partObjects();
       const centers = parts.map(center).map((c) => new Vector3(...c));
@@ -375,7 +484,16 @@ export async function mountGenerated(code: string): Promise<MountReport> {
     onSurface: null,
     kit: (await loadKit())?.createKit(IWSDK) ?? null,
     handle: null,
+    cards: [],
+    glows: new Map(),
+    built: null,
+    fitScale: 1,
+    realSizeM: null,
+    view: 'fit',
+    fitPose: null,
     handleRest: null,
+    layers: null,
+    layered: [],
   };
   // The last wait: from here to the end, nothing else can run before this lesson is in the scene.
   if (ticket !== mountTicket) {
@@ -423,7 +541,7 @@ export async function mountGenerated(code: string): Promise<MountReport> {
     },
   };
 
-  let result: { root?: unknown; update?: unknown };
+  let result: { root?: unknown; update?: unknown; real?: { size?: unknown } };
   try {
     result = (build as (a: typeof api) => typeof result)(api) ?? {};
   } catch (err) {
@@ -460,22 +578,30 @@ export async function mountGenerated(code: string): Promise<MountReport> {
   anchor.add(root);
   // Measured before the anchor is placed, so the box is in the lesson's own frame (+Z toward the learner).
   const panelHolders = new Set(panels.map((p) => p.holder));
-  fitToComfortSize(root, panelHolders, warnings);
+  const layers = splitLayers(mounted, anchor, root, panels, new Set(traitRequests.map((r) => r.object)));
+  fitToBox(mounted, root, panels);
+  fitCards(mounted);
+  syncLayers(mounted);
+  const declared = Number(result.real?.size);
+  mounted.realSizeM = Number.isFinite(declared) && declared > 0 ? declared : null;
   const extent = contentBox(root, panelHolders);
   for (const panel of panels) extent.expandByPoint(panel.holder.getWorldPosition(new Vector3()));
+  for (const item of mounted.layered) extent.expandByPoint(item.object.getWorldPosition(new Vector3()));
   const front = extent.isEmpty() ? 0 : Math.max(0, extent.max.z);
-  mounted.onSurface = placeInSeatedReach(anchor, front);
+  const bottom = extent.isEmpty() ? 0 : extent.min.y;
+  mounted.onSurface = placeInSeatedReach(anchor, front, bottom);
+  const anchorEntity = track(mounted, world.createTransformEntity(anchor, { parent: roomFrame().entity }), anchor);
   anchor.updateMatrixWorld(true);
-
-  const anchorEntity = track(mounted, world.createTransformEntity(anchor), anchor);
   // The handle lies on the desk in front of everything, nearest the learner.
   mounted.handle = createMoveHandle(world, anchor, {
     offset: [0, Math.max(-0.1, Math.min(0, extent.isEmpty() ? 0 : extent.min.y)) + MOVE_HANDLE_RADIUS_M, front + 0.07],
-    onMoved: () => (lessonSpot = { position: anchor.position.clone(), surface: null }),
+    measure: root,
+    onMoved: () => setLessonSpot({ position: anchor.position.clone(), surface: null }),
   });
   mounted.handle.setShown(true);
   mounted.handleRest = { offset: mounted.handle.offset.clone(), root: root.position.clone() };
-  const rootEntity = track(mounted, world.createTransformEntity(root, { parent: anchorEntity }), root);
+  track(mounted, world.createTransformEntity(root, { parent: anchorEntity }), root);
+  for (const layer of [layers.cards, layers.annotations]) track(mounted, world.createTransformEntity(layer, { parent: anchorEntity }), layer);
 
   // Each object the lesson made interactive keeps its place in the lesson's own hierarchy: a planet stays in
   // the orbit group that turns it, a part in the model that carries it. IWSDK wants an entity's object to be a
@@ -484,7 +610,7 @@ export async function mountGenerated(code: string): Promise<MountReport> {
     const existing = mounted.objectEntities.get(object);
     if (existing) return existing;
     let inLesson = false;
-    for (let o = object.parent; o && !inLesson; o = o.parent) inLesson = o === root;
+    for (let o = object.parent; o && !inLesson; o = o.parent) inLesson = o === root || o === layers.cards || o === layers.annotations;
     if (!inLesson) root.attach(object); // built but never added to the lesson: hang it on the root where it stands
     return track(mounted, world!.createTransformEntity(object, { parent: entityFor(object.parent!) }), object);
   };
@@ -515,7 +641,9 @@ export async function mountGenerated(code: string): Promise<MountReport> {
       entity.addComponent(DistanceGrabbable, { movementMode: MovementMode.MoveAtSource });
       mounted.grabModes.set(request.object, 'ray');
     } else if (request.grab) {
-      entity.addComponent(OneHandGrabbable, {});
+      // One hand picks it up and carries it; both hands turn it. Objects don't change size by hand: the view
+      // pill sizes the whole lesson, the same way in every lesson.
+      entity.addComponent(TwoHandsGrabbable, { scale: false });
       mounted.grabModes.set(request.object, 'touch');
     }
     if (request.onPress) {
@@ -540,19 +668,36 @@ export async function mountGenerated(code: string): Promise<MountReport> {
       own?.();
     });
   }
-  // IWSDK's near grab turns the hand ray away from the object ({ deny: 'ray' }), so a learner pointing and
-  // pinching could never press it or its parts. Let the ray in: a pointed pinch presses, and moving the hand
-  // then drags the object, as with crowded objects.
   for (const [object, mode] of mounted.grabModes) {
     const entity = mounted.objectEntities.get(object);
-    if (mode === 'touch' && entity && (partPresses.has(object) || mounted.pressHandlers.has(entity))) {
-      object.pointerEventsType = 'all';
-      pinchOnlyGrab(entity);
-    }
+    if (mode !== 'touch' || !entity) continue;
+    pinchOnlyGrab(entity);
+    // IWSDK's near grab turns the hand ray away from the object ({ deny: 'ray' }), so a learner pointing and
+    // pinching could never press it or its parts. Let the ray in: a pointed pinch presses, and moving the hand
+    // then drags the object, as with crowded objects.
+    if (partPresses.has(object) || mounted.pressHandlers.has(entity)) object.pointerEventsType = 'all';
+  }
+
+  // What a pinch or poke will take glows while a pointer is over it: a part of a model, else the object.
+  for (const object of new Set(traitRequests.map((r) => r.object))) {
+    if (partPresses.has(object) || !mounted.objectEntities.has(object) || !(grabObjects.has(object) || mounted.pressTargets.includes(object))) continue;
+    const glow = createGlow(object, world.scene);
+    mounted.glows.set(object, glow);
+    glowOnHover(object, () => object, new Map([[object, glow]]));
+  }
+  for (const [model, parts] of partPresses) {
+    const glows = new Map<Object3D, Glow>([...parts.keys()].map((part) => [part, createGlow(part, world!.scene)]));
+    if (grabObjects.has(model)) glows.set(model, createGlow(model, world!.scene));
+    for (const [target, glow] of glows) mounted.glows.set(target, glow);
+    glowOnHover(model, (hit) => {
+      for (let o: Object3D | null = hit; o && o !== model; o = o.parent) if (parts.has(o)) return o;
+      return glows.has(model) ? model : null;
+    }, glows);
   }
 
   // Panels with nothing to press (library labels, name tags, captions) are read-only: without interactables they
-  // can't catch a hand ray meant for a button behind them (labels move when a model explodes).
+  // can't catch a hand ray meant for a button behind them (labels move when a model explodes). Cards with nothing
+  // to press get the ray later, for their frames (setUpCards).
   const labelHolders = new Set(mounted.rigs.flatMap((rig) => rig.labelHolders()));
   for (const panel of panels) {
     const entity = entityFor(panel.holder);
@@ -566,6 +711,7 @@ export async function mountGenerated(code: string): Promise<MountReport> {
 
   mounted.update = typeof result.update === 'function' ? (result.update as Mounted['update']) : undefined;
   current = mounted;
+  updatePill();
   return { ok: true, warnings, credits: library ? creditsFor(library, assetIds) : [] };
 }
 
@@ -579,9 +725,10 @@ class GenUISystem extends createSystem({
     let immersive = false;
     this.cleanupFuncs.push(
       this.world.visibilityState.subscribe((visibility) => {
-        // Entering or leaving XR changes the viewpoint: the next lesson finds its place afresh.
+        // Entering XR: lessons open at the spot saved in the room (or find one, if the learner is elsewhere).
+        // Leaving XR: the flat page has no room to keep a spot in.
         const now = visibility !== VisibilityState.NonImmersive;
-        if (now !== immersive) forgetLessonSpot();
+        if (now !== immersive) lessonSpot = now ? loadLessonSpot() : null;
         immersive = now;
       }),
     );
@@ -603,17 +750,32 @@ class GenUISystem extends createSystem({
     });
   }
 
+  private fingertips = false;
+
   update(delta: number): void {
+    // Once the hands' pointers exist: a near pinch takes only what is at the fingertips.
+    if (!this.fingertips) this.fingertips = pinchAtFingertips(this.world.input);
     const mounted = current;
     if (!mounted) return;
     // Textures are painted a few milliseconds per frame, so a lesson never stalls the headset.
     mounted.kit?.pump(5);
+    tickGlows();
+    if (mounted.cards.length > 0) {
+      const head = this.world.camera.getWorldPosition(new Vector3());
+      const floor = floorHeight(head);
+      for (const card of mounted.cards) card.tick(head, floor);
+    }
     if (mounted.declutterIn !== null && [...mounted.panels.values()].every((p) => p.document)) {
       // UIKit lays panels out over a few frames; measure once their sizes are real.
       if (mounted.declutterIn-- <= 0) {
         mounted.declutterIn = null;
         if (mounted.rigs.length > 0) layoutLessonPanels(mounted);
-        else keepPanelsInView(mounted);
+        else {
+          fitCards(mounted);
+          keepPanelsInView(mounted);
+        }
+        setUpCards(mounted);
+        updatePill();
       }
     }
     for (const rig of mounted.rigs) {
@@ -624,14 +786,17 @@ class GenUISystem extends createSystem({
         onRuntimeError?.(`Teaching rig failed: ${describe(err)}`);
       }
     }
-    if (!mounted.update) return;
-    try {
-      mounted.update(performance.now() / 1000 - mounted.startTime, delta);
-    } catch (err) {
-      // Stop calling a broken update; the scene stays, the error goes to the repair loop.
-      mounted.update = undefined;
-      onRuntimeError?.(`update() threw: ${describe(err)}`);
+    if (mounted.update) {
+      try {
+        mounted.update(performance.now() / 1000 - mounted.startTime, delta);
+      } catch (err) {
+        // Stop calling a broken update; the scene stays, the error goes to the repair loop.
+        mounted.update = undefined;
+        onRuntimeError?.(`update() threw: ${describe(err)}`);
+      }
     }
+    // After the lesson has moved its parts: tags stand on them this frame, not the next.
+    syncLayers(mounted);
   }
 }
 
@@ -676,17 +841,13 @@ function applyProps(document: UIKitDocument, id: string, props: ElementProps) {
 }
 
 /**
- * Only a pinch picks up a near-grabbable object that also takes pokes: IWSDK's grab handle would let a fingertip
- * touch drag it too, and a hand reaching in to pinch touches the model with its fingertip first, so the model
- * followed the finger and was dropped instead of being held. The handle lives in an IWSDK-internal component;
- * if it isn't there (another IWSDK version), the object keeps IWSDK's behaviour.
+ * Only a pinch picks up a near-grabbable object: a hand's pinch, or a pointed pinch where the ray is let in for
+ * presses (a small part in motion, an orbiting planet, is easier to take from a distance). IWSDK's grab handle
+ * would also let a fingertip touch drag it: a hand reaching in to pinch touches the model with its fingertip
+ * first, so the model followed the finger and was dropped instead of being held.
  */
 function pinchOnlyGrab(entity: Entity) {
-  const component = entity.getComponents().find((c) => c?.id === 'Handle');
-  const store = component ? (entity.getValue(component, 'instance' as never) as { getOptions?: () => object } | null) : null;
-  if (typeof store?.getOptions !== 'function') return;
-  const options = store.getOptions;
-  store.getOptions = () => ({ ...options(), filter: (event: { pointerType?: string }) => event.pointerType !== 'touch' });
+  setGrabFilter(entity, (event) => event.pointerType !== 'touch');
 }
 
 function track(mounted: Mounted, entity: Entity, object: Object3D): Entity {
@@ -702,29 +863,65 @@ function track(mounted: Mounted, entity: Entity, object: Object3D): Entity {
  * `front` is how far this lesson reaches toward the learner from its centre: it is set back far enough
  * that nothing starts in their face. Returns the surface's label, or null when floating.
  */
-function placeInSeatedReach(anchor: Group, front: number): string | null {
+function placeInSeatedReach(anchor: Group, front: number, bottom: number): string | null {
+  const frame = roomFrame().group;
+  frame.updateMatrixWorld(true);
   const camera = world!.camera;
   camera.getWorldPosition(tmpHead);
-  if (!lessonSpot || lessonSpot.position.distanceTo(tmpHead) > KEEP_SPOT_WITHIN_M) {
+  const head = frame.worldToLocal(tmpHead.clone());
+  if (!lessonSpot || lessonSpot.position.distanceTo(head) > KEEP_SPOT_WITHIN_M) {
     camera.getWorldDirection(tmpForward);
     tmpForward.y = 0;
     if (tmpForward.lengthSq() < 1e-6) tmpForward.set(0, 0, -1);
     tmpForward.normalize();
     const desk = findDesk(tmpHead, tmpForward);
-    const position = desk ? desk.point.clone() : tmpHead.clone().addScaledVector(tmpForward, REACH_DISTANCE_M).setY(tmpHead.y - BELOW_EYES_M);
-    lessonSpot = { position, surface: desk?.label ?? null };
+    const spot = desk ? desk.point.clone() : tmpHead.clone().addScaledVector(tmpForward, REACH_DISTANCE_M).setY(tmpHead.y - BELOW_EYES_M);
+    setLessonSpot({ position: frame.worldToLocal(spot), surface: desk?.label ?? null });
   }
-  anchor.position.copy(lessonSpot.position);
-  const away = tmpForward.set(anchor.position.x - tmpHead.x, 0, anchor.position.z - tmpHead.z);
+  const spot = lessonSpot!;
+  anchor.position.copy(spot.position);
+  if (spot.surface) {
+    // On a desk the lesson stands on it: anything built below y = 0 would be inside the desk.
+    if (bottom < 0) anchor.position.y -= bottom;
+  } else {
+    // Floating, nothing goes below the floor (a learner sitting low, on a bed or the floor, has little room).
+    const floor = frame.worldToLocal(new Vector3(tmpHead.x, floorHeight(tmpHead), tmpHead.z)).y;
+    anchor.position.y = Math.max(anchor.position.y, floor + FLOOR_CLEARANCE_M - bottom);
+  }
+  const away = new Vector3(anchor.position.x - head.x, 0, anchor.position.z - head.z);
   const gap = away.length() - front;
   if (gap < MIN_FRONT_GAP_M && away.lengthSq() > 1e-6) anchor.position.addScaledVector(away.normalize(), Math.min(MIN_FRONT_GAP_M - gap, MAX_SET_BACK_M));
   // root's +Z must face the viewer, so yaw toward the head.
-  anchor.rotation.y = Math.atan2(tmpHead.x - anchor.position.x, tmpHead.z - anchor.position.z);
-  return lessonSpot.surface;
+  anchor.rotation.y = Math.atan2(head.x - anchor.position.x, head.z - anchor.position.z);
+  return spot.surface;
 }
 
-// A desk or table: 15-90 cm below the eyes (not the floor, not a shelf), big enough for a lesson, ahead.
+/**
+ * The floor's height in the world: the lowest surface the headset labels floor, or failing that the lowest
+ * horizontal one well below the eyes; without scene data, y = 0 of the floor-level reference space.
+ */
+export function floorHeight(head: Vector3): number {
+  let floor: number | null = null;
+  for (const entity of planeEntities?.() ?? []) {
+    const plane = entity.getValue(XRPlaneComponent, '_plane') as { orientation?: string; semanticLabel?: string } | undefined;
+    const mesh = entity.object3D;
+    if (!plane || !mesh || plane.orientation !== 'horizontal') continue;
+    const y = mesh.getWorldPosition(new Vector3()).y;
+    if (/floor/i.test(plane.semanticLabel ?? '') || head.y - y > FLOOR_DROP_M) floor = floor === null ? y : Math.min(floor, y);
+  }
+  return floor ?? 0;
+}
+
+/** The floor's height in `frame` (a lesson's root), for steps that move a placed lesson down. */
+function floorIn(frame: Object3D): number {
+  const eye = world ? world.camera.getWorldPosition(new Vector3()) : new Vector3();
+  return frame.worldToLocal(new Vector3(eye.x, floorHeight(eye), eye.z)).y;
+}
+
+// A desk or table: 15-90 cm below the eyes (not a shelf), big enough for a lesson, ahead, and not the floor (for a
+// learner sitting low the floor is less than 90 cm below the eyes too).
 const DESK_DROP_M = [0.15, 0.9] as const;
+const DESK_ABOVE_FLOOR_M = 0.15;
 const DESK_REACH_M = [0.3, 0.9] as const;
 const DESK_MARGIN_M = 0.12;
 const DESK_AHEAD_COS = Math.cos((50 * Math.PI) / 180);
@@ -733,14 +930,15 @@ const DESK_AHEAD_COS = Math.cos((50 * Math.PI) / 180);
 function findDesk(head: Vector3, forward: Vector3): { point: Vector3; label: string } | null {
   let best: { point: Vector3; label: string } | null = null;
   let bestCost = Infinity;
+  const floor = floorHeight(head);
   for (const entity of planeEntities?.() ?? []) {
     const plane = entity.getValue(XRPlaneComponent, '_plane') as { orientation?: string; semanticLabel?: string } | undefined;
     const mesh = entity.object3D as IWSDK.Mesh | undefined;
-    if (!plane || !mesh?.isMesh || plane.orientation !== 'horizontal') continue;
+    if (!plane || !mesh?.isMesh || plane.orientation !== 'horizontal' || /floor/i.test(plane.semanticLabel ?? '')) continue;
     mesh.updateWorldMatrix(true, false);
     const height = mesh.getWorldPosition(new Vector3()).y;
     const drop = head.y - height;
-    if (drop < DESK_DROP_M[0] || drop > DESK_DROP_M[1]) continue;
+    if (drop < DESK_DROP_M[0] || drop > DESK_DROP_M[1] || height - floor < DESK_ABOVE_FLOOR_M) continue;
     // IWSDK builds each plane as a thin box around its origin, sized to the plane's outline.
     mesh.geometry.computeBoundingBox();
     const box = mesh.geometry.boundingBox!;
@@ -790,20 +988,209 @@ function findCrowdedGrabbables(objects: Object3D[]): Set<Object3D> {
   return crowded;
 }
 
+/** A name tag drawn in 3D by the kit (kit.card); older kits only named them "card: …". */
+function isNameTag(object: Object3D): boolean {
+  return object.userData?.nameTag === true || object.name.startsWith('card: ');
+}
+
 /**
- * Shrink oversized 3D content into the seated reach zone. Only meshes count: panels, labels and
- * leader lines are excluded, because shrinking them would push text below the readable size the
- * server checked. (Scaling root still scales panels, so this only triggers for genuinely huge models.)
+ * The lesson's three layers. build() returns one root with everything in it; the host splits it, so the views
+ * scale the 3D and nothing else:
+ * - root keeps the 3D, and the teaching rigs' labels (the rig sizes and places those itself);
+ * - the cards layer takes the cards: panels with something to press, wherever the lesson attached them, and every
+ *   panel it put straight in root. They are placed beside the 3D once, then they are the learner's to move;
+ * - the annotations layer takes the name tags: the kit's tags, and panels with nothing to press that the lesson hung
+ *   on a part. Each follows its spot on the 3D every frame at its own size (syncLayers).
+ * Both layers stand where root stands, unscaled. Each card and tag leaves a pin where the lesson put it and stands in
+ * a slot of its own, shown while the pin's groups are, so hiding a group of the lesson still hides its cards and tags
+ * and their own visible flags stay the lesson's. What the lesson made grabbable or pressable stays in the 3D,
+ * tag or not: a label the learner drags onto a landscape is a piece of the model.
  */
-function fitToComfortSize(root: Object3D, panelHolders: Set<Object3D>, warnings: string[]) {
-  const box = contentBox(root, panelHolders);
+function splitLayers(mounted: Mounted, anchor: Group, root: Object3D, panels: PanelRecord[], interactive: Set<Object3D>): { cards: Group; annotations: Group } {
+  const layers = { cards: new Group(), annotations: new Group() };
+  layers.cards.name = 'GenUI Cards';
+  layers.annotations.name = 'GenUI Annotations';
+  for (const layer of [layers.cards, layers.annotations]) {
+    layer.position.copy(root.position);
+    layer.quaternion.copy(root.quaternion);
+    anchor.add(layer);
+  }
+  anchor.updateMatrixWorld(true);
+  const rigLabels = new Set(mounted.rigs.flatMap((rig) => rig.labelHolders()));
+  const panelOf = new Map<Object3D, PanelRecord>(panels.map((p) => [p.holder, p]));
+  const moving: { object: Object3D; kind: Layered['kind'] }[] = [];
+  const visit = (object: Object3D) => {
+    for (const child of object.children) {
+      const panel = panelOf.get(child);
+      if (interactive.has(child)) visit(child);
+      else if (panel && !rigLabels.has(child)) {
+        const pressable = panel.handlers.length > 0 || panel.valueIds.length > 0;
+        moving.push({ object: child, kind: pressable || object === root ? 'card' : 'tag' });
+      } else if (!panel && isNameTag(child)) moving.push({ object: child, kind: 'tag' });
+      else if (!panel) visit(child);
+    }
+  };
+  visit(root);
+  for (const { object, kind } of moving) {
+    const pin = new Object3D();
+    pin.name = 'GenUI Pin';
+    pin.position.copy(object.position);
+    pin.quaternion.copy(object.quaternion);
+    pin.scale.copy(object.scale);
+    object.parent!.add(pin);
+    pin.updateWorldMatrix(true, false);
+    // The anchor is not placed yet: world is the lesson's own frame.
+    const size = object.getWorldScale(new Vector3()).x;
+    const at = root.worldToLocal(pin.getWorldPosition(new Vector3()));
+    const slot = new Group();
+    slot.name = 'GenUI Slot';
+    (kind === 'card' ? layers.cards : layers.annotations).add(slot);
+    slot.attach(object);
+    object.scale.setScalar(size);
+    const shown = pinShown(pin, root);
+    slot.visible = shown;
+    mounted.layered.push({ object, kind, pin, slot, panel: panelOf.get(object) ?? null, size, at, shown });
+  }
+  mounted.layers = layers;
+  return layers;
+}
+
+/** Whether the lesson shows what `pin` stands for: the pin is still in the lesson, and every group above it is visible. */
+function pinShown(pin: Object3D, root: Object3D): boolean {
+  for (let o: Object3D | null = pin; o; o = o.parent) {
+    if (!o.visible) return false;
+    if (o === root) return true;
+  }
+  return false;
+}
+
+const tmpPinPosition = new Vector3();
+const tmpPinQuaternion = new Quaternion();
+const tmpPinScale = new Vector3();
+const tmpLayerTurn = new Quaternion();
+
+/** Per frame: cards and tags show while the lesson shows their pins; tags stand at their pins, at their own size. */
+function syncLayers(mounted: Mounted) {
+  const { layers, root } = mounted;
+  if (!layers || !root) return;
+  const tags = layers.annotations;
+  tags.updateWorldMatrix(true, false);
+  tags.getWorldQuaternion(tmpLayerTurn).invert();
+  for (const item of mounted.layered) {
+    const now = pinShown(item.pin, root);
+    if (now !== item.shown) item.slot.visible = item.shown = now;
+    if (item.kind !== 'tag' || !now) continue;
+    item.pin.updateWorldMatrix(true, false);
+    item.pin.matrixWorld.decompose(tmpPinPosition, tmpPinQuaternion, tmpPinScale);
+    item.object.position.copy(tags.worldToLocal(tmpPinPosition));
+    item.object.quaternion.copy(tmpLayerTurn).multiply(tmpPinQuaternion);
+  }
+}
+
+/**
+ * The fitted view: scale the lesson's 3D so its largest side is FIT_BOX_M (up or down). Only root is scaled: the
+ * cards and tags are in their own layers. Only meshes count: the rigs' labels and leader lines are left out.
+ */
+function fitToBox(mounted: Mounted, root: Object3D, panels: PanelRecord[]) {
+  const box = contentBox(root, new Set(panels.map((p) => p.holder)));
   if (box.isEmpty()) return;
   const size = box.getSize(new Vector3());
   const largest = Math.max(size.x, size.y, size.z);
-  if (largest > MAX_CONTENT_SIZE_M) {
-    root.scale.multiplyScalar(MAX_CONTENT_SIZE_M / largest);
-    warnings.push(`Scaled content down from ${largest.toFixed(2)} m to fit the seated reach zone.`);
+  mounted.built = { box: box.clone(), size: largest, rootScale: root.scale.x || 1, origin: root.position.clone() };
+  const scale = Math.min(FIT_SCALE_RANGE[1], Math.max(FIT_SCALE_RANGE[0], FIT_BOX_M / largest));
+  if (Math.abs(scale - 1) < 0.02) return;
+  mounted.fitScale = scale;
+  root.scale.multiplyScalar(scale);
+  for (const rig of mounted.rigs) rig.setLabelScale(1 / scale);
+}
+
+/**
+ * Cards go where the lesson put them beside the 3D, moved with the fitted 3D: each card's inner edge stays where
+ * the model's edge now is, while the card keeps its size. Heights are known once a card has laid out.
+ */
+function fitCards(mounted: Mounted) {
+  const { root, layers } = mounted;
+  if (!root || !layers) return;
+  const scale = mounted.fitScale;
+  root.updateWorldMatrix(true, false);
+  layers.cards.updateWorldMatrix(true, false);
+  for (const item of mounted.layered) {
+    if (item.kind !== 'card') continue;
+    const position = item.object.position.copy(layers.cards.worldToLocal(root.localToWorld(item.at.clone())));
+    if (Math.abs(scale - 1) < 0.02) continue;
+    const box = boxAround(item.object);
+    const width = (item.panel?.width ?? 0) * item.size;
+    const height = box.isEmpty() ? 0 : box.max.y - box.min.y;
+    if (Math.abs(item.at.x) > width / 4) position.x += Math.sign(item.at.x) * (width / 2) * (1 - scale);
+    if (item.at.y > 0) position.y += (height / 2) * (1 - scale);
   }
+}
+
+function canShowRealSize(mounted: Mounted): boolean {
+  return mounted.built !== null && mounted.realSizeM !== null && mounted.realSizeM >= REAL_SIZE_RANGE_M[0] && mounted.realSizeM <= REAL_SIZE_RANGE_M[1];
+}
+
+/**
+ * Show the lesson's subject fitted in the box on the desk, or at its real size: standing on the floor, its near side
+ * REAL_VIEW_GAP_M ahead. Only the 3D moves and changes size: the cards stay where they are, so the learner can still
+ * read and use them, and the tags go with their parts at their own size. The teaching rig sizes its own labels.
+ */
+export function setLessonView(view: 'fit' | 'real') {
+  const mounted = current;
+  const root = mounted?.root;
+  const anchor = root?.parent;
+  if (!mounted || !root || !anchor || !world || view === mounted.view) return;
+  // Not before the one-time layout has placed the cards beside the fitted 3D.
+  if (view === 'real' && (!canShowRealSize(mounted) || !mounted.built || mounted.declutterIn !== null)) return;
+  if (view === 'real') {
+    const built = mounted.built!;
+    mounted.fitPose = { position: root.position.clone(), scale: root.scale.clone(), labelScales: mounted.rigs.map((rig) => rig.labelScaleNow()) };
+    // World metres per metre as built, and how much bigger than the fitted view.
+    const k = mounted.realSizeM! / built.size;
+    const grow = (built.rootScale * k) / (root.scale.x || 1);
+    const head = anchor.worldToLocal(world.camera.getWorldPosition(new Vector3()));
+    const floor = floorIn(anchor);
+    // The box was measured with root where the lesson put it: from root's origin as built.
+    const box = built.box.clone().translate(built.origin.clone().negate());
+    root.scale.setScalar(built.rootScale * k);
+    root.position.set(head.x - k * ((box.min.x + box.max.x) / 2), floor - k * box.min.y, head.z - REAL_VIEW_GAP_M - k * box.max.z);
+    mounted.rigs.forEach((rig, i) => rig.setLabelScale(mounted.fitPose!.labelScales[i] / grow));
+  } else if (mounted.fitPose) {
+    root.position.copy(mounted.fitPose.position);
+    root.scale.copy(mounted.fitPose.scale);
+    mounted.rigs.forEach((rig, i) => rig.setLabelScale(mounted.fitPose!.labelScales[i]));
+    mounted.fitPose = null;
+  }
+  syncLayers(mounted);
+  mounted.view = view;
+  updatePill();
+}
+
+/** The real size of the lesson open now (from the size agent, when the lesson didn't declare it). */
+export function setLessonRealSize(sizeM: number | null) {
+  if (!current || current.realSizeM !== null) return;
+  current.realSizeM = typeof sizeM === 'number' && Number.isFinite(sizeM) && sizeM > 0 ? sizeM : null;
+  updatePill();
+}
+
+/** Whether the lesson open now declared its real size (no need to ask the size agent). */
+export function lessonDeclaresRealSize(): boolean {
+  return current?.realSizeM != null;
+}
+
+/** "1:16" for a subject shown smaller than it is, "x250,000" for one shown larger. */
+function scaleText(ratio: number): string {
+  const round = (n: number) => (n >= 100 ? Number(n.toPrecision(2)) : Math.round(n * 10) / 10).toLocaleString('en-US');
+  return ratio >= 1 ? `1:${round(ratio)}` : `x${round(1 / ratio)}`;
+}
+
+function updatePill() {
+  const mounted = current;
+  if (!mounted?.built || mounted.realSizeM === null) return setPill({ shown: false, label: '', detail: '', enabled: false });
+  if (mounted.view === 'real') return setPill({ shown: true, label: 'Fit', detail: '1:1', enabled: true });
+  const ratio = mounted.realSizeM / (mounted.built.size * mounted.fitScale);
+  if (canShowRealSize(mounted)) return setPill({ shown: true, label: 'Real size', detail: scaleText(ratio), enabled: mounted.declutterIn === null });
+  setPill({ shown: true, label: 'Scale', detail: scaleText(ratio), enabled: false });
 }
 
 /** The box around a lesson's meshes (no panels, labels or leader lines), in world space. */
@@ -864,9 +1251,9 @@ function layoutLessonPanels(mounted: Mounted, again?: { main: Object3D }) {
   const occupied = model.clone();
   for (const label of labels) if (label.visible) occupied.union(boxIn(label));
 
-  const panels = [...mounted.panels.values()]
-    .filter((p) => !labels.has(p.holder) && p.holder.parent === root)
-    .map((p) => ({ holder: p.holder, box: boxIn(p.holder) }))
+  const panels = mounted.layered
+    .filter((item) => item.kind === 'card')
+    .map((item) => ({ holder: item.object, box: boxIn(item.object) }))
     .filter((p) => !p.box.isEmpty());
   if (panels.length === 0) return;
   const gap = 0.025;
@@ -874,10 +1261,11 @@ function layoutLessonPanels(mounted: Mounted, again?: { main: Object3D }) {
   // Panels stand forward of the model's front face: a hand ray from chest height up to a button
   // behind that plane would pass through the model (and a grabbable model catches it).
   const frontZ = model.max.z + gap;
+  // Cards stand in their own layer, unscaled: a move worked out in root's frame is converted to the card's.
   const moveTo = (panel: { holder: Object3D; box: Box3 }, minX: number, minY: number, z: number) => {
-    panel.holder.position.x += minX - panel.box.min.x;
-    panel.holder.position.y += minY - panel.box.min.y;
-    panel.holder.position.z += z - panel.box.min.z;
+    const parent = panel.holder.parent!;
+    const from = parent.worldToLocal(root.localToWorld(panel.box.min.clone()));
+    panel.holder.position.add(parent.worldToLocal(root.localToWorld(new Vector3(minX, minY, z))).sub(from));
   };
   const { min, max } = occupied;
   const corners = [min.x, max.x].flatMap((x) => [min.y, max.y].flatMap((y) => [min.z, max.z].map((z) => new Vector3(x, y, z))));
@@ -921,8 +1309,8 @@ function layoutLessonPanels(mounted: Mounted, again?: { main: Object3D }) {
   const move = { dy: 0, dz: 0, misfit: 0 };
   if (start && start.z > frontZ) {
     let best = { cost: Infinity, dy: 0, dz: 0 };
-    // A lesson standing on a desk can't move down (into the desk), only back.
-    const maxDown = mounted.onSurface ? 0 : 0.4001;
+    // A lesson standing on a desk can't move down (into the desk), only back; a floating one stops above the floor.
+    const maxDown = mounted.onSurface ? 0 : Math.max(0, Math.min(0.4001, (model.min.y - floorIn(root)) / metre - FLOOR_CLEARANCE_M));
     search: for (let dz = 0; dz <= 0.4001; dz += 0.1) {
       for (let dy = 0; dy <= maxDown; dy += 0.05) {
         const cost = misfit(new Vector3(start.x, start.y + dy * metre, start.z + dz * metre));
@@ -933,8 +1321,11 @@ function layoutLessonPanels(mounted: Mounted, again?: { main: Object3D }) {
     Object.assign(move, { dy: best.dy, dz: best.dz, misfit: best.cost });
     if (best.dy || best.dz) {
       const target = root.localToWorld(new Vector3(0, -best.dy * metre, -best.dz * metre));
+      const before = root.position.clone();
       root.position.copy(root.parent ? root.parent.worldToLocal(target) : target);
-      root.updateMatrixWorld(true);
+      // The cards move with the lesson (the tags follow their parts by themselves).
+      mounted.layers?.cards.position.add(root.position).sub(before);
+      root.parent?.updateMatrixWorld(true);
       // The move handle stays in front of the lesson's base.
       if (mounted.handle && mounted.handleRest) mounted.handle.offset.copy(mounted.handleRest.offset).add(root.position).sub(mounted.handleRest.root);
     }
@@ -977,7 +1368,7 @@ function layoutLessonPanels(mounted: Mounted, again?: { main: Object3D }) {
       top -= height + gap;
     }
   }
-  root.updateMatrixWorld(true);
+  root.parent?.updateMatrixWorld(true);
 
   // Labels keep the angular size they were designed for (1.4 cm text read from 55 cm) wherever the
   // framing put the lesson; if that changes their size, lay everything out again around them.
@@ -985,7 +1376,7 @@ function layoutLessonPanels(mounted: Mounted, again?: { main: Object3D }) {
     const labelScale = Math.min(1.8, Math.max(1, eye.distanceTo(model.getCenter(new Vector3())) / 0.55));
     mounted.layout.labelScale = labelScale;
     if (labelScale > 1.05) {
-      for (const rig of mounted.rigs) rig.setLabelScale(labelScale);
+      for (const rig of mounted.rigs) rig.setLabelScale(labelScale / mounted.fitScale);
       layoutLessonPanels(mounted, { main: main.holder });
       if (mounted.layout) mounted.layout.labelScale = labelScale;
     }
@@ -1000,18 +1391,44 @@ function layoutLessonPanels(mounted: Mounted, again?: { main: Object3D }) {
 function keepPanelsInView(mounted: Mounted) {
   const root = mounted.root;
   if (!root || !world) return;
-  root.updateMatrixWorld(true);
+  root.parent?.updateMatrixWorld(true);
   const eye = world.camera.getWorldPosition(new Vector3());
   const base = root.parent ? root.parent.getWorldPosition(new Vector3()).y : -Infinity;
-  const scale = root.getWorldScale(new Vector3()).y || 1;
   const centre = new Vector3();
-  for (const panel of mounted.panels.values()) {
-    const box = new Box3().setFromObject(panel.holder);
-    if (box.isEmpty() || panel.holder.parent !== root) continue;
+  for (const item of mounted.layered) {
+    const holder = item.object;
+    const parent = holder.parent;
+    const box = boxAround(holder);
+    if (item.kind !== 'card' || !parent || box.isEmpty()) continue;
     box.getCenter(centre);
     const limit = eye.y + PANEL_TOP_RISE * Math.hypot(centre.x - eye.x, centre.z - eye.z);
     const drop = Math.min(box.max.y - limit, box.min.y - (base + 0.02));
-    if (drop > 0.005) panel.holder.position.y -= drop / scale;
+    if (drop > 0.005) holder.position.y -= drop / (parent.getWorldScale(new Vector3()).y || 1);
+    // Nor nearer the eyes than a comfortable reading distance: a learner sitting low (on a bed, on the floor)
+    // otherwise had the card right in front of their face.
+    const flat = new Vector3(centre.x - eye.x, 0, centre.z - eye.z);
+    const distance = flat.length();
+    if (distance > 1e-3 && distance < CARD_MIN_DISTANCE_M) {
+      const away = centre.clone().addScaledVector(flat.normalize(), CARD_MIN_DISTANCE_M - distance);
+      holder.position.add(parent.worldToLocal(away).sub(parent.worldToLocal(centre.clone())));
+    }
+  }
+}
+
+/**
+ * A lesson's cards (the panels in its cards layer) start a little smaller than the lesson drew them, and the learner
+ * holds them by their frames: one hand moves a card, two hands make it bigger or smaller.
+ */
+function setUpCards(mounted: Mounted) {
+  if (!world || !mounted.root) return;
+  const cards = new Set(mounted.layered.filter((item) => item.kind === 'card').map((item) => item.object));
+  for (const [entity, panel] of mounted.panels) {
+    if (!cards.has(panel.holder)) continue;
+    // A card with nothing to press (an info card) still takes the hand ray, for its frame.
+    if (!entity.hasComponent(RayInteractable)) entity.addComponent(RayInteractable, {});
+    panel.holder.scale.multiplyScalar(CARD_START_SCALE);
+    panel.holder.updateWorldMatrix(true, true);
+    mounted.cards.push(makeCardGrabbable(panel.holder, entity));
   }
 }
 

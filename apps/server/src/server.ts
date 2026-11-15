@@ -8,7 +8,8 @@ import { assetPath, libraryCatalog, shortCredit } from './library.js';
 import type { LlmTarget } from './llm.js';
 import { loadModel } from './models.js';
 import { EXAMPLE_MODULE } from './prompt.js';
-import { admit, admitVoice, recordSpend, spendToday, visitorOf } from './guard.js';
+import { admit, admitLookup, admitVoice, recordSpend, spendToday, visitorOf } from './guard.js';
+import { knownRealSize, realSizeOf } from './real-size.js';
 import { transcribe, voiceAgentToken } from './voice.js';
 import { getCourse, listCourses, openLesson, polishLesson, startCourse, summary } from './courses.js';
 
@@ -97,6 +98,21 @@ const server = createServer(async (req, res) => {
       const result = await voiceAgentToken();
       // 501: no tutor on this server (the headset stops asking); 503: try again later.
       return send(res, result.ok ? 200 : result.configured ? 503 : 501, result);
+    }
+    // The size agent (real-size.ts): how big a lesson's subject is in the real world, for the Real size view.
+    if (req.method === 'POST' && req.url === '/api/real-size') {
+      const body = await readJson(req);
+      const request = typeof body.request === 'string' ? body.request.trim() : '';
+      if (!request || request.length > 500) return send(res, 400, { error: 'Send { "request": "…" } (1–500 characters).' });
+      const known = knownRealSize(request);
+      if (known) return send(res, 200, known);
+      const refusal = admitLookup(visitorOf(req));
+      if (refusal) return send(res, refusal.status, { ok: false, error: refusal.error, reason: refusal.reason });
+      try {
+        return send(res, 200, await realSizeOf(request));
+      } catch (err) {
+        return send(res, 502, { error: `Size agent failed: ${(err as Error).message}` });
+      }
     }
     // Saved courses (courses.ts): planned at once, lessons written in the background and kept on disk.
     if (req.method === 'POST' && req.url === '/api/courses') {
@@ -210,7 +226,7 @@ async function readJson(req: IncomingMessage, limit = MAX_BODY_BYTES): Promise<a
 /** A fast model plans parallel runs (PARALLEL_PLANNER, a bench/models.json id); without one, the main model plans. */
 let planner: Promise<LlmTarget | undefined> | null = null;
 function parallelPlanner(): Promise<LlmTarget | undefined> {
-  planner ??= loadModel(process.env.PARALLEL_PLANNER || 'claude-haiku-5-5').catch((err) => {
+  planner ??= loadModel(process.env.PARALLEL_PLANNER || config.model).catch((err) => {
     console.warn(`Parallel planner unavailable (${(err as Error).message}); the main model plans.`);
     return undefined;
   });

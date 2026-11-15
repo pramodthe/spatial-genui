@@ -99,7 +99,7 @@ async function checkContent(prompt: string): Promise<{ refusal: Refusal | null; 
   if (process.env.MODERATION === 'off') return { refusal: null };
   const key = prompt.trim().toLowerCase();
   if (screened.has(key)) return { refusal: screened.get(key)! };
-  screener ??= loadModel(process.env.MODERATION_MODEL || 'claude-haiku-5-5').catch((err) => {
+  screener ??= loadModel(process.env.MODERATION_MODEL || config.model).catch((err) => {
     console.warn(`Content screen unavailable (${(err as Error).message}); requests are not screened.`);
     return null;
   });
@@ -131,6 +131,23 @@ export function admitVoice(visitor: string): Refusal | null {
   if (times.length >= VOICE_LIMIT) return { status: 429, reason: 'rate', error: 'Too many voice requests; try again in a few minutes.' };
   times.push(now);
   recentVoice.set(visitor, times);
+  return null;
+}
+
+// Size lookups (real-size.ts) are small model calls, one for each lesson opened that doesn't give its size: a limit
+// of their own, so opening lessons never uses up the learner's lesson and course requests (they did: six lessons
+// opened, and the next course was refused).
+const LOOKUP_LIMIT = 30;
+const recentLookups = new Map<string, number[]>();
+
+export function admitLookup(visitor: string): Refusal | null {
+  const now = Date.now();
+  const times = (recentLookups.get(visitor) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
+  recentLookups.set(visitor, times);
+  if (times.length >= LOOKUP_LIMIT) return { status: 429, reason: 'rate', error: 'Too many size lookups; try again in a few minutes.' };
+  const budget = checkBudget();
+  if (budget) return budget;
+  times.push(now);
   return null;
 }
 

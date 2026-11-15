@@ -54,12 +54,14 @@ export function expandByMesh(box: Box3, object: Object3D) {
   box.expandByObject(object, false);
 }
 
-export function captureLesson(world: World, root: Object3D, panelHolders: Set<Object3D>, options: CaptureOptions = {}): string | null {
+/** `layers`: the lesson's annotation and card layers, beside root (the host keeps them out of the 3D). */
+export function captureLesson(world: World, root: Object3D, layers: Object3D[], panelHolders: Set<Object3D>, options: CaptureOptions = {}): string | null {
   const width = Math.round(options.width ?? 1280);
   const height = Math.round(options.height ?? 960);
   const renderer = world.renderer;
   const scene = world.scene;
   root.updateWorldMatrix(true, true);
+  for (const layer of layers) layer.updateWorldMatrix(false, true);
 
   // What to frame: the lesson's 3D content, or everything including its panels.
   const box = new Box3();
@@ -72,6 +74,7 @@ export function captureLesson(world: World, root: Object3D, panelHolders: Set<Ob
     for (const child of object.children) visit(child);
   };
   visit(root);
+  for (const layer of layers) visit(layer);
   if (box.isEmpty()) box.setFromObject(root);
   if (box.isEmpty()) return null;
   const sphere = box.getBoundingSphere(new Sphere());
@@ -91,7 +94,7 @@ export function captureLesson(world: World, root: Object3D, panelHolders: Set<Ob
 
   // Draw the lesson only: hide everything else that would show (the room stand-ins, other panels).
   const lesson = new Set<Object3D>();
-  root.traverse((o) => lesson.add(o));
+  for (const part of [root, ...layers]) part.traverse((o) => lesson.add(o));
   const hidden: Object3D[] = [];
   scene.traverse((o) => {
     const kind = o as { isMesh?: boolean; isPoints?: boolean; isSprite?: boolean; isLine?: boolean };

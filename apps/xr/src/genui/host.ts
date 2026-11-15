@@ -200,6 +200,9 @@ const SPOT_STORAGE_KEY = 'genui.lessonSpot.v1';
 // drew it (a card half a metre from the eyes filled the view).
 const CARD_MIN_DISTANCE_M = 0.45;
 const CARD_START_SCALE = 0.8;
+// A card that covers the model is shifted this far past the model's side, and kept this far above the floor.
+const CARD_MODEL_GAP_M = 0.04;
+const CARD_FLOOR_GAP_M = 0.02;
 // A panel's top edge stays within this slope above the eye line (10 degrees): no reading upwards.
 const PANEL_TOP_RISE = Math.tan((10 * Math.PI) / 180);
 // A near-hand pinch grabs everything within a few centimetres of the pinch point.
@@ -375,6 +378,62 @@ export function aimPoint(index: number, from: [number, number, number], kind: 'g
 function shown(object: Object3D): boolean {
   for (let o: Object3D | null = object; o; o = o.parent) if (!o.visible) return false;
   return true;
+}
+
+// Three.js raycasts a mesh even when it is not drawn. A mesh the lesson hid, or one under a group the lesson
+// hid, keeps its real raycast here while a no-op stands in, and gets it back when it is shown. UIKit sets
+// `visible` false on elements it still draws in batches and still hits with its own raycast; that flag is not
+// a lesson hide, and neither is an empty raycast a glow copy or a leader line already installed.
+const savedRaycast = new WeakMap<Object3D, Object3D['raycast']>();
+const silencedRaycast: Object3D['raycast'] = () => {};
+
+function raycastInUse(object: Object3D): Object3D['raycast'] {
+  return savedRaycast.get(object) ?? object.raycast;
+}
+
+/** A raycast the object installed itself, rather than the one its class came with. */
+function ownRaycast(object: Object3D): boolean {
+  const inherited = (Object.getPrototypeOf(object) as { raycast?: Object3D['raycast'] }).raycast;
+  const raycast = raycastInUse(object);
+  return raycast !== inherited && raycast !== silencedRaycast;
+}
+
+/**
+ * Hidden by the lesson (or by a card slot the lesson closed), not by UIKit's own visibility flag.
+ * Once a UIKit element is in the chain, its `visible` and its descendants' `visible` no longer count,
+ * until a plain object above that element is hidden: a closed card slot still stops rays.
+ */
+function hiddenByLesson(object: Object3D): boolean {
+  const chain: Object3D[] = [];
+  for (let node: Object3D | null = object; node; node = node.parent) chain.push(node);
+  let underOwnRaycast = false;
+  for (let i = chain.length - 1; i >= 0; i--) {
+    const node = chain[i]!;
+    if (ownRaycast(node)) underOwnRaycast = true;
+    if (!node.visible && !underOwnRaycast) return true;
+  }
+  return false;
+}
+
+function syncRaycastVisibility(root: Object3D) {
+  root.traverse((object) => {
+    const saved = savedRaycast.get(object);
+    if (!hiddenByLesson(object)) {
+      if (!saved) return;
+      object.raycast = saved;
+      savedRaycast.delete(object);
+      return;
+    }
+    if (saved || object.raycast.length === 0) return;
+    savedRaycast.set(object, object.raycast);
+    object.raycast = silencedRaycast;
+  });
+}
+
+/** Whether `object` is `ancestor` or sits inside it. */
+function isWithin(ancestor: Object3D, object: Object3D | undefined): boolean {
+  for (let node: Object3D | null = object ?? null; node; node = node.parent) if (node === ancestor) return true;
+  return false;
 }
 
 /** What the host wired up for the current generation, for tests and the benchmark. */
@@ -670,12 +729,18 @@ export async function mountGenerated(code: string): Promise<MountReport> {
   }
   for (const [object, mode] of mounted.grabModes) {
     const entity = mounted.objectEntities.get(object);
-    if (mode !== 'touch' || !entity) continue;
-    pinchOnlyGrab(entity);
-    // IWSDK's near grab turns the hand ray away from the object ({ deny: 'ray' }), so a learner pointing and
-    // pinching could never press it or its parts. Let the ray in: a pointed pinch presses, and moving the hand
-    // then drags the object, as with crowded objects.
-    if (partPresses.has(object) || mounted.pressHandlers.has(entity)) object.pointerEventsType = 'all';
+    if (!entity) continue;
+    if (mode === 'touch') {
+      pinchOnlyGrab(entity);
+      // IWSDK's near grab turns the hand ray away from the object ({ deny: 'ray' }), so a learner pointing and
+      // pinching could never press it or its parts. Let the ray in: a pointed pinch presses, and moving the hand
+      // then drags the object, as with crowded objects.
+      if (partPresses.has(object) || mounted.pressHandlers.has(entity)) object.pointerEventsType = 'all';
+    }
+    // A pinch on a grabbable part must not bind the model that contains it. The part keeps its own grab; the
+    // model accepts the pinch only when the hit is outside every grabbable part.
+    const parts = [...grabObjects].filter((part) => part !== object && isWithin(object, part));
+    if (parts.length > 0) setGrabFilter(entity, (event) => !parts.some((part) => isWithin(part, event.object)));
   }
 
   // What a pinch or poke will take glows while a pointer is over it: a part of a model, else the object.
@@ -711,6 +776,7 @@ export async function mountGenerated(code: string): Promise<MountReport> {
 
   mounted.update = typeof result.update === 'function' ? (result.update as Mounted['update']) : undefined;
   current = mounted;
+  if (world) syncRaycastVisibility(world.scene);
   updatePill();
   return { ok: true, warnings, credits: library ? creditsFor(library, assetIds) : [] };
 }
@@ -755,6 +821,8 @@ class GenUISystem extends createSystem({
   update(delta: number): void {
     // Once the hands' pointers exist: a near pinch takes only what is at the fingertips.
     if (!this.fingertips) this.fingertips = pinchAtFingertips(this.world.input);
+    // Before this frame's later rays, and again after the lesson shows or hides parts.
+    syncRaycastVisibility(this.world.scene);
     const mounted = current;
     if (!mounted) return;
     // Textures are painted a few milliseconds per frame, so a lesson never stalls the headset.
@@ -797,6 +865,7 @@ class GenUISystem extends createSystem({
     }
     // After the lesson has moved its parts: tags stand on them this frame, not the next.
     syncLayers(mounted);
+    syncRaycastVisibility(this.world.scene);
   }
 }
 
@@ -1422,14 +1491,70 @@ function keepPanelsInView(mounted: Mounted) {
 function setUpCards(mounted: Mounted) {
   if (!world || !mounted.root) return;
   const cards = new Set(mounted.layered.filter((item) => item.kind === 'card').map((item) => item.object));
+  const ready: [Entity, PanelRecord][] = [];
   for (const [entity, panel] of mounted.panels) {
     if (!cards.has(panel.holder)) continue;
     // A card with nothing to press (an info card) still takes the hand ray, for its frame.
     if (!entity.hasComponent(RayInteractable)) entity.addComponent(RayInteractable, {});
     panel.holder.scale.multiplyScalar(CARD_START_SCALE);
     panel.holder.updateWorldMatrix(true, true);
-    mounted.cards.push(makeCardGrabbable(panel.holder, entity));
+    ready.push([entity, panel]);
   }
+  // After the start scale, so the gap is the one the learner sees, and before the frame can be grabbed.
+  separateCardsFromModel(mounted);
+  for (const [entity, panel] of ready) mounted.cards.push(makeCardGrabbable(panel.holder, entity));
+}
+
+/**
+ * A card whose box covers the model in x and z moves to the side it is already closer to, clear of the model,
+ * and stays above the floor. Cards the lesson already placed beside the model stay put.
+ */
+function separateCardsFromModel(mounted: Mounted) {
+  const root = mounted.root;
+  if (!root || !world) return;
+  root.updateMatrixWorld(true);
+  const model = visibleModelBox(root);
+  if (model.isEmpty()) return;
+  const floor = floorHeight(world.camera.getWorldPosition(new Vector3()));
+  for (const item of mounted.layered) {
+    if (item.kind !== 'card') continue;
+    const holder = item.object;
+    const parent = holder.parent;
+    if (!parent) continue;
+    holder.updateWorldMatrix(true, false);
+    let card = boxAround(holder);
+    if (card.isEmpty()) continue;
+    const overlapsX = card.min.x < model.max.x && card.max.x > model.min.x;
+    const overlapsZ = card.min.z < model.max.z && card.max.z > model.min.z;
+    if (!overlapsX || !overlapsZ) continue;
+    const cardCenterX = (card.min.x + card.max.x) / 2;
+    const modelCenterX = (model.min.x + model.max.x) / 2;
+    const width = card.max.x - card.min.x;
+    const targetMinX = cardCenterX >= modelCenterX ? model.max.x + CARD_MODEL_GAP_M : model.min.x - CARD_MODEL_GAP_M - width;
+    const origin = holder.getWorldPosition(new Vector3());
+    const shifted = origin.clone();
+    shifted.x += targetMinX - card.min.x;
+    holder.position.add(parent.worldToLocal(shifted).sub(parent.worldToLocal(origin.clone())));
+    holder.updateWorldMatrix(true, false);
+    card = boxAround(holder);
+    if (card.isEmpty() || card.min.y >= floor + CARD_FLOOR_GAP_M) continue;
+    const lifted = holder.getWorldPosition(new Vector3());
+    const raised = lifted.clone();
+    raised.y += floor + CARD_FLOOR_GAP_M - card.min.y;
+    holder.position.add(parent.worldToLocal(raised).sub(parent.worldToLocal(lifted.clone())));
+  }
+}
+
+/** The box around a lesson's visible meshes, in world space. Hidden meshes and lines are left out. */
+function visibleModelBox(root: Object3D): Box3 {
+  const box = new Box3();
+  const visit = (object: Object3D) => {
+    if (!shown(object) || (object as { isLine?: boolean }).isLine) return;
+    if ((object as { isMesh?: boolean }).isMesh) expandByMesh(box, object);
+    for (const child of object.children) visit(child);
+  };
+  visit(root);
+  return box;
 }
 
 function describe(err: unknown): string {

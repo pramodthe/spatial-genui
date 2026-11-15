@@ -1,5 +1,6 @@
 import { VisibilityState, type World } from '@iwsdk/core';
 import { courseProgress, createCourse, fetchCourseLesson, listCourses, type CourseSummary } from './courses';
+import { inspectMounted } from './host';
 import { EXAMPLE_LESSONS } from './lessons';
 import { onChromeHidden, onLessonStatus, openWritten, startLesson, type LessonStatus } from './overlay';
 import { askForMicrophone, microphoneState, type MicrophoneState } from './voice';
@@ -215,8 +216,12 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
   });
 
   // Mixed reality.
+  const microscope = EXAMPLE_LESSONS.find((lesson) => lesson.saved === 'microscope');
   const enter = async () => {
     try {
+      // The desk opens on a finished lesson. A lesson already on the page stays; emulator scripts that enter
+      // XR themselves never take this path, so they mount their own lesson.
+      if (microscope && !inspectMounted()) await startLesson(microscope.prompt);
       await world.launchXR();
     } catch (err) {
       find('hero-message').textContent = `Could not start mixed reality: ${(err as Error).message}`;

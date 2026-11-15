@@ -1,16 +1,23 @@
-import { Box3, Grabbed, Mesh, MeshBasicMaterial, Shape, ShapeGeometry, TwoHandsGrabbable, Vector3, type Entity, type Object3D } from '@iwsdk/core';
+import { Box3, Grabbed, Mesh, MeshBasicMaterial, Path, Shape, ShapeGeometry, TwoHandsGrabbable, Vector3, type Entity, type Object3D } from '@iwsdk/core';
 import { boxAround, worldYaw } from './handle';
 
 /**
  * Which pinches may move a grabbable entity. IWSDK keeps each entity's grab handle in an internal component; if it
  * isn't there (another IWSDK version), the entity keeps IWSDK's behaviour.
  */
-export function setGrabFilter(entity: Entity, accept: (event: { pointerType?: string; object?: Object3D }) => boolean) {
+type GrabEvent = { pointerType?: string; object?: Object3D };
+
+export function setGrabFilter(entity: Entity, accept: (event: GrabEvent) => boolean) {
   const component = entity.getComponents().find((c) => c?.id === 'Handle');
   const store = component ? (entity.getValue(component, 'instance' as never) as { getOptions?: () => object } | null) : null;
   if (typeof store?.getOptions !== 'function') return;
   const options = store.getOptions;
-  store.getOptions = () => ({ ...options(), filter: accept });
+  // A later filter adds to the one already there (a near pinch, then "not on a part inside this model").
+  store.getOptions = () => {
+    const current = options() as { filter?: (event: GrabEvent) => boolean };
+    const previous = current.filter;
+    return { ...current, filter: (event: GrabEvent) => (previous ? previous(event) : true) && accept(event) };
+  };
 }
 
 // A near pinch takes what is within this distance of the index fingertip, where the fingers meet.
@@ -159,19 +166,44 @@ export function makeCardGrabbable(holder: Object3D, entity: Entity, onMoved?: ()
   };
 }
 
-function roundedRect(width: number, height: number, radius: number): ShapeGeometry {
+/** A rounded rectangle path, centred on the origin. `clockwise` is the hole (opposite winding to the outer edge). */
+function traceRounded(path: Path, width: number, height: number, radius: number, clockwise: boolean) {
   const r = Math.min(radius, width / 2, height / 2);
   const x = -width / 2;
   const y = -height / 2;
+  if (!clockwise) {
+    path.moveTo(x + r, y);
+    path.lineTo(x + width - r, y);
+    path.quadraticCurveTo(x + width, y, x + width, y + r);
+    path.lineTo(x + width, y + height - r);
+    path.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+    path.lineTo(x + r, y + height);
+    path.quadraticCurveTo(x, y + height, x, y + height - r);
+    path.lineTo(x, y + r);
+    path.quadraticCurveTo(x, y, x + r, y);
+    return;
+  }
+  path.moveTo(x + r, y);
+  path.quadraticCurveTo(x, y, x, y + r);
+  path.lineTo(x, y + height - r);
+  path.quadraticCurveTo(x, y + height, x + r, y + height);
+  path.lineTo(x + width - r, y + height);
+  path.quadraticCurveTo(x + width, y + height, x + width, y + height - r);
+  path.lineTo(x + width, y + r);
+  path.quadraticCurveTo(x + width, y, x + width - r, y);
+  path.lineTo(x + r, y);
+}
+
+/** The card border: the outer rounded rect, with the face cut out so a ray to a button misses the frame. */
+function roundedRect(width: number, height: number, radius: number): ShapeGeometry {
   const shape = new Shape();
-  shape.moveTo(x + r, y);
-  shape.lineTo(x + width - r, y);
-  shape.quadraticCurveTo(x + width, y, x + width, y + r);
-  shape.lineTo(x + width, y + height - r);
-  shape.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
-  shape.lineTo(x + r, y + height);
-  shape.quadraticCurveTo(x, y + height, x, y + height - r);
-  shape.lineTo(x, y + r);
-  shape.quadraticCurveTo(x, y, x + r, y);
+  traceRounded(shape, width, height, radius, false);
+  const innerW = width - FRAME_MARGIN_M * 2;
+  const innerH = height - FRAME_MARGIN_M * 2;
+  if (innerW > 0.004 && innerH > 0.004) {
+    const hole = new Path();
+    traceRounded(hole, innerW, innerH, Math.max(0, radius - FRAME_MARGIN_M), true);
+    shape.holes.push(hole);
+  }
   return new ShapeGeometry(shape, 6);
 }

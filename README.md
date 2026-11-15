@@ -14,6 +14,10 @@ related work.
   picture (Muse Image, checked by Muse Ember), a textured body from TRELLIS.2, then an agent in Blender
   (Muse Spark) cuts it into named parts that lessons can move, highlight and pull apart. Models are kept and
   reused; the library is in `data/library/` (credits in `data/library/CREDITS.md`).
+- **Play.** A second section beside Learn, on the start page and in the headset picker: ask for any game and
+  the agent writes one tabletop game (no course plan) with a game prompt (`GAME_SYSTEM_PROMPT`: a game loop,
+  score and restart, a HUD instead of a teaching panel, no real-size view). Games are saved on a Games shelf;
+  four ready-made ones open at once (`apps/xr/public/games/`).
 - **Voice tutor.** A spoken conversation through Deepgram's Voice Agent API. It answers questions about the
   subject and the lesson on the desk, quizzes you aloud when you ask, and can plan a course or open a lesson.
 - **Look-and-fix.** The first time a course lesson opens, the headset sends three pictures of it to the

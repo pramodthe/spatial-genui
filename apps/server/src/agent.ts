@@ -6,7 +6,7 @@ import { dryRun } from './sandbox.js';
 import { complete, defaultTarget, type ChatMessage, type LlmTarget } from './llm.js';
 import { assetStubs, librarySection, libraryCatalog } from './library.js';
 import { routeAssets, type Route } from './router.js';
-import { REVIEW_MESSAGE, SYSTEM_PROMPT, repairMessage } from './prompt.js';
+import { GAME_SYSTEM_PROMPT, REVIEW_MESSAGE, SYSTEM_PROMPT, repairMessage } from './prompt.js';
 import { extractCode, validateModule } from './validate.js';
 import { checkSurface, compileSurface, extractJson, surfaceFrom, type Surface } from './a2ui/catalog.js';
 import { A2UI_SYSTEM_PROMPT, TEMPLATE_SYSTEM_PROMPT, jsonRepairMessage } from './a2ui/prompts.js';
@@ -80,13 +80,16 @@ export async function generate(
     assets?: string[];
     /** Parallel generation: the planner model (default: the same as target) and the event stream. */
     planner?: LlmTarget; onEvent?: (event: RunEvent) => void; plannerFallback?: boolean;
+    /** Play: write a game (GAME_SYSTEM_PROMPT, no model library) instead of a lesson. */
+    kind?: 'lesson' | 'game';
   } = {},
 ): Promise<GenerationResult> {
   const target = options.target ?? defaultTarget;
   const format = options.format ?? 'code';
   // The asset library is on for the app; benchmarks turn it off so their prompt stays as published.
   // The A2UI catalog and the templates have no library models, so they always run without it.
-  const useLibrary = (options.library ?? true) && format === 'code';
+  const game = options.kind === 'game' && format === 'code';
+  const useLibrary = (options.library ?? true) && format === 'code' && !game;
   const started = performance.now();
   // Route first: only the models this request needs go into the prompt (molecules get built here).
   const route = useLibrary && !options.previousCode && !options.assets ? await routeAssets(prompt, target, { wantObjects: options.onDemand }) : undefined;
@@ -104,7 +107,7 @@ export async function generate(
   }
   const knownAssets = useLibrary ? new Set(libraryCatalog().keys()) : new Set<string>();
   const messages: ChatMessage[] = [
-    { role: 'system', content: useLibrary ? SYSTEM_PROMPT + librarySection(options.assets ?? route?.assets ?? []) : systemPromptFor(format) },
+    { role: 'system', content: game ? GAME_SYSTEM_PROMPT : useLibrary ? SYSTEM_PROMPT + librarySection(options.assets ?? route?.assets ?? []) : systemPromptFor(format) },
     { role: 'user', content: prompt },
   ];
   const repair = format === 'code' ? repairMessage : jsonRepairMessage;

@@ -1,4 +1,4 @@
-import { aimPoint, capture, forgetLessonSpot, inspectMounted, debugRay, debugRoot, lessonDeclaresRealSize, mountGenerated, setLessonRealSize, setLessonView, unmountGenerated, type MountReport } from './host.js';
+import { aimPoint, capture, dropLessonRealSize, inspectFrame, zoomGame, forgetLessonSpot, inspectMounted, debugHands, debugRay, debugRoot, lessonDeclaresRealSize, mountGenerated, setLessonRealSize, setLessonView, unmountGenerated, type MountReport } from './host.js';
 import { inspectPill, pressPill, setPillHidden } from './hud.js';
 import { EXAMPLE_LESSONS, type SavedLesson } from './lessons.js';
 import { inspectPicker, pickerCourses, redockPicker, setPickerHidden } from './picker.js';
@@ -10,10 +10,14 @@ import { inspectMoveHandles, setMoveHandlesHidden } from './handle.js';
  * inside an immersive session.
  */
 
+/** What is on the desk: a lesson (Learn) or a game (Play). */
+export type LessonKind = 'lesson' | 'game';
+
 /** Where the current lesson is, for the in-headset picker. */
 export type LessonStatus = {
   phase: 'idle' | 'building' | 'fixing' | 'ready' | 'failed' | 'broken';
   prompt: string | null;
+  kind: LessonKind;
   message: string;
   /** performance.now() when this phase began. */
   since: number;
@@ -42,6 +46,8 @@ type AssetJob = { id: string; name: string; status: 'queued' | 'running' | 'done
 
 type GenUIState = {
   prompt: string | null;
+  /** A game has no real-size view and is repaired with the game prompt. */
+  kind: LessonKind;
   code: string | null;
   lastResponse: GenerateResponse | null;
   lastMount: MountReport | null;
@@ -57,6 +63,7 @@ type GenUIState = {
 
 const state: GenUIState = {
   prompt: null,
+  kind: 'lesson',
   code: null,
   lastResponse: null,
   lastMount: null,
@@ -67,7 +74,7 @@ const state: GenUIState = {
   autoRepaired: false,
 };
 
-let lessonStatus: LessonStatus = { phase: 'idle', prompt: null, message: '', since: performance.now() };
+let lessonStatus: LessonStatus = { phase: 'idle', prompt: null, kind: 'lesson', message: '', since: performance.now() };
 const statusListeners = new Set<(status: LessonStatus) => void>();
 const chromeListeners = new Set<(hidden: boolean) => void>();
 
@@ -90,7 +97,7 @@ export function onLessonStatus(listener: (status: LessonStatus) => void): () => 
 
 function setPhase(phase: LessonStatus['phase'], message = '', keepSince = false) {
   const since = keepSince && lessonStatus.phase === phase ? lessonStatus.since : performance.now();
-  lessonStatus = { phase, prompt: state.prompt, message, since };
+  lessonStatus = { phase, prompt: state.prompt, kind: state.kind, message, since };
   for (const listener of statusListeners) listener(lessonStatus);
 }
 
@@ -175,6 +182,7 @@ export function createOverlay(): HTMLElement {
     inspect: inspectMounted,
     inspectPicker,
     inspectMoveHandles,
+    inspectFrame,
     inspectPill,
     pressPill,
     setLessonView,
@@ -182,6 +190,8 @@ export function createOverlay(): HTMLElement {
     courses: pickerCourses,
     debugRay,
     debugRoot,
+    debugHands,
+    zoomGame,
     capture,
     aimPoint,
     // Hides all chrome, the in-headset picker too (the benchmark's screenshots show the lesson only).
@@ -225,6 +235,7 @@ export async function generate(prompt: string, extra: { previousCode?: string; c
   state.busy = true;
   repairPending = false;
   if (!extra.previousCode) state.autoRepaired = false; // a new lesson gets its own automatic repair
+  if (!extra.previousCode) state.kind = 'lesson'; // the prompt box writes lessons; a repair keeps the kind
   state.prompt = prompt;
   repairButton.hidden = true;
   stopWatchingAssets();
@@ -234,7 +245,7 @@ export async function generate(prompt: string, extra: { previousCode?: string; c
     const res = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ prompt, ...extra }),
+      body: JSON.stringify({ prompt, kind: state.kind, ...extra }),
     });
     const data = (await res.json()) as GenerateResponse;
     state.lastResponse = data;
@@ -278,6 +289,7 @@ async function generateStream(prompt: string) {
   repairPending = false;
   state.autoRepaired = false;
   state.prompt = prompt;
+  state.kind = 'lesson';
   repairButton.hidden = true;
   stopWatchingAssets();
   setStatus('Planning…');
@@ -370,6 +382,7 @@ export async function startLesson(prompt: string) {
     if (!res.ok) return generate(prompt);
     const saved = (await res.json()) as SavedLesson;
     state.prompt = prompt;
+    state.kind = 'lesson';
     state.autoRepaired = false;
     repairPending = false;
     stopWatchingAssets();
@@ -384,15 +397,16 @@ export async function startLesson(prompt: string) {
   }
 }
 
-/** Open a lesson that is already written (a saved course's lesson): no model call. */
-export async function openWritten(code: string, prompt: string) {
+/** Open a lesson or game that is already written (a saved course's lesson, a saved game): no model call. */
+export async function openWritten(code: string, prompt: string, kind: LessonKind = 'lesson') {
   if (state.busy) return state;
   state.prompt = prompt;
+  state.kind = kind;
   state.autoRepaired = false;
   repairPending = false;
   stopWatchingAssets();
   await mount(code);
-  if (state.lastMount?.ok) setStatus('Lesson from a saved course.');
+  if (state.lastMount?.ok) setStatus(kind === 'game' ? 'A saved game.' : 'Lesson from a saved course.');
   return state;
 }
 
@@ -402,15 +416,17 @@ async function mount(code: string) {
   codeEl.textContent = code;
   state.mountedAt = performance.now();
   const sizeFor = ++sizeTicket;
-  const report = await mountGenerated(code);
+  const report = await mountGenerated(code, { kind: state.kind });
   // A later lesson replaced this one while it loaded: that one reports for itself.
   if (!report.ok && report.superseded) return report;
   state.lastMount = report;
   if (!state.lastMount.ok) reportRuntimeError(state.lastMount.error);
   // Any lesson in the scene docks the picker, however it was mounted (generate, tests, saved lessons).
   else {
+    // A game is played at desk scale: no real-size view, whatever its code declares.
+    if (state.kind === 'game') dropLessonRealSize();
     setPhase('ready');
-    if (state.prompt && !lessonDeclaresRealSize()) void lookUpRealSize(state.prompt, sizeFor);
+    if (state.kind === 'lesson' && state.prompt && !lessonDeclaresRealSize()) void lookUpRealSize(state.prompt, sizeFor);
   }
   return state.lastMount;
 }

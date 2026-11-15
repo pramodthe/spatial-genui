@@ -199,6 +199,95 @@ ${EXAMPLE_MODULE}
 \`\`\`
 `;
 
+/** Replace the passage from `start` through `end` (a passage that has moved fails loudly at startup). */
+function swap(text: string, start: string, end: string, by: string): string {
+  const from = text.indexOf(start);
+  const to = from < 0 ? -1 : text.indexOf(end, from);
+  if (to < 0) throw new Error(`GAME_SYSTEM_PROMPT: the lesson prompt no longer contains "${start.slice(0, 50)}"`);
+  return text.slice(0, from) + by + text.slice(to + end.length);
+}
+
+/**
+ * Play: the agent writes a game instead of a lesson. The same API, kit and checks as SYSTEM_PROMPT (which
+ * stays as the benchmark published it); the lesson-only passages are swapped for game ones.
+ */
+export const GAME_SYSTEM_PROMPT = [
+  [
+    'A seated user asks for something',
+    'even when the facts are right.',
+    `A seated user asks for a game ("two player ping pong", "a tower defense game"). You write the complete,
+playable game as JavaScript code. The app loads your code at runtime and the user plays it using only their
+hands (pinch to grab, poke or pinch to press).
+What you build stands on the user's real desk, fitted into a 0.5 m box: a tabletop game, like a beautifully
+made miniature arcade or board game, with a small score panel beside it. It must be fun within seconds and
+look finished. A few plain boxes and spheres in flat colors is a failure, even when the game works.`,
+  ],
+  [
+    'real.size: the largest',
+    '(the water cycle).',
+    'Leave out real: a game is played at desk scale and has no real-size view.',
+  ],
+  [
+    'Users judge the look first.',
+    'on the main model.',
+    'Users judge the look first. Spend most of your effort on the playfield and the pieces the player touches.',
+  ],
+  [
+    '- Grabbable objects must be still',
+    'start the motion with a button.',
+    `- Play with the hands themselves, not by pinching objects. The player's tool follows a hand every frame
+  with no pinch needed: a paddle, bat, net or cannon moves toward hands.right.tip (clamped to the playfield,
+  smoothed with lerp), so the player just moves their hand. Hits are distances from a hand or its tool to
+  the ball or target. A pinch (hands.right.pinched) fires, jumps, launches or places. Use both hands for two
+  tools or two players (left hand = left player). Keep traits grab only for pieces the player picks up and
+  puts down (a tower, a card). Fast movers (balls, enemies, shots) are never grabbable.
+- When a hand is not tracked, its tool stays where it was; nothing breaks.`,
+  ],
+  [
+    '# Quality',
+    'so they can be identified.',
+    `# The game
+- One goal the player understands in five seconds. The panel's first line says how to play, in one sentence.
+- The game loop runs in update(time, delta): movement, collisions (distances or simple boxes in root's space)
+  and scoring. Multiply speeds by delta and clamp it (Math.min(delta, 0.05)) so a slow frame doesn't jump.
+- It never stands still. Before Start it plays a demo of itself, like an arcade's attract mode: the runner
+  runs and jumps the obstacles on its own, the invaders march, the ball rallies. Nothing scores or hurts until
+  the player starts. Besides the panel's Start button, put a big pressable START piece on the playfield.
+- Score, lives or time as a stat part, and a status line for what just happened ("Hit!", "Missed", "Wave 2").
+  A round ends with a clear win or lose message and Play again; a restart is always one press away. It gets
+  harder as the player does well.
+- Playable by hand at this size: targets at least 0.03 m, the player's tools at least 0.06 m, no fast catches.
+  Every hand action gets feedback in the same frame: a flash, a pop, a bounce, a glow.
+- The panel is the game's HUD, not a lesson: no explanations, facts, rule essays or notes. The how-to-play
+  line, the score and state, and one to three buttons (Start or Play again, Pause, perhaps a difficulty
+  segmented control).
+- The game gets no room depth or room meshes: it plays on the desk. Do not tell the player what the app lacks.
+- Name important meshes and groups (object.name = 'Paddle') so they can be identified.`,
+  ],
+  [
+    '- Never overlap:',
+    '0.2 to 0.25 above the desk.',
+    `- The panel is the game's scoreboard: stand it behind the playfield and raised, facing the player like an
+  arcade marquee (position about [0, 0.3, -0.22], rotationY 0), never in front of the playfield. Keep labels
+  off the playfield.`,
+  ],
+  [
+    'export default function build({ THREE, kit, traits, ui, isGrabbed })',
+    'export default function build({ THREE, kit, traits, ui, isGrabbed })',
+    'export default function build({ THREE, kit, traits, ui, isGrabbed, hands })',
+  ],
+  [
+    '- isGrabbed(object): true while',
+    'Skip animating a held object.',
+    `- isGrabbed(object): true while the user holds that object. Skip animating a held object.
+- hands: the player's two hands, refreshed every frame before update(): hands.left and hands.right, each
+  { tracked, tip, palm, pinching, pinched }. tip (index fingertip) and palm are THREE.Vector3 in root's
+  coordinates, the units you build in; pinching is true while the hand pinches, pinched only on the frame a
+  pinch starts. Read them inside update().`,
+  ],
+  ['# Example', '# Example', '# Example (a lesson: it shows the API, not what a game looks like)'],
+].reduce((text, [start, end, by]) => swap(text, start, end, by), SYSTEM_PROMPT);
+
 export function repairMessage(error: string): string {
   return `Your module failed the host checks:
 

@@ -71,6 +71,21 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
     isGrabbed() {
       return false;
     },
+    // Games read the player's hands every frame: here the right hand sweeps across the desk and pinches on
+    // frames 3 to 5, so code that follows a hand runs before the headset does; the left hand is not seen.
+    hands: {
+      left: { tracked: false, tip: new THREE.Vector3(), palm: new THREE.Vector3(), pinching: false, pinched: false },
+      right: { tracked: true, tip: new THREE.Vector3(0, 0.1, 0.15), palm: new THREE.Vector3(0, 0.08, 0.2), pinching: false, pinched: false },
+    },
+  };
+  /** Move the simulated right hand for frame i of the dry run (called from inside the sandbox before update). */
+  const moveHand = (i: number) => {
+    const hand = api.hands.right;
+    hand.tip.set(-0.15 + i * 0.03, 0.08 + 0.02 * Math.sin(i), 0.12);
+    hand.palm.copy(hand.tip).add(new THREE.Vector3(0, -0.02, 0.05));
+    const pinching = i >= 3 && i <= 5;
+    hand.pinched = pinching && !hand.pinching;
+    hand.pinching = pinching;
   };
   function hostUi(markup: unknown, options: any = {}) {
     {
@@ -84,7 +99,7 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
     }
   }
 
-  const context = vm.createContext({ __exports: {}, __api: api, console: { log() {}, warn() {}, error() {} } });
+  const context = vm.createContext({ __exports: {}, __api: api, __moveHand: moveHand, console: { log() {}, warn() {}, error() {} } });
   let result: any;
   try {
     // Browsers load the module as an ES module, which is always strict: an assignment to an
@@ -93,7 +108,7 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
     vm.runInContext(
       `__result = __exports.default(__api);
        if (__result && typeof __result.update === 'function') {
-         for (let i = 0; i < 10; i++) __result.update(i * 0.1, 0.1);
+         for (let i = 0; i < 10; i++) { __moveHand(i); __result.update(i * 0.1, 0.1); }
        }`,
       context,
       { filename: 'host-call.js', timeout: TIMEOUT_MS },
@@ -274,7 +289,7 @@ const LABEL_WIDTH_M = 0.16;
 const labelMarkup = (text: string) => `
   <style>
     .l { width: 320px; padding-left: 14px; padding-right: 14px; padding-top: 7px; padding-bottom: 7px;
-         border-radius: 1000px; background-color: rgba(21, 23, 27, 0.8);
+         border-radius: 1000px; background-color: #333333;
          border-width: 2px; border-color: rgba(255, 255, 255, 0.24); }
     .t { color: rgba(255, 255, 255, 0.9); font-size: 28px; font-weight: 600; }
   </style>

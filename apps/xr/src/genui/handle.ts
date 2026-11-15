@@ -17,11 +17,9 @@ import {
 } from '@iwsdk/core';
 
 /**
- * Move handles: a small bar the learner points at, pinches and drags to move a whole lesson, the picker or one
- * of a lesson's cards. The bar is its own entity in the scene, not the target's parent: a grabbable parent would
- * take every pinch meant for a part or a button inside it. While the bar is held the target follows it and keeps
- * facing the learner; otherwise the bar follows the target. Targets may sit inside other frames (a lesson in the
- * room's anchored frame, a card inside a lesson): the bar works in world space and the target in its parent's.
+ * Move handles: a bar the player pinches to move a whole game. The bar is its own entity, not the target's
+ * parent, so a pinch on a piece or a button still lands on that. It sits at a fixed offset and the game turns to
+ * face the player while it is dragged. (A lesson is moved by the handles on its frame instead: bounds.ts.)
  */
 
 export type MoveHandle = {
@@ -37,7 +35,7 @@ type Options = {
   offset: [number, number, number];
   /** Stand the bar upright (beside a panel) instead of lying flat (in front of a lesson). */
   upright?: boolean;
-  /** What is kept above the floor while dragging (default: the target; a lesson's 3D, not the cards the learner placed). */
+  /** What is kept above the floor while dragging (default: the target; a game's 3D, not its cards). */
   measure?: Object3D;
   /** The learner let go: the target is where they want it. */
   onMoved?: () => void;
@@ -106,11 +104,13 @@ export function inspectMoveHandles() {
 
 /** Give `target` (turned only about the vertical, inside frames that are too) a move handle. */
 export function createMoveHandle(world: World, target: Object3D, options: Options): MoveHandle {
-  const geometry = new CapsuleGeometry(BAR_RADIUS_M, BAR_LENGTH_M - BAR_RADIUS_M * 2, 6, 16);
+  const geometry = new CapsuleGeometry(BAR_RADIUS_M, Math.max(0.001, BAR_LENGTH_M - BAR_RADIUS_M * 2), 6, 16);
   if (!options.upright) geometry.rotateZ(Math.PI / 2);
-  const material = new MeshBasicMaterial({ color: COLORS[0], transparent: true, opacity: OPACITY[0] });
+  const material = new MeshBasicMaterial({ color: COLORS[0], transparent: true, opacity: OPACITY[0], depthWrite: false });
   const bar = new Mesh(geometry, material);
   bar.name = `Move handle: ${target.name}`;
+  bar.frustumCulled = false;
+  bar.renderOrder = 12;
   const entity = world.createTransformEntity(bar);
   entity.addComponent(DistanceGrabbable, { movementMode: MovementMode.MoveAtSource, rotate: false, scale: false });
   const scaleRef = target.scale.x || 1;
@@ -130,6 +130,8 @@ export function createMoveHandle(world: World, target: Object3D, options: Option
     dispose() {
       records.delete(record);
       entity.dispose();
+      geometry.dispose();
+      material.dispose();
     },
   };
 }
@@ -142,9 +144,13 @@ function drawn(object: Object3D): boolean {
 function show(record: Record) {
   const visible = record.shown && record.drawn && inXR && !hiddenByHost;
   record.bar.visible = visible;
-  if (visible === record.entity.hasComponent(RayInteractable)) return;
-  if (visible) record.entity.addComponent(RayInteractable, {});
-  else record.entity.removeComponent(RayInteractable);
+  syncRay(record.entity, visible);
+}
+
+function syncRay(entity: Entity, visible: boolean) {
+  if (visible === entity.hasComponent(RayInteractable)) return;
+  if (visible) entity.addComponent(RayInteractable, {});
+  else entity.removeComponent(RayInteractable);
 }
 
 const shift = new Vector3();
@@ -169,6 +175,26 @@ function follow(record: Record) {
   const { bar, target } = record;
   bar.position.copy(target.getWorldPosition(at)).add(offsetNow(record, shift));
   bar.rotation.set(0, worldYaw(target), 0);
+}
+
+/** A game's bar: fixed offset, and the game turns to face the learner while the bar is held. */
+function tickOffset(record: Record, held: boolean, camera: Object3D, head: Vector3) {
+  const { bar, target } = record;
+  if (held && !record.held) {
+    const origin = target.getWorldPosition(at);
+    boxAround(record.measure, box);
+    record.grab = { bottom: box.isEmpty() ? 0 : origin.y - box.min.y };
+  }
+  if (held && record.grab) {
+    camera.getWorldPosition(head);
+    at.copy(bar.position).sub(offsetNow(record, shift));
+    at.y = Math.max(at.y, floorHeight() + FLOOR_CLEARANCE_M + record.grab.bottom);
+    const toHead = Math.atan2(head.x - at.x, head.z - at.z);
+    target.position.copy(target.parent ? target.parent.worldToLocal(at) : at);
+    target.rotation.y = toHead - worldYaw(target.parent);
+  } else {
+    follow(record);
+  }
 }
 
 const box = new Box3();
@@ -206,24 +232,7 @@ class MoveHandleSystem extends createSystem({}) {
         show(record);
       }
       const held = record.entity.hasComponent(Grabbed);
-      const { bar, target } = record;
-      if (held && !record.held) {
-        // A grab starts: measure how far the target reaches below its origin, to keep it above the floor.
-        const origin = target.getWorldPosition(at);
-        boxAround(record.measure, box);
-        record.grab = { bottom: box.isEmpty() ? 0 : origin.y - box.min.y };
-      }
-      if (held && record.grab) {
-        // The target keeps its place beside the bar, never below the floor, and turns to face the learner.
-        this.world.camera.getWorldPosition(this.head);
-        at.copy(bar.position).sub(offsetNow(record, shift));
-        at.y = Math.max(at.y, floorHeight() + FLOOR_CLEARANCE_M + record.grab.bottom);
-        const toHead = Math.atan2(this.head.x - at.x, this.head.z - at.z);
-        target.position.copy(target.parent ? target.parent.worldToLocal(at) : at);
-        target.rotation.y = toHead - worldYaw(target.parent);
-      } else {
-        follow(record);
-      }
+      tickOffset(record, held, this.world.camera, this.head);
       const look = held ? 2 : record.entity.hasComponent(Hovered) ? 1 : 0;
       if (look !== record.look) {
         record.look = look;

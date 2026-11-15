@@ -3,9 +3,10 @@ import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import type { Course, CourseLesson, CourseModel } from './courses.js';
+import type { Game } from './games.js';
 
 /**
- * The app's database: saved courses, their lessons, and an index of the 3D models made for them. One
+ * The app's database: saved courses, their lessons, saved games, and an index of the 3D models made for them. One
  * SQLite file (data/app.db, or APP_DB), so there is no service to run; the model files themselves stay
  * in the asset library (library.ts), which this indexes by the name a course asked for.
  */
@@ -50,6 +51,17 @@ CREATE TABLE IF NOT EXISTS models (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS models_name ON models(name);
+CREATE TABLE IF NOT EXISTS games (
+  id TEXT PRIMARY KEY,
+  request TEXT NOT NULL,
+  title TEXT NOT NULL,
+  status TEXT NOT NULL,
+  error TEXT,
+  code TEXT,
+  model TEXT,                      -- the language model that wrote it
+  seconds INTEGER,
+  created_at TEXT NOT NULL
+);
 `;
 
 let db: DatabaseSync | null = null;
@@ -130,4 +142,19 @@ const toModel = (row: ModelRow): SavedModel => ({ id: row.id, name: row.name, de
 
 export function savedModels(): SavedModel[] {
   return (open().prepare('SELECT * FROM models ORDER BY created_at').all() as ModelRow[]).map(toModel);
+}
+
+type GameRow = { id: string; request: string; title: string; status: Game['status']; error: string | null; code: string | null; model: string | null; seconds: number | null; created_at: string };
+
+export function loadGames(): Game[] {
+  return (open().prepare('SELECT * FROM games').all() as GameRow[]).map((row) => ({
+    id: row.id, request: row.request, title: row.title, status: row.status, createdAt: row.created_at,
+    ...set<Game>({ error: row.error, code: row.code, model: row.model, seconds: row.seconds }),
+  }));
+}
+
+export function saveGame(game: Game) {
+  open().prepare(`INSERT INTO games (id, request, title, status, error, code, model, seconds, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET title = excluded.title, status = excluded.status, error = excluded.error, code = excluded.code, model = excluded.model, seconds = excluded.seconds`)
+    .run(game.id, game.request, game.title, game.status, game.error ?? null, game.code ?? null, game.model ?? null, game.seconds ?? null, game.createdAt);
 }

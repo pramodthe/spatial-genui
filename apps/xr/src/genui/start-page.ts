@@ -1,5 +1,6 @@
 import { VisibilityState, type World } from '@iwsdk/core';
 import { courseProgress, createCourse, fetchCourseLesson, listCourses, type CourseSummary } from './courses';
+import { EXAMPLE_GAMES, createGame, currentSection, fetchGame, gameProgress, listGames, loadExampleGame, onSection, setSection, type GameSummary, type Section } from './games';
 import { inspectMounted } from './host';
 import { EXAMPLE_LESSONS } from './lessons';
 import { onChromeHidden, onLessonStatus, openWritten, startLesson, type LessonStatus } from './overlay';
@@ -8,8 +9,8 @@ import { askForMicrophone, microphoneState, type MicrophoneState } from './voice
 /**
  * The 2D start page: what the headset browser (and a desktop) shows outside XR. Styled after the Meta
  * Horizon OS UI Set like the in-headset picker: enter mixed reality, allow the microphone (Quest Browser
- * cannot ask for it inside XR), ask for a course by typing, see the saved courses, and preview a lesson on
- * this screen. The developer prompt box sits folded at the bottom. Hidden while an XR session runs.
+ * cannot ask for it inside XR), and switch between two sections: Learn (ask for a course, see the saved
+ * courses) and Play (ask for a game, see the saved games). A lesson or game previews on this screen. The developer prompt box sits folded at the bottom. Hidden while an XR session runs.
  */
 
 const STYLE = `
@@ -72,6 +73,12 @@ const STYLE = `
 .sp-tile svg { width: 24px; height: 24px; color: rgba(255, 255, 255, 0.9); }
 .sp-tile-title { font-size: 16px; line-height: 20px; font-weight: 700; }
 .sp-tile-sub { font-size: 12px; line-height: 16px; font-weight: 500; color: rgba(255, 255, 255, 0.7); }
+.sp-tabs { display: inline-flex; gap: 4px; padding: 4px; border-radius: 1000px; background: rgba(0, 0, 0, 0.25); margin-bottom: 18px; }
+.sp-tab { appearance: none; border: 0; border-radius: 1000px; min-height: 40px; padding: 8px 18px; display: inline-flex; align-items: center; gap: 8px;
+  background: transparent; color: rgba(255, 255, 255, 0.7); font: 600 14px/20px inherit; font-family: inherit; cursor: pointer; }
+.sp-tab svg { width: 18px; height: 18px; }
+.sp-tab:hover { background: rgba(255, 255, 255, 0.1); }
+.sp-tab[aria-selected="true"] { background: rgba(255, 255, 255, 0.9); color: #272727; }
 .sp-dev summary { cursor: pointer; font-size: 12px; line-height: 16px; font-weight: 500; color: rgba(255, 255, 255, 0.55); }
 .sp-dev[open] summary { margin-bottom: 12px; }
 #start-bar { position: fixed; top: 16px; left: 16px; z-index: 10000; display: none; align-items: center; gap: 8px; padding: 6px; max-width: calc(100vw - 32px);
@@ -92,8 +99,26 @@ const ICONS = {
   cog: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"/>',
   flower: '<circle cx="12" cy="12" r="3"/><path d="M12 9a3 3 0 1 1 3-3M15 12a3 3 0 1 1 3 3M12 15a3 3 0 1 1-3 3M9 12a3 3 0 1 1-3-3"/>',
   book: '<path d="M2 4h6a4 4 0 0 1 4 4v12a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v12a3 3 0 0 1 3-3h7z"/>',
+  gamepad: '<path d="M6 11h4M8 9v4M15 12h.01M18 10h.01"/><rect x="2" y="6" width="20" height="12" rx="2"/>',
+  trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
+  puzzle: '<path d="M19.4 7.3a2.4 2.4 0 0 0-1.7-.7h-1.2a.5.5 0 0 1-.5-.5V5a2.5 2.5 0 0 0-5 0v1.1a.5.5 0 0 1-.5.5H6.4A2.4 2.4 0 0 0 4 9v2.1a.5.5 0 0 0 .5.5H5a2.5 2.5 0 0 1 0 5h-.5a.5.5 0 0 0-.5.5V19a2.4 2.4 0 0 0 2.4 2.4h11.2A2.4 2.4 0 0 0 20 19V9a2.4 2.4 0 0 0-.6-1.7Z"/>',
+  graduation: '<path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>',
 } as const;
 const TILE_ICONS = [ICONS.heart, ICONS.microscope, ICONS.cog, ICONS.flower];
+const GAME_ICONS = [ICONS.gamepad, ICONS.trophy, ICONS.puzzle, ICONS.gamepad];
+// The hero's words for each section.
+const HERO: Record<Section, { eyebrow: string; title: string; lead: string }> = {
+  learn: {
+    eyebrow: 'SPATIAL GENERATIVE UI',
+    title: 'Lessons on your desk',
+    lead: 'Ask for any subject. An AI agent builds a hands-on course in 3D that you pick up, turn and take apart in your own room.',
+  },
+  play: {
+    eyebrow: 'SPATIAL GENERATIVE UI',
+    title: 'Games on your desk',
+    lead: 'Ask for any game. An AI agent builds it in 3D on your desk, and you play it with your hands.',
+  },
+};
 
 const icon = (paths: string) =>
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
@@ -113,12 +138,12 @@ const MIC_TEXT: Record<MicrophoneState, string> = {
   unknown: 'Allow microphone',
 };
 const PHASE_TEXT: Record<LessonStatus['phase'], string> = {
-  idle: 'No lesson open',
-  building: 'Writing the lesson...',
-  fixing: 'Fixing a problem in the lesson...',
-  ready: 'Lesson ready',
+  idle: 'Nothing open',
+  building: 'Writing...',
+  fixing: 'Fixing a problem...',
+  ready: 'Ready',
   failed: 'That did not work',
-  broken: 'Something in the lesson broke',
+  broken: 'Something broke',
 };
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text?: string): HTMLElementTagNameMap[K] {
@@ -138,16 +163,20 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
   page.innerHTML = `
     <div class="sp-wrap">
       <section class="sp-panel">
-        <div class="sp-eyebrow">SPATIAL GENERATIVE UI</div>
-        <h1 class="sp-h1">Lessons on your desk</h1>
-        <p class="sp-lead">Ask for any subject. An AI agent builds a hands-on course in 3D that you pick up, turn and take apart in your own room.</p>
+        <div class="sp-tabs" role="tablist">
+          <button class="sp-tab" role="tab" data-section="learn">${icon(ICONS.graduation)}<span>Learn</span></button>
+          <button class="sp-tab" role="tab" data-section="play">${icon(ICONS.gamepad)}<span>Play</span></button>
+        </div>
+        <div class="sp-eyebrow" data-id="hero-eyebrow"></div>
+        <h1 class="sp-h1" data-id="hero-title"></h1>
+        <p class="sp-lead" data-id="hero-lead"></p>
         <div class="sp-actions">
           <button class="sp-btn sp-primary" data-id="enter">${icon(ICONS.goggles)}<span>Enter mixed reality</span></button>
           <button class="sp-btn sp-secondary" data-id="mic">${icon(ICONS.mic)}<span data-id="mic-text">Allow microphone</span></button>
         </div>
         <div class="sp-message" data-id="hero-message"></div>
       </section>
-      <div class="sp-grid">
+      <div class="sp-grid" data-id="learn">
         <div class="sp-col">
           <section class="sp-panel">
             <h2 class="sp-title">Ask for a course</h2>
@@ -165,6 +194,26 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
         <section class="sp-panel">
           <h2 class="sp-title">My courses <span class="sp-note">Saved for you</span></h2>
           <div class="sp-list" data-id="courses"><div class="sp-empty">Loading...</div></div>
+        </section>
+      </div>
+      <div class="sp-grid" data-id="play" style="display: none">
+        <div class="sp-col">
+          <section class="sp-panel">
+            <h2 class="sp-title">Ask for a game</h2>
+            <form class="sp-ask" data-id="game-ask">
+              <input class="sp-input" data-id="game-input" maxlength="200" placeholder="e.g. Mini golf with three holes" />
+              <button class="sp-btn sp-primary" type="submit">Make it</button>
+            </form>
+            <div class="sp-message" data-id="game-message">A game takes about two minutes to write.</div>
+          </section>
+          <section class="sp-panel">
+            <h2 class="sp-title">Start a game <span class="sp-note">Opens at once</span></h2>
+            <div class="sp-tiles" data-id="game-tiles"></div>
+          </section>
+        </div>
+        <section class="sp-panel">
+          <h2 class="sp-title">My games <span class="sp-note">Saved for you</span></h2>
+          <div class="sp-list" data-id="games"><div class="sp-empty">Loading...</div></div>
         </section>
       </div>
       <details class="sp-dev"><summary>Developer tools</summary></details>
@@ -185,6 +234,7 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
   let immersive = false;
   let hiddenByHost = false;
   let courses: CourseSummary[] = [];
+  let games: GameSummary[] = [];
   const expanded = new Set<string>();
   let poll = 0;
   // Declared before anything can call refresh(): the visibility subscription below runs at once.
@@ -215,13 +265,33 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
     bar.querySelector<HTMLElement>('[data-id="bar-text"]')!.textContent = PHASE_TEXT[status.phase];
   });
 
+  // Learn or Play: the hero, the grid under it, and (shared through games.ts) the headset picker.
+  for (const tab of page.querySelectorAll<HTMLButtonElement>('[data-section]')) {
+    tab.addEventListener('click', () => setSection(tab.dataset.section as Section));
+  }
+  onSection((section) => {
+    for (const tab of page.querySelectorAll<HTMLElement>('[data-section]')) tab.setAttribute('aria-selected', String(tab.dataset.section === section));
+    find('hero-eyebrow').textContent = HERO[section].eyebrow;
+    find('hero-title').textContent = HERO[section].title;
+    find('hero-lead').textContent = HERO[section].lead;
+    find('learn').style.display = section === 'learn' ? '' : 'none';
+    find('play').style.display = section === 'play' ? '' : 'none';
+  });
+
   // Mixed reality.
   const microscope = EXAMPLE_LESSONS.find((lesson) => lesson.saved === 'microscope');
   const enter = async () => {
     try {
-      // The desk opens on a finished lesson. A lesson already on the page stays; emulator scripts that enter
-      // XR themselves never take this path, so they mount their own lesson.
-      if (microscope && !inspectMounted()) await startLesson(microscope.prompt);
+      // The desk opens on a finished lesson (in Play, a finished game). One already on the page stays;
+      // emulator scripts that enter XR themselves never take this path, so they mount their own lesson.
+      if (!inspectMounted()) {
+        if (currentSection() === 'play') {
+          const game = await loadExampleGame(EXAMPLE_GAMES[0].saved).catch(() => null);
+          if (game) await openWritten(game.code, game.request, 'game');
+        } else if (microscope) {
+          await startLesson(microscope.prompt);
+        }
+      }
       await world.launchXR();
     } catch (err) {
       find('hero-message').textContent = `Could not start mixed reality: ${(err as Error).message}`;
@@ -262,6 +332,40 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
     }
   });
 
+  // Ask for a game by typing.
+  find<HTMLFormElement>('game-ask').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const input = find<HTMLInputElement>('game-input');
+    const request = input.value.trim();
+    if (!request) return;
+    find('game-message').textContent = `Writing "${request}"...`;
+    try {
+      await createGame(request);
+      input.value = '';
+      find('game-message').textContent = 'It is being written; it appears under My games in about two minutes.';
+      await refresh();
+    } catch (err) {
+      find('game-message').textContent = `That did not work: ${(err as Error).message}`;
+    }
+  });
+
+  // Example games: ready-made, so they open at once.
+  EXAMPLE_GAMES.forEach((example, i) => {
+    const tile = el('button', 'sp-tile');
+    tile.innerHTML = icon(GAME_ICONS[i] ?? ICONS.gamepad);
+    tile.append(el('span', 'sp-tile-title', example.title), el('span', 'sp-tile-sub', example.sub));
+    tile.addEventListener('click', async () => {
+      try {
+        const game = await loadExampleGame(example.saved);
+        preview(true);
+        await openWritten(game.code, game.request, 'game');
+      } catch (err) {
+        find('game-message').textContent = `That game did not load: ${(err as Error).message}`;
+      }
+    });
+    find('game-tiles').appendChild(tile);
+  });
+
   // Example lessons.
   EXAMPLE_LESSONS.forEach((lesson, i) => {
     const tile = el('button', 'sp-tile');
@@ -281,9 +385,11 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
     clearTimeout(poll);
     let wait = 20000;
     try {
-      courses = await listCourses();
+      [courses, games] = await Promise.all([listCourses(), listGames()]);
       renderCourses();
-      const active = courses.some((c) => c.status === 'planning' || c.model?.status === 'building' || c.lessons.some((l) => l.status === 'generating'));
+      renderGames();
+      const active = courses.some((c) => c.status === 'planning' || c.model?.status === 'building' || c.lessons.some((l) => l.status === 'generating'))
+        || games.some((g) => g.status === 'writing');
       if (active) wait = 4000;
     } catch {
       wait = 8000; // the server may be restarting
@@ -333,6 +439,39 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
       });
       list.appendChild(lessons);
     }
+  }
+
+  function renderGames() {
+    const list = find('games');
+    list.replaceChildren();
+    if (games.length === 0) {
+      list.appendChild(el('div', 'sp-empty', 'No games yet. Ask for one, or start one of the examples.'));
+      return;
+    }
+    for (const game of games) {
+      const row = el('button', 'sp-cell');
+      row.innerHTML = icon(ICONS.gamepad);
+      const text = el('div', 'sp-cell-text');
+      text.append(el('span', 'sp-text1', game.title), el('span', 'sp-text2', game.status === 'ready' ? 'Ready: tap to preview here' : gameProgress(game)));
+      row.appendChild(text);
+      row.disabled = game.status === 'writing';
+      row.addEventListener('click', () => void openGame(game.id));
+      list.appendChild(row);
+    }
+  }
+
+  /** A ready game opens here; a failed one is written again. */
+  async function openGame(id: string) {
+    try {
+      const game = await fetchGame(id);
+      if (game.status === 'ready' && game.code) {
+        preview(true);
+        await openWritten(game.code, game.request, 'game');
+      }
+    } catch {
+      // The list shows what the server says next.
+    }
+    await refresh();
   }
 
   async function openLesson(courseId: string, index: number) {

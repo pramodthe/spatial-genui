@@ -12,6 +12,7 @@ import { admit, admitLookup, admitVoice, recordSpend, spendToday, visitorOf } fr
 import { knownRealSize, realSizeOf } from './real-size.js';
 import { transcribe, voiceAgentToken } from './voice.js';
 import { getCourse, listCourses, openLesson, polishLesson, startCourse, summary } from './courses.js';
+import { gameSummary, getGame, listGames, retryGame, startGame } from './games.js';
 
 const MAX_BODY_BYTES = 200_000;
 const KIT_FILE = fileURLToPath(new URL('./kit/kit.js', import.meta.url));
@@ -59,6 +60,8 @@ const server = createServer(async (req, res) => {
         previousCode: typeof body.previousCode === 'string' ? body.previousCode : undefined,
         clientError: typeof body.clientError === 'string' ? body.clientError : undefined,
         onDemand: config.onDemandAssets,
+        // Play: a game (or a game's repair) is written with the game prompt.
+        kind: body.kind === 'game' ? 'game' : 'lesson',
       });
       await spent(result);
       return send(res, 200, result);
@@ -141,6 +144,24 @@ const server = createServer(async (req, res) => {
       if (courseMatch[2] === undefined) return send(res, 200, summary(course));
       const lesson = openLesson(course, Number(courseMatch[2]));
       return lesson ? send(res, 200, lesson) : send(res, 404, { error: 'Unknown lesson' });
+    }
+    // Play (games.ts): a request becomes one game, written in the background and kept on the Games shelf.
+    if (req.method === 'POST' && req.url === '/api/games') {
+      const body = await readJson(req);
+      const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
+      if (!prompt || prompt.length > 500) return send(res, 400, { error: 'Send { "prompt": "…" } (1–500 characters).' });
+      const refusal = await admit(visitorOf(req), prompt);
+      if (refusal) return send(res, refusal.status, { ok: false, error: refusal.error, reason: refusal.reason });
+      return send(res, 200, gameSummary(startGame(prompt)));
+    }
+    if (req.method === 'GET' && req.url === '/api/games') return send(res, 200, { games: listGames() });
+    // A game with its code; asking for one that failed writes it again.
+    const gameMatch = req.method === 'GET' && req.url?.match(/^\/api\/games\/([a-f0-9]{8})$/);
+    if (gameMatch) {
+      const game = getGame(gameMatch[1]);
+      if (!game) return send(res, 404, { error: 'Unknown game' });
+      retryGame(game);
+      return send(res, 200, game);
     }
     // On-demand assets: progress of a background model job started by a lesson request.
     const jobMatch = req.method === 'GET' && req.url?.match(/^\/api\/assets\/jobs(?:\/([a-z0-9-]+))?$/);

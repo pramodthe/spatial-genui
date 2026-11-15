@@ -89,12 +89,18 @@ def _check_budget() -> dict[str, Any] | None:
 
 def _price_of(model_id: str) -> dict[str, Any] | None:
     if model_id not in _prices:
-        try:
-            entry = llm.load_model(model_id)
-            catalogue = llm.model_prices().get(model_id) or {}
-            _prices[model_id] = {"priceIn": catalogue.get("priceIn"), "priceOut": catalogue.get("priceOut"), "id": entry.id}
-        except Exception:
-            _prices[model_id] = None
+        # The catalogue's price, whether or not the model can be loaded here: loading Muse fails (its entry is
+        # disabled), and the fallback then charged Muse at $3/$15 per million instead of $0.10/$0.20.
+        catalogue = llm.model_prices().get(model_id)
+        if catalogue is not None:
+            _prices[model_id] = {"priceIn": catalogue.get("priceIn"), "priceOut": catalogue.get("priceOut"), "id": model_id}
+        else:
+            try:
+                entry = llm.load_model(model_id)
+                listed = llm.model_prices().get(entry.id) or {}
+                _prices[model_id] = {"priceIn": listed.get("priceIn"), "priceOut": listed.get("priceOut"), "id": entry.id}
+            except Exception:
+                _prices[model_id] = None
     return _prices[model_id]
 
 

@@ -11,7 +11,7 @@ import uuid
 from typing import Any
 
 from app import config as config_mod
-from app import library, llm
+from app import library, live, llm
 from app.a2ui.catalog import extract_json
 from app.clock import now_iso
 from app.db import count_courses, load_courses, save_course, save_model, saved_models
@@ -69,8 +69,11 @@ def drain_deferred() -> None:
 
 def summary(course: dict[str, Any]) -> dict[str, Any]:
     lessons = []
-    for lesson in course["lessons"]:
+    for index, lesson in enumerate(course["lessons"]):
         rest = {key: value for key, value in lesson.items() if key not in {"code", "firstCode", "critique", "prompt"}}
+        watcher = live.get(live.lesson_key(course["id"], index)) if lesson.get("status") == "generating" else None
+        if watcher is not None:
+            rest["live"] = {"key": watcher.key, "line": watcher.line(), "seq": watcher.seq}
         lessons.append(rest)
     return {**course, "lessons": lessons}
 
@@ -354,12 +357,14 @@ async def build_lesson(course: dict[str, Any], lesson: dict[str, Any]) -> None:
     started = time.time() * 1000
     try:
         given = _model_for(course)
-        result = await run_lesson(
-            lesson["prompt"] + given["note"],
-            on_demand=False,
-            assets=given["assets"],
-            thread_id=f"{course['id']}:lesson:{course['lessons'].index(lesson)}",
-        )
+        index = course["lessons"].index(lesson)
+        with live.watching(live.lesson_key(course["id"], index)):
+            result = await run_lesson(
+                lesson["prompt"] + given["note"],
+                on_demand=False,
+                assets=given["assets"],
+                thread_id=f"{course['id']}:lesson:{index}",
+            )
         await record_spend([
             {"model": result["model"], "promptTokens": attempt.get("promptTokens") or 0, "completionTokens": attempt.get("completionTokens") or 0}
             for attempt in result.get("attempts") or []

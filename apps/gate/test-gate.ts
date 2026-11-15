@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const tsx = fileURLToPath(new URL('./node_modules/.bin/tsx', import.meta.url));
 const gate = fileURLToPath(new URL('./gate.ts', import.meta.url));
+const snapshot = fileURLToPath(new URL('./snapshot.ts', import.meta.url));
 const example = readFileSync(new URL('./src/example-module.js', import.meta.url), 'utf8')
   .replace(/^(\/\/.*\n)+/, '')
   .trim();
@@ -32,4 +33,18 @@ if (broken.ok || broken.error == null) {
   console.error('expected the gate to reject a banned global', broken);
   process.exit(1);
 }
-console.log(`gate ok: triangles=${first.stats?.triangles} rawPanels=${first.stats?.rawPanels} warnings=${first.warnings?.length ?? 0}`);
+
+// Live preview: a reply cut mid-way still runs (its finished statements, closed and checked), and a later cut shows more.
+function preview(reply: string) {
+  const child = spawnSync(tsx, [snapshot], { input: JSON.stringify({ reply, knownAssets: [] }), encoding: 'utf8' });
+  if (child.status !== 0) throw new Error(child.stderr || `snapshot exit ${child.status}`);
+  return JSON.parse(child.stdout) as { ok: boolean; meshes?: number; error?: string };
+}
+const reply = '```js\n' + example + '\n```';
+const early = preview(reply.slice(0, Math.round(reply.length * 0.45)));
+const later = preview(reply.slice(0, Math.round(reply.length * 0.7)));
+if (!early.ok || !later.ok || (later.meshes ?? 0) <= (early.meshes ?? 0)) {
+  console.error('expected partial replies to run and to grow', early, later);
+  process.exit(1);
+}
+console.log(`gate ok: triangles=${first.stats?.triangles} rawPanels=${first.stats?.rawPanels} warnings=${first.warnings?.length ?? 0} preview=${early.meshes}->${later.meshes} meshes`);

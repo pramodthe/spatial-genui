@@ -14,7 +14,7 @@ import random
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urlparse
 
 import httpx
@@ -141,8 +141,16 @@ def _message_content(content: Any) -> str:
     return "" if content is None else str(content)
 
 
-async def complete(messages: list[dict[str, Any]], target: LlmTarget | None = None) -> Completion:
-    """One chat completion. Sampling is left at the provider default, as in llm.ts."""
+async def complete(
+    messages: list[dict[str, Any]],
+    target: LlmTarget | None = None,
+    *,
+    on_text: Callable[[str], None] | None = None,
+) -> Completion:
+    """One chat completion. Sampling is left at the provider default, as in llm.ts.
+
+    With `on_text` the reply is streamed and the callback gets the whole text so far after every chunk (the live
+    preview); the Completion returned is the same either way."""
     target = target or default_target()
     _refuse_target(target)
     if not target.api_key:
@@ -154,13 +162,19 @@ async def complete(messages: list[dict[str, Any]], target: LlmTarget | None = No
     }
     if target.extra_body:
         body.update(target.extra_body)
+    effort = os.environ.get("LLM_REASONING_EFFORT")
+    if effort and target.model == config.model and "reasoning_effort" not in body:
+        # The app's own model at the effort .env asks for; a call that sets one (the router's "low") keeps it.
+        body["reasoning_effort"] = effort
     headers = {"authorization": f"Bearer {target.api_key}", "content-type": "application/json"}
     if target.headers:
         headers.update(target.headers)
     url = target.base_url.rstrip("/") + "/chat/completions"
     started = time.perf_counter()
-    response = await _post(url, headers, body)
-    data = response.json()
+    if on_text is None:
+        data = (await _post(url, headers, body)).json()
+    else:
+        data = await _stream(url, headers, {**body, "stream": True, "stream_options": {"include_usage": True}}, on_text)
     choice = (data.get("choices") or [{}])[0]
     message = choice.get("message") or {}
     usage = data.get("usage") or {}
@@ -201,6 +215,50 @@ async def _post(url: str, headers: dict[str, str], body: dict[str, Any]) -> http
     raise RuntimeError(f"Model request failed after retries: {last_error}")
 
 
+async def _stream(url: str, headers: dict[str, str], body: dict[str, Any], on_text: Callable[[str], None]) -> dict[str, Any]:
+    """A streamed completion, put back together in the shape of a plain one. Retried as _post is; a stream that
+    breaks part-way starts again from the beginning (on_text then sees the text restart)."""
+    timeout = httpx.Timeout(REQUEST_TIMEOUT_S, connect=60.0)
+    last_error: Exception | None = None
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        for attempt in range(MAX_RETRIES + 1):
+            wait: float | None = None
+            try:
+                async with client.stream("POST", url, headers=headers, json=body) as response:
+                    if response.status_code in {408, 409, 429} or response.status_code >= 500:
+                        await response.aread()
+                        last_error = RuntimeError(f"HTTP {response.status_code}: {response.text[:200]}")
+                        wait = _retry_after(response)
+                    elif response.status_code >= 400:
+                        await response.aread()
+                        raise RuntimeError(f"Model request failed (HTTP {response.status_code}): {response.text[:500]}")
+                    else:
+                        text = ""
+                        finish: str | None = None
+                        usage: dict[str, Any] = {}
+                        async for line in response.aiter_lines():
+                            if not line.startswith("data:"):
+                                continue
+                            payload = line[5:].strip()
+                            if payload == "[DONE]":
+                                break
+                            chunk = json.loads(payload)
+                            usage = chunk.get("usage") or usage
+                            for choice in chunk.get("choices") or []:
+                                delta = (choice.get("delta") or {}).get("content")
+                                if delta:
+                                    text += delta
+                                    on_text(text)
+                                finish = choice.get("finish_reason") or finish
+                        return {"choices": [{"message": {"content": text}, "finish_reason": finish}], "usage": usage}
+            except httpx.TransportError as exc:
+                last_error = exc
+            if attempt < MAX_RETRIES:
+                backoff = min(8.0, 0.5 * (2**attempt)) + random.random() * 0.1
+                await asyncio.sleep(backoff if wait is None else wait)
+    raise RuntimeError(f"Model request failed after retries: {last_error}")
+
+
 def _retry_after(response: httpx.Response) -> float | None:
     """The server's Retry-After (seconds or an HTTP date), capped at 60 s like the SDK; None if absent."""
     value = response.headers.get("retry-after-ms")
@@ -223,8 +281,9 @@ def _retry_after(response: httpx.Response) -> float | None:
 
 
 def gpt_chat():
-    """gpt-6.1-sol on Chat Completions (the server's API), not the Responses API. Always OpenAI's gpt-6.1-sol:
-    when .env points the app at Muse, this is the fallback, so it must not be Muse again."""
+    """gpt-6.1-sol for the agents, on the Responses API: on Chat Completions Sol refuses function tools with its
+    default reasoning (400: "use /v1/responses or set reasoning_effort to 'none'"), and an agent always has tools.
+    Always OpenAI's gpt-6.1-sol: when .env points the app at Muse, this is the fallback, so it must not be Muse again."""
     on_openai = "api.meta.ai" not in config.base_url and not config.model.startswith("muse")
     target = None if on_openai else load_model("gpt-6.1-sol")
     model = config.model if target is None else target.model
@@ -235,7 +294,7 @@ def gpt_chat():
         model=model,
         api_key=api_key,
         base_url=base_url,
-        use_responses_api=False,
+        use_responses_api=True,
         max_tokens=config.max_completion_tokens,
         max_retries=MAX_RETRIES,
         timeout=REQUEST_TIMEOUT_S,
@@ -266,9 +325,9 @@ def agent_model():
         effort = None
         try:
             entry = load_model(config.model)
-            effort = (entry.extra_body or {}).get("reasoning_effort")
+            effort = (entry.extra_body or {}).get("reasoning_effort") or os.environ.get("LLM_REASONING_EFFORT")
             return muse_chat(entry.model, reasoning_effort=str(effort) if effort else None)
         except Exception:
-            return muse_chat(config.model)
+            return muse_chat(config.model, reasoning_effort=os.environ.get("LLM_REASONING_EFFORT"))
     return gpt_chat()
 

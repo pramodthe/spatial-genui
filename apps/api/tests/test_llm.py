@@ -61,3 +61,26 @@ async def test_complete_refuses_anthropic_before_http(monkeypatch: pytest.Monkey
         await complete([{"role": "user", "content": "hi"}], anthropic)
     with pytest.raises(RuntimeError, match="Anthropic is disabled"):
         await complete([{"role": "user", "content": "hi"}], disguised)
+
+
+async def test_reasoning_effort_reaches_the_app_model_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.config import config
+
+    sent: list[dict] = []
+
+    class Reply:
+        def json(self) -> dict:
+            return {"choices": [{"message": {"content": "ok"}}], "usage": {}}
+
+    async def record(_url: str, _headers: dict, body: dict) -> Reply:
+        sent.append(body)
+        return Reply()
+
+    monkeypatch.setattr("app.llm._post", record)
+    monkeypatch.setenv("LLM_REASONING_EFFORT", "max")
+    app_model = LlmTarget(id=config.model, base_url="https://api.openai.com/v1/", api_key="k", model=config.model)
+    router = LlmTarget(**{**app_model.__dict__, "extra_body": {"reasoning_effort": "low"}})
+    other = LlmTarget(id="other", base_url="https://api.openai.com/v1/", api_key="k", model="some-other-model")
+    for target in (app_model, router, other):
+        await complete([{"role": "user", "content": "hi"}], target)
+    assert [body.get("reasoning_effort") for body in sent] == ["max", "low", None]

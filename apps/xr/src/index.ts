@@ -10,7 +10,7 @@ import projectOptions from 'virtual:iwsdk-project';
 import { initMoveHandles } from './genui/handle.js';
 import { initGenUIHost } from './genui/host.js';
 import { createStartPage } from './genui/start-page.js';
-import { createOverlay, generate, onLessonStatus, repair, reportRuntimeError, startLesson, lessonPrompt, openWritten } from './genui/overlay.js';
+import { createOverlay, generate, onLessonStatus, repair, reportRuntimeError, startLesson, lessonPrompt, openWritten, watchLive } from './genui/overlay.js';
 import { initLessonPicker } from './genui/picker.js';
 
 World.create(
@@ -29,6 +29,7 @@ World.create(
     },
     ask: (prompt) => void generate(prompt),
     open: (code, prompt, kind) => void openWritten(code, prompt, kind),
+    watch: (key, prompt, kind, outcome) => void watchLive(key, prompt, kind, outcome),
     onStatus: onLessonStatus,
   });
   createStartPage(world, createOverlay());

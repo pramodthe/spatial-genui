@@ -16,7 +16,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
-from app import assets, config as config_mod, courses, games, guard, library, llm
+from app import assets, config as config_mod, courses, games, guard, library, live, llm
 from app.agents.coder import set_checkpointer as set_coder_checkpointer
 from app.a2ui.parallel import run_parallel
 from app.clock import mtime_ms
@@ -329,6 +329,18 @@ async def get_course(course_id: str) -> JSONResponse:
     if course is None:
         return JSONResponse({"error": "Unknown course"}, status_code=404)
     return JSONResponse(courses.summary(course))
+
+
+@app.get("/api/live/{key}")
+async def get_live(key: str, after: int = 0) -> JSONResponse:
+    """A lesson or game being written: its stage, the parts named so far, and the latest gate-checked scene
+    (only when newer than `after`)."""
+    if not re.fullmatch(r"(course-[0-9a-f]+-\d|game-[0-9a-f]+)", key):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    watcher = live.get(key)
+    if watcher is None:
+        return JSONResponse({"error": "Not being written"}, status_code=404)
+    return JSONResponse(watcher.view(after))
 
 
 @app.get("/api/courses/{course_id}/lessons/{index}")

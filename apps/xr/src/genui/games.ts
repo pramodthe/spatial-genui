@@ -1,3 +1,5 @@
+import type { LiveSummary } from './courses';
+
 /**
  * Play: saved games (the server's games.ts). A request becomes one game, written in the background and kept
  * on the Games shelf; the start page and the in-headset picker show it in their Play section.
@@ -11,6 +13,8 @@ export type GameSummary = {
   error?: string;
   seconds?: number;
   createdAt: string;
+  /** While it is being written: its live preview and one line on it. */
+  live?: LiveSummary;
 };
 export type Game = GameSummary & { code?: string };
 
@@ -56,7 +60,7 @@ export async function fetchGame(id: string): Promise<Game> {
 
 /** One line on a game's state, for its row on the shelf. */
 export function gameProgress(game: GameSummary): string {
-  if (game.status === 'writing') return 'Writing the game...';
+  if (game.status === 'writing') return game.live ? `${game.live.line}: pinch to watch` : 'Writing the game...';
   if (game.status === 'failed') return 'Failed: tap to try again';
   return 'Ready: tap to play';
 }

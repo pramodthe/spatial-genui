@@ -22,7 +22,9 @@ _SKIP = {".env", "node_modules", "runs", ".venv", ".cache", "__pycache__"}
 
 
 def _ignore(path: Path) -> bool:
-    return path.name in _SKIP or path.name.startswith(".env")
+    # Modal asks about every file, not only folders, so a file inside a skipped folder (.cache/sandbox-child.mjs,
+    # which the dry run rewrites) must be caught by its folder too; otherwise the build fails when it changes mid-copy.
+    return any(part in _SKIP for part in Path(path).parts) or Path(path).name.startswith(".env")
 
 
 def image_layout() -> list[tuple[Path, str]]:

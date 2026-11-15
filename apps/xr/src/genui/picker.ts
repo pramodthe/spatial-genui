@@ -14,9 +14,9 @@ import {
 import { EXAMPLE_LESSONS } from './lessons';
 import { cancelListening, isListening, microphoneState, startListening, stopAndTranscribe, voiceAvailable } from './voice';
 import { TutorUnavailable, VoiceTutor } from './voice-agent';
-import type { LessonKind, LessonStatus } from './overlay';
+import type { LessonKind, LessonStatus, LiveOutcome } from './overlay';
 import { EXAMPLE_GAMES, createGame, fetchGame, gameProgress, listGames, loadExampleGame, onSection, setSection, type GameSummary, type Section } from './games';
-import { courseProgress, createCourse, fetchCourseLesson, listCourses, polishCourseLesson, type CourseSummary } from './courses';
+import { courseProgress, createCourse, fetchCourse, fetchCourseLesson, listCourses, polishCourseLesson, type CourseSummary } from './courses';
 import { capture, floorHeight, lessonPosition, roomFrame, zoomGame } from './host';
 import { makeCardGrabbable, type CardGrab } from './grab';
 import { boxAround, worldYaw } from './handle';
@@ -45,6 +45,8 @@ type PickerHandlers = {
   ask: (prompt: string) => void;
   /** Open a lesson or game that is already written (from a saved course, a saved or example game). */
   open: (code: string, prompt: string, kind?: LessonKind) => void;
+  /** Watch a lesson or game being written: its scene builds up on the desk, then it opens (overlay.ts watchLive). */
+  watch: (key: string, prompt: string, kind: LessonKind, outcome: () => Promise<LiveOutcome>) => void;
   onStatus: (listener: (status: LessonStatus) => void) => () => void;
 };
 
@@ -75,7 +77,7 @@ const TAB_TONES = {
 const COURSE_POLL_MS = 4000;
 // A lesson's textures and panels are in by now; its pictures then go to the agent for one revision.
 const REVIEW_AFTER_MS = 7000;
-const STEP_STATES = { pending: 'Pinch to write it', generating: 'Writing...', ready: 'Ready: pinch to open', failed: 'Failed: pinch to retry' } as const;
+const STEP_STATES = { pending: 'Pinch to write it', generating: 'Writing: pinch to watch', ready: 'Ready: pinch to open', failed: 'Failed: pinch to retry' } as const;
 // Lesson number badges, by state (Reality Labs Design System, dark mode).
 const STEP_BADGES = {
   pending: { background: 'rgba(255, 255, 255, 0.15)', number: 'rgba(255, 255, 255, 0.9)' },
@@ -350,7 +352,11 @@ class LessonPickerSystem extends createSystem({
   /** Play: a saved game's row opens it when it is written; a failed one is written again. */
   async openGameRow(index: number) {
     const row = this.games[index];
-    if (!row || row.status === 'writing') return;
+    if (!row) return;
+    if (row.status === 'writing') {
+      this.watchGame(row);
+      return;
+    }
     try {
       const game = await fetchGame(row.id);
       if (game.status === 'ready' && game.code) {
@@ -363,11 +369,27 @@ class LessonPickerSystem extends createSystem({
     await this.refreshCourses();
   }
 
+  /** Play: a game being written. Its board builds up on the desk, then it opens to play. */
+  private watchGame(row: GameSummary) {
+    this.titles.set(row.request, row.title);
+    handlers?.watch(`game-${row.id}`, row.request, 'game', async () => {
+      const now = (await listGames()).find((g) => g.id === row.id);
+      if (!now) return { failed: 'the game is gone' };
+      if (now.status === 'failed') return { failed: now.error ?? 'the game could not be written' };
+      if (now.status !== 'ready') return null;
+      const game = await fetchGame(row.id);
+      if (game.code) this.titles.set(game.request, game.title);
+      return game.code ? { code: game.code } : null;
+    });
+  }
+
   /** Play: a spoken (or typed) request becomes a saved game, written in the background. */
   async requestGame(request: string) {
     try {
       const game = await createGame(request);
       this.games = [game, ...this.games.filter((g) => g.id !== game.id)];
+      // With nothing on the desk, the new game builds up there while it is written.
+      if (this.status.phase === 'idle') this.watchGame(game);
       this.setGameVoice(`Writing "${ascii(request)}": it appears below in about two minutes.`, 'working');
       this.renderCourses();
       this.pollCourses();
@@ -421,6 +443,18 @@ class LessonPickerSystem extends createSystem({
         this.titles.set(lesson.prompt, lesson.title);
         handlers?.open(lesson.code, lesson.prompt);
         if (!lesson.polish) this.reviewLater(course.id, index, lesson.prompt);
+      } else if (lesson.status === 'generating' || lesson.status === 'pending') {
+        // Asking for it started it (or it was already being written): watch it build up on the desk.
+        this.titles.set(lesson.prompt, lesson.title);
+        const courseId = course.id;
+        handlers?.watch(`course-${courseId}-${index}`, lesson.prompt, 'lesson', async () => {
+          const now = (await fetchCourse(courseId)).lessons[index];
+          if (!now) return { failed: 'the lesson is gone' };
+          if (now.status === 'failed') return { failed: now.error ?? 'the lesson could not be written' };
+          if (now.status !== 'ready') return null;
+          const written = await fetchCourseLesson(courseId, index);
+          return written.code ? { code: written.code } : null;
+        });
       }
     } catch {
       // The shelf below shows what the server says next.
@@ -536,7 +570,11 @@ class LessonPickerSystem extends createSystem({
       document.getElementById(`step-${i}-badge`)?.setProperties({ backgroundColor: STEP_BADGES[lesson.status].background });
       document.getElementById(`step-${i}-num`)?.setProperties({ color: STEP_BADGES[lesson.status].number });
       document.getElementById(`step-${i}-title`)?.setProperties({ text: ascii(lesson.title) });
-      document.getElementById(`step-${i}-state`)?.setProperties({ text: modelling && lesson.status === 'pending' ? 'Waits for the 3D model' : STEP_STATES[lesson.status] });
+      document.getElementById(`step-${i}-state`)?.setProperties({
+        text: modelling && lesson.status === 'pending' ? 'Waits for the 3D model'
+          : lesson.status === 'generating' && lesson.live ? ascii(`${lesson.live.line}: pinch to watch`)
+          : STEP_STATES[lesson.status],
+      });
     }
   }
 

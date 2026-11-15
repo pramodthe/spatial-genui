@@ -174,6 +174,8 @@ export function createOverlay(): HTMLElement {
     generateParallel: (prompt: string) => generateStream(prompt),
     startLesson,
     openWritten,
+    watchLive,
+    lessonStatus: () => lessonStatus,
     repair,
     rebuild,
     mount,
@@ -231,6 +233,7 @@ let repairPending = false;
 export async function generate(prompt: string, extra: { previousCode?: string; clientError?: string } = {}) {
   prompt = prompt.trim();
   if (!prompt || state.busy) return state;
+  liveWatch++; // a live lesson replaces the one being watched
   if (PARALLEL && !extra.previousCode) return generateStream(prompt);
   state.busy = true;
   repairPending = false;
@@ -360,14 +363,93 @@ async function onStreamEvent(event: StreamEvent) {
 }
 
 /** Mount a lesson that is still streaming in: no picker docking, no repair. */
-async function mountPartial(code: string) {
+async function mountPartial(code: string, preview = false) {
   state.code = code;
   state.runtimeErrors = [];
   codeEl.textContent = code;
   sizeTicket++;
-  const report = await mountGenerated(code);
+  const report = await mountGenerated(code, preview ? { kind: state.kind, preview: true } : {});
   if (!report.ok && report.superseded) return; // a later part replaced it
   state.lastMount = report;
+}
+
+/** The live preview being watched; anything else opening (or a second watch) ends it. */
+let liveWatch = 0;
+const LIVE_POLL_MS = 1000;
+
+type LiveView = { line: string; stage: string; detail: string; parts: string[]; seq: number; meshes: number; done: boolean; ok: boolean; code?: string };
+/** Where the shelf has the lesson or game: its code once it is written, or why it failed. */
+export type LiveOutcome = { code?: string; failed?: string } | null;
+
+/**
+ * Watch a course lesson or a game while the server writes it (GET /api/live/<key>, the server's live.py): the
+ * status line follows what the writer is doing, and every gate-checked snapshot of the scene so far is mounted
+ * on the desk, its new parts growing in. When the shelf has the code (`outcome`) it opens as usual. Before the
+ * writer starts (a lesson waiting for its course's 3D model) there is nothing to show yet, so it waits.
+ */
+export async function watchLive(key: string, prompt: string, kind: LessonKind, outcome: () => Promise<LiveOutcome>) {
+  if (state.busy) return state;
+  const watch = ++liveWatch;
+  state.prompt = prompt;
+  state.kind = kind;
+  state.autoRepaired = false;
+  repairPending = false;
+  stopWatchingAssets();
+  streaming = true;
+  setStatus('Watching it being written…');
+  setPhase('building', 'starting');
+  let seq = 0;
+  try {
+    while (watch === liveWatch) {
+      let view: LiveView | null = null;
+      try {
+        const res = await fetch(`/api/live/${key}?after=${seq}`);
+        view = res.ok ? ((await res.json()) as LiveView) : null;
+      } catch {
+        view = null; // the server may be restarting
+      }
+      if (watch !== liveWatch) return state;
+      if (view) {
+        if (view.code && view.seq > seq) {
+          seq = view.seq;
+          await mountPartial(view.code, true);
+          if (watch !== liveWatch) return state;
+        }
+        setPhase('building', view.line, true);
+        setStatus(`${view.line}${view.parts.length ? `\n${view.parts.join(', ')}` : ''}`);
+        if (view.done && !view.ok) {
+          setStatus(`Writing failed: ${view.detail}`);
+          setPhase('failed', view.detail || 'it could not be written');
+          return state;
+        }
+      }
+      if (!view || view.done) {
+        const shelf = await outcome().catch(() => null);
+        if (watch !== liveWatch) return state;
+        if (shelf?.code) {
+          liveWatch++;
+          streaming = false;
+          await mountWritten(shelf.code);
+          return state;
+        }
+        if (shelf?.failed) {
+          setPhase('failed', shelf.failed);
+          return state;
+        }
+        if (!view) setPhase('building', 'waiting to start', true);
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, LIVE_POLL_MS));
+    }
+  } finally {
+    if (watch === liveWatch) streaming = false;
+  }
+  return state;
+}
+
+/** The finished lesson or game after a live preview: opened like a saved one (the prompt and kind are set). */
+async function mountWritten(code: string) {
+  await mount(code);
+  if (state.lastMount?.ok) setStatus(state.kind === 'game' ? 'A saved game.' : 'Lesson from a saved course.');
 }
 
 /**
@@ -400,6 +482,7 @@ export async function startLesson(prompt: string) {
 /** Open a lesson or game that is already written (a saved course's lesson, a saved game): no model call. */
 export async function openWritten(code: string, prompt: string, kind: LessonKind = 'lesson') {
   if (state.busy) return state;
+  liveWatch++; // opening something else stops watching one being written
   state.prompt = prompt;
   state.kind = kind;
   state.autoRepaired = false;

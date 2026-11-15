@@ -335,6 +335,13 @@ export function lessonPosition(out: Vector3): Vector3 | null {
   return current?.root?.parent?.getWorldPosition(out) ?? null;
 }
 
+/** The centre of the lesson's cards (its panels) in the world, or null when it has none. */
+export function lessonCardsCentre(out: Vector3): Vector3 | null {
+  const cards = current?.layers?.cards;
+  if (!cards || cards.children.length === 0) return null;
+  const box = boxAround(cards);
+  return box.isEmpty() ? null : box.getCenter(out);
+}
 
 export function unmountGenerated() {
   if (!current) return;

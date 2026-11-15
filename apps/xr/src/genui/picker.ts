@@ -17,7 +17,7 @@ import { TutorUnavailable, VoiceTutor } from './voice-agent';
 import type { LessonKind, LessonStatus, LiveOutcome } from './overlay';
 import { EXAMPLE_GAMES, createGame, fetchGame, gameProgress, listGames, loadExampleGame, onSection, setSection, type GameSummary, type Section } from './games';
 import { courseProgress, createCourse, fetchCourse, fetchCourseLesson, listCourses, polishCourseLesson, type CourseSummary } from './courses';
-import { capture, floorHeight, lessonPosition, roomFrame, zoomGame } from './host';
+import { capture, floorHeight, lessonCardsCentre, lessonPosition, roomFrame, zoomGame } from './host';
 import { makeCardGrabbable, type CardGrab } from './grab';
 import { boxAround, worldYaw } from './handle';
 
@@ -177,6 +177,7 @@ class LessonPickerSystem extends createSystem({
   private readonly head = new Vector3();
   private readonly forward = new Vector3();
   private readonly lesson = new Vector3();
+  private readonly cards = new Vector3();
 
   init(): void {
     picker = this;
@@ -790,7 +791,17 @@ class LessonPickerSystem extends createSystem({
     else camera.getWorldDirection(this.forward);
     this.forward.y = 0;
     if (this.forward.lengthSq() < 1e-6) this.forward.set(0, 0, -1);
-    this.forward.normalize().applyAxisAngle(Object3DUp, spot.yaw);
+    this.forward.normalize();
+    // Docked on the side away from the lesson's panels. A positive yaw turns toward the learner's left; a lesson
+    // that faces away from them (opened at a spot saved from elsewhere) has its panels on the left, and a picker
+    // docked there stood in front of them and took every press meant for their buttons.
+    let yaw = spot.yaw;
+    if (this.docked && lessonCardsCentre(this.cards)) {
+      const toCards = this.cards.sub(this.head);
+      const leftOfLine = this.forward.x * toCards.z - this.forward.z * toCards.x < 0;
+      if (leftOfLine) yaw = -spot.yaw;
+    }
+    this.forward.applyAxisAngle(Object3DUp, yaw);
     // Worked out in the world, then put in the room's frame (anchored to the room, so it can differ).
     const at = this.head.clone().addScaledVector(this.forward, spot.distance);
     // Below the eyes, but never into the floor: a learner lying down or sitting on the floor has little room.

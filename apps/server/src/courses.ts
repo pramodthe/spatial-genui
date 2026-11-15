@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { generate } from './agent.js';
 import { extractJson } from './a2ui/catalog.js';
+import { config } from './config.js';
 import { countCourses, loadCourses, saveCourse, saveModel, savedModels } from './db.js';
 import { recordSpend } from './guard.js';
 import { libraryCatalog } from './library.js';
@@ -169,7 +170,7 @@ export function getCourse(id: string): Course | undefined {
 
 let planner: Promise<LlmTarget> | null = null;
 function plannerTarget(): Promise<LlmTarget> {
-  planner ??= loadModel(process.env.COURSE_PLANNER || 'claude-haiku-5-5').catch((err) => {
+  planner ??= loadModel(process.env.COURSE_PLANNER || config.model).catch((err) => {
     console.warn(`Course planner unavailable (${(err as Error).message}); the main model plans.`);
     return defaultTarget;
   });

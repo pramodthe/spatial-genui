@@ -99,7 +99,7 @@ async function checkContent(prompt: string): Promise<{ refusal: Refusal | null; 
   if (process.env.MODERATION === 'off') return { refusal: null };
   const key = prompt.trim().toLowerCase();
   if (screened.has(key)) return { refusal: screened.get(key)! };
-  screener ??= loadModel(process.env.MODERATION_MODEL || 'claude-haiku-5-5').catch((err) => {
+  screener ??= loadModel(process.env.MODERATION_MODEL || config.model).catch((err) => {
     console.warn(`Content screen unavailable (${(err as Error).message}); requests are not screened.`);
     return null;
   });

@@ -1117,6 +1117,7 @@ export function createKit(THREE, options = {}) {
     const body = own(new THREE.MeshStandardMaterial({ color: GLASS.color, roughness: 0.25, metalness: 0, transparent: true, opacity: GLASS.opacity }));
     const group = new THREE.Group();
     group.name = `card: ${text}`;
+    group.userData.nameTag = true; // the host keeps name tags readable at any view size
 
     const outline = new THREE.Shape();
     const hw = width / 2;

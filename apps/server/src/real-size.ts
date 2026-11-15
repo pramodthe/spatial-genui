@@ -1,10 +1,11 @@
 // The size agent: how big a lesson's subject is in the real world, for the headset's "Real size" view. Lessons are
 // built at desk scale (a house and a bacterium both about 0.4 m), so the headset can't know the true size from the
-// model; this asks a fast model once per subject and keeps the answer.
+// model; this asks the app's model once per subject and keeps the answer.
 import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { config } from './config.js';
 import { recordSpend } from './guard.js';
 import { complete, type LlmTarget } from './llm.js';
 import { loadModel } from './models.js';
@@ -42,7 +43,7 @@ export async function realSizeOf(request: string): Promise<RealSize> {
   const key = request.trim().toLowerCase();
   const known = cache.get(key);
   if (known) return known;
-  sizer ??= loadModel(process.env.SIZE_MODEL || 'claude-haiku-5-5').catch((err) => {
+  sizer ??= loadModel(process.env.SIZE_MODEL || config.model).catch((err) => {
     console.warn(`Size agent unavailable (${(err as Error).message}); real-size views are off.`);
     return null;
   });

@@ -9,10 +9,11 @@ try {
 }
 
 export const config = {
-  // Any OpenAI-compatible chat-completions endpoint; swap provider by editing .env.
-  baseURL: process.env.LLM_BASE_URL || 'https://api.anthropic.com/v1/',
+  // Any OpenAI-compatible chat-completions endpoint; swap provider by editing .env. The app runs on OpenAI
+  // (gpt-6.1-sol) or Meta's Muse models; other models are for the benchmark only (bench/models.json).
+  baseURL: process.env.LLM_BASE_URL || 'https://api.openai.com/v1/',
   apiKey: process.env.LLM_API_KEY || '',
-  model: process.env.LLM_MODEL || 'claude-sonnet-5-5',
+  model: process.env.LLM_MODEL || 'gpt-6.1-sol',
   anthropicWorkspaceId: process.env.ANTHROPIC_WORKSPACE_ID || undefined,
   port: Number(process.env.GENUI_PORT || 8787),
   maxRepairs: 2,

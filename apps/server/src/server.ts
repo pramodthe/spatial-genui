@@ -224,7 +224,7 @@ async function readJson(req: IncomingMessage, limit = MAX_BODY_BYTES): Promise<a
 /** A fast model plans parallel runs (PARALLEL_PLANNER, a bench/models.json id); without one, the main model plans. */
 let planner: Promise<LlmTarget | undefined> | null = null;
 function parallelPlanner(): Promise<LlmTarget | undefined> {
-  planner ??= loadModel(process.env.PARALLEL_PLANNER || 'claude-haiku-5-5').catch((err) => {
+  planner ??= loadModel(process.env.PARALLEL_PLANNER || config.model).catch((err) => {
     console.warn(`Parallel planner unavailable (${(err as Error).message}); the main model plans.`);
     return undefined;
   });

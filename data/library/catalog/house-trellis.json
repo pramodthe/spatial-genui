@@ -1,0 +1,280 @@
+{
+  "id": "house-trellis",
+  "title": "House",
+  "tier": "D",
+  "kind": "architecture",
+  "concept": "A realistic single-storey timber-framed house with a concrete foundation, clad exterior walls, a pitched roof, windows, a front door and gutters.",
+  "detail": "split",
+  "keywords": [
+    "house",
+    "timber house",
+    "single storey house",
+    "bungalow",
+    "pitched roof house",
+    "home"
+  ],
+  "glb": "assets/house-trellis.glb",
+  "sizeM": [
+    0.4,
+    0.3156,
+    0.3472
+  ],
+  "triangles": 116137,
+  "parts": [
+    {
+      "node": "roof",
+      "name": "roof",
+      "group": null,
+      "color": "#e6194b",
+      "triangles": 27792,
+      "centroid": [
+        0.004,
+        0.2174,
+        -0.0125
+      ],
+      "labelAnchor": [
+        0.1909,
+        0.3138,
+        -0.0043
+      ],
+      "explodeDir": [
+        0.0651,
+        0.9766,
+        -0.2051
+      ]
+    },
+    {
+      "node": "right_windows",
+      "name": "right windows",
+      "group": null,
+      "color": "#3cb44b",
+      "triangles": 5029,
+      "centroid": [
+        0.1805,
+        0.0989,
+        -0.017
+      ],
+      "labelAnchor": [
+        0.1841,
+        0.0562,
+        -0.125
+      ],
+      "explodeDir": [
+        0.9468,
+        -0.3091,
+        -0.0893
+      ]
+    },
+    {
+      "node": "main_walls",
+      "name": "main walls",
+      "group": null,
+      "color": "#4363d8",
+      "triangles": 19782,
+      "centroid": [
+        0.0965,
+        0.1062,
+        -0.0038
+      ],
+      "labelAnchor": [
+        0.1855,
+        0.025,
+        -0.1494
+      ],
+      "explodeDir": [
+        0.8811,
+        -0.4717,
+        -0.0343
+      ]
+    },
+    {
+      "node": "left_window",
+      "name": "left window",
+      "group": null,
+      "color": "#ffe119",
+      "triangles": 4424,
+      "centroid": [
+        -0.1819,
+        0.0987,
+        0.0409
+      ],
+      "labelAnchor": [
+        -0.1835,
+        0.0562,
+        0.125
+      ],
+      "explodeDir": [
+        -0.9301,
+        -0.3021,
+        0.209
+      ]
+    },
+    {
+      "node": "left_wall",
+      "name": "left wall",
+      "group": null,
+      "color": "#f58231",
+      "triangles": 11048,
+      "centroid": [
+        -0.1732,
+        0.1076,
+        0.0109
+      ],
+      "labelAnchor": [
+        -0.185,
+        0.025,
+        0.1479
+      ],
+      "explodeDir": [
+        -0.9587,
+        -0.2781,
+        0.0601
+      ]
+    },
+    {
+      "node": "front_windows",
+      "name": "front windows",
+      "group": null,
+      "color": "#911eb4",
+      "triangles": 6442,
+      "centroid": [
+        -0.0029,
+        0.0999,
+        0.1483
+      ],
+      "labelAnchor": [
+        -0.15,
+        0.0562,
+        0.1496
+      ],
+      "explodeDir": [
+        -0.0184,
+        -0.3637,
+        0.9313
+      ]
+    },
+    {
+      "node": "front_gutter",
+      "name": "front gutter",
+      "group": null,
+      "color": "#42d4f4",
+      "triangles": 7208,
+      "centroid": [
+        -0.0108,
+        0.1757,
+        0.1643
+      ],
+      "labelAnchor": [
+        -0.1981,
+        0.1819,
+        0.1695
+      ],
+      "explodeDir": [
+        -0.0651,
+        0.1078,
+        0.992
+      ]
+    },
+    {
+      "node": "front_door",
+      "name": "front door",
+      "group": null,
+      "color": "#f032e6",
+      "triangles": 3972,
+      "centroid": [
+        -0.1766,
+        0.0966,
+        -0.0948
+      ],
+      "labelAnchor": [
+        -0.1829,
+        0.025,
+        -0.1375
+      ],
+      "explodeDir": [
+        -0.8426,
+        -0.292,
+        -0.4524
+      ]
+    },
+    {
+      "node": "foundation_base",
+      "name": "foundation base",
+      "group": null,
+      "color": "#bfef45",
+      "triangles": 17000,
+      "centroid": [
+        -0.0007,
+        0.0078,
+        -0.0038
+      ],
+      "labelAnchor": [
+        -0.1783,
+        0.0004,
+        -0.1477
+      ],
+      "explodeDir": [
+        -0.005,
+        -0.9997,
+        -0.0257
+      ]
+    },
+    {
+      "node": "back_windows",
+      "name": "back windows",
+      "group": null,
+      "color": "#fabed4",
+      "triangles": 7655,
+      "centroid": [
+        -0.001,
+        0.1021,
+        -0.1475
+      ],
+      "labelAnchor": [
+        -0.1497,
+        0.0562,
+        -0.152
+      ],
+      "explodeDir": [
+        -0.0066,
+        -0.3534,
+        -0.9354
+      ]
+    },
+    {
+      "node": "back_gutter",
+      "name": "back gutter",
+      "group": null,
+      "color": "#e6194b",
+      "triangles": 5785,
+      "centroid": [
+        -0.004,
+        0.1786,
+        -0.1638
+      ],
+      "labelAnchor": [
+        -0.1881,
+        0.185,
+        -0.1736
+      ],
+      "explodeDir": [
+        -0.0241,
+        0.1258,
+        -0.9918
+      ]
+    }
+  ],
+  "licence": "generated (TRELLIS.2, MIT)",
+  "credit": "Generated with TRELLIS.2 (Microsoft, MIT) from a Muse Image reference picture",
+  "provenance": {
+    "built": "2026-11-15",
+    "source": "trellis",
+    "request": "A realistic single-storey timber-framed house with a concrete foundation, clad exterior walls, a pitched roof, windows, a front door and gutters.",
+    "notes": [
+      "Generated by TRELLIS.2 from a reference picture made by Muse Image (checked by Muse Ember: 5/5); not checked by a subject expert.",
+      "Parts were cut out of the generated model by an agent working in Blender (Muse Spark), by eye: where one part ends and the next begins is approximate.",
+      "It is the outside only, a hollow shell with nothing inside: do not use cutaway() or xray() on it, and show what happens inside with your own shapes.",
+      "Not real size: the real house is about 10 m across."
+    ]
+  }
+}

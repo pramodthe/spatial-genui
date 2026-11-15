@@ -659,7 +659,7 @@ The main structural risk remains that a lesson needs every part to succeed. A le
 **Status (Nov 13):**
 
 - **Guards** (`apps/server/src/guard.ts`): per-visitor rate limit (`RATE_LIMIT_PER_10_MIN`, default 6), a daily budget (`DAILY_BUDGET_USD`, default 15; estimated from tokens and catalogue prices, kept per day in `runs/`), and a content screen with a fast model for the competition rules (no identifiable real people, no brands or logos, nothing unfit for 13+). It allows the heart, Newton's laws and a colour button; it refuses a celebrity statue, a brand logo and explosives, each with a friendly alternative. A failed screen lets the request through rather than blocking learning.
-- **One origin:** with `STATIC_DIR` set, the agent server also serves the built XR app (path traversal refused), so the deployment is one container; `Dockerfile` added (not yet built here).
+- **One origin:** with `STATIC_DIR` set, the agent server also serves the built XR app (path traversal refused).
 - **Reliability:** ready-made lessons (Phase 4) cover an outage or a spent budget. An Anthropic outage on Nov 13 (Haiku and Opus returning "503 credential validation failed" for about 20 minutes) showed why: benchmarks resumed, the cards kept working, and the app's parallel path now plans with the main model when the planner's provider fails.
 - **Hosting** is chosen once the app is complete: a private test deploy around Sun/Mon to find the hosting problems early, the final one at the freeze.
 

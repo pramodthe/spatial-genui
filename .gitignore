@@ -29,3 +29,6 @@ apps/api/server.log
 # Python caches
 __pycache__/
 .pytest_cache/
+
+# Local MCP config (machine-specific paths)
+.mcp.json

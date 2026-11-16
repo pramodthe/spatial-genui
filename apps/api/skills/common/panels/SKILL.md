@@ -41,4 +41,4 @@ Font: plain ASCII plus ° § ä ö ü Ä Ö Ü ß. Write CO2, x, -, ->, .... No 
 
 `rotationY` stays within -0.4..0.4. A lesson panel sits beside the model (x about 0.38 or -0.38), centre 0.2 to 0.25 above the desk, never in front of the model. About 8 parts. One panel; a second only when it has its own job.
 
-A game's panel is the scoreboard behind the playfield: position about `[0, 0.3, -0.22]`, rotationY 0.
+A game's panel is its scoreboard, beside the playfield like a lesson panel (a panel behind the playfield is out of a pointing hand's reach).

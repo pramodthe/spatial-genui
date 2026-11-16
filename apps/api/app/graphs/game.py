@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Any
 
 from langgraph.graph import END, START, StateGraph
@@ -13,10 +14,10 @@ from app.a2ui.catalog import extract_json
 from app.graphs.lesson import get_checkpointer, run_lesson
 from app.guard import record_spend
 
-DESIGN_PROMPT = """You design one mixed-reality game that is played on a desk with the player's hands, before any code is written.
+DESIGN_PROMPT = """You design one mixed-reality learning game that is played on a desk with the player's hands, before any code is written. Every game here teaches one real idea by playing it: find the idea under the request (a sailing game: how wind pushes a sail; a racing game: speed, grip and turning) and make the rules depend on it, so playing well means understanding it. Players are from about 9 years old to adults.
 
 Reply with only this JSON:
-{"title": "2 to 4 words", "rules": "how a turn works", "controls": "what each hand does", "scoring": "how points are earned", "win": "how the game is won", "lose": "how it ends", "difficulty": "what gets harder"}"""
+{"title": "2 to 4 words", "idea": "the one idea, as a sentence a player could repeat", "rules": "how a turn works", "controls": "what each hand does", "learn": "the moves the player learns first, each with why it matters", "scoring": "how points are earned, and why that depends on the idea", "win": "how the game is won", "lose": "how it ends (never before Start)", "difficulty": "what gets harder"}"""
 
 
 class GameState(TypedDict, total=False):
@@ -45,13 +46,15 @@ async def design(state: GameState) -> dict[str, Any]:
     except Exception:
         parsed = None
     if isinstance(parsed, dict) and isinstance(parsed.get("rules"), str) and parsed["rules"].strip():
-        kept = {key: parsed[key] for key in ("title", "rules", "controls", "scoring", "win", "lose", "difficulty") if key in parsed}
+        kept = {key: parsed[key] for key in ("title", "idea", "rules", "controls", "learn", "scoring", "win", "lose", "difficulty") if key in parsed}
         return {"design": kept, "brief": _brief(request, kept)}
     return {"design": None, "brief": request}
 
 
 async def write(state: GameState) -> dict[str, Any]:
-    result = await run_lesson(state.get("brief") or state["request"], kind="game", mode="classic", thread_id=None)
+    # A learning game needs the skills only the agent writer has; GAME_MODE=classic keeps the one-call writer.
+    mode = "classic" if os.environ.get("GAME_MODE") == "classic" else "agent"
+    result = await run_lesson(state.get("brief") or state["request"], kind="game", mode=mode, thread_id=None)
     return {"result": result}
 
 

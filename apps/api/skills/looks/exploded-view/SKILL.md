@@ -5,6 +5,12 @@ description: Build a mixed-reality lesson as a product teardown - one real objec
 
 # Exploded view lessons
 
+> **In a learning game** (every lesson, level and game this app writes): start with the learning-game skill,
+> `node /skills/play/learning-game/scripts/new-game.mjs exploded-view /work/module.js`, and check with its
+> `scripts/check.mjs` (it runs this look's rules too). Use this skill for the look: its builders, recipes, palette
+> and mistakes. Skip its own start and check scripts (`scripts/new-lesson.mjs`, `scripts/check.mjs`). Its stage
+> flags and step panel are for journeys and processes; a game uses them only when it is one.
+
 An exploded-view lesson is one real object on the learner's desk, enlarged, that comes apart along its axis: each part
 moves out to its own place in a row, in the order the object is assembled, wearing its real finish and a numbered
 ink-blue callout. Then it goes back together, each part seating with a click. The look exists to answer "what is in

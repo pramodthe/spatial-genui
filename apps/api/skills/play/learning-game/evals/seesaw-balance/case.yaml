@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: seesaw-balance
+expected_outcome: |
+  A learning game in the soft-clay look where the player moves clay children or weights along a plank by hand, sees
+  it tip, learns that weight times distance decides it, then balances it in as few tries as possible.

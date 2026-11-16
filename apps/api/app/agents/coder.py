@@ -46,8 +46,9 @@ WALL_S = int(os.environ.get("AGENT_WALL_S") or 15 * 60)
 RUN_BUDGET_USD = 2.0
 APP_NAME = "genui-coder"
 
-_LESSON_SKILLS = ["kit", "panels", "lesson-craft", "dry-run"]
-_GAME_SKILLS = ["kit", "panels", "game-loop", "hand-play", "dry-run"]
+# Every lesson and game is a learning game (skills/play/learning-game), so both start with that skill in context.
+_LESSON_SKILLS = ["kit", "panels", "learning-game", "dry-run"]
+_GAME_SKILLS = ["kit", "panels", "learning-game", "hand-play", "dry-run"]
 
 _HOST_TOOLS = [library_lookup, start_asset_job, asset_job_status, real_size]
 
@@ -70,26 +71,24 @@ def _progress(message: str) -> None:
 
 def _prompt(kind: str) -> str:
     subject = "game" if kind == "game" else "lesson"
-    delegate = (
-        "Do not delegate to model-maker unless the player asked for one realistic scanned object."
-        if kind == "game"
-        else "Delegate the main realistic 3D model to model-maker with task(), then place what it returns. "
-        "When the request names a look (soft clay, voxel, low-poly, ...), follow that look's skill: start the module "
-        "with its scripts/new-lesson.mjs and check it with its scripts/check.mjs."
-    )
     return (
-        f"You write one JavaScript module for a mixed-reality {subject} and save it at /work/module.js. "
-        "Read your skills before writing. Check with `node /skills/common/dry-run/scripts/check.mjs /work/module.js` "
-        "and fix the file until the check prints ok. The sandbox has no network. Never look for API keys. "
-        f"{delegate} When the file passes, stop."
+        f"You write one JavaScript module for a mixed-reality {subject} and save it at /work/module.js. Everything this "
+        "app makes is a learning game: follow the learning-game skill. Start the module with "
+        "`node /skills/play/learning-game/scripts/new-game.mjs <look> /work/module.js` (the look the request names, "
+        "else the one that fits the subject, else plain) and draw it with that look's skill. Check it with "
+        "`node /skills/play/learning-game/scripts/check.mjs /work/module.js` and fix the file until it prints game ok. "
+        "The sandbox has no network. Never look for API keys. Only for a realistic model of one real object in the "
+        "plain look, delegate it to model-maker with task() and place what it returns. When the file passes, stop."
     )
 
 
 def _skills(kind: str) -> list[str]:
+    # /skills/play/: the learning-game skill, which every module starts from. /skills/looks/: one skill per look
+    # (soft-clay, voxel, ...); looks/shared holds their common code and has no SKILL.md. /skills/game/: hands that
+    # steer, game loops and tabletop physics, which learning games of every kind use.
     if kind == "game":
-        return ["/skills/common/", "/skills/game/"]
-    # /skills/looks/: one skill per look (soft-clay, voxel, ...); looks/shared holds their common code and has no SKILL.md.
-    return ["/skills/common/", "/skills/lesson/", "/skills/looks/"]
+        return ["/skills/common/", "/skills/play/", "/skills/looks/", "/skills/game/"]
+    return ["/skills/common/", "/skills/play/", "/skills/looks/", "/skills/game/", "/skills/lesson/"]
 
 
 def skills_fingerprint() -> str:

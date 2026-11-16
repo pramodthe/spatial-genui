@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: string-pitch
+expected_outcome: |
+  A learning game where the player plucks and shortens strings by hand and hears each one's pitch (sound.note or
+  sound.tone with frequency rising as the string gets shorter), learns that a shorter, tighter string vibrates
+  faster and sounds higher, then plays back a short tune by ear for stars.

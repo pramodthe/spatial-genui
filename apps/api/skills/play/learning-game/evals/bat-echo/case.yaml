@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: bat-echo
+expected_outcome: |
+  A learning game where the player's bat sends clicks by hand, hears echoes come back after a delay that grows with
+  the moth's distance (slowed down to be heard), learns that sound travels out and back so a closer moth echoes
+  sooner, then catches moths in the dark by ear for a score.

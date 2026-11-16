@@ -5,6 +5,12 @@ description: Build a mixed-reality lesson as a plasticine stop-motion tabletop -
 
 # Soft clay lessons
 
+> **In a learning game** (every lesson, level and game this app writes): start with the learning-game skill,
+> `node /skills/play/learning-game/scripts/new-game.mjs soft-clay /work/module.js`, and check with its
+> `scripts/check.mjs` (it runs this look's rules too). Use this skill for the look: its builders, recipes, palette
+> and mistakes. Skip its own start and check scripts (`scripts/new-lesson.mjs`, `scripts/check.mjs`). Its stage
+> flags and step panel are for journeys and processes; a game uses them only when it is one.
+
 A soft-clay lesson is a small tabletop on the learner's desk where everything is plasticine: the board is coloured card,
 the objects are chunky and a little lopsided with fingerprints in them, and they move like stop-motion, a pose at a
 time. The look exists to make abstract amounts touchable. A child who drops a fourth coin on a stack and watches the

@@ -5,6 +5,12 @@ description: Build a mixed-reality lesson as a circuit board seen as a city at n
 
 # Circuit city lessons
 
+> **In a learning game** (every lesson, level and game this app writes): start with the learning-game skill,
+> `node /skills/play/learning-game/scripts/new-game.mjs circuit-city /work/module.js`, and check with its
+> `scripts/check.mjs` (it runs this look's rules too). Use this skill for the look: its builders, recipes, palette
+> and mistakes. Skip its own start and check scripts (`scripts/new-lesson.mjs`, `scripts/check.mjs`). Its stage
+> flags and step panel are for journeys and processes; a game uses them only when it is one.
+
 A circuit-city lesson is a small circuit board on the learner's desk, read as a city at night: matte black chips are
 the buildings, aluminium capacitors the towers, gold tracks the streets, and white silkscreen prints each district's
 name. A pulse of warm light travels the tracks from stop to stop and each landmark wakes as it arrives. The look exists

@@ -24,6 +24,13 @@ from app.agents.coder import write_with_agent
 from app.llm import LlmTarget
 from app.prompt import GAME_SYSTEM_PROMPT, REVIEW_MESSAGE, SYSTEM_PROMPT, repair_message
 
+# A starter (skills/play/learning-game, skills/looks) passes the gate as it is. Served as a finished game when the
+# model stopped right after writing it (an API that ran out of credits); its markers mean it is not one.
+UNFINISHED_STARTER = re.compile(r"look\.demo\(subject\)|['\"`]REPLACE:")
+STARTER_LEFT = (
+    "The module is still the starter: its REPLACE markers or look.demo(subject) are left. Build the game itself, "
+    "then run the check again."
+)
 HAND_MADE_PANEL = (
     "The module calls ui() with its own markup. Build every panel with kit.panel(ui, { title, items: [...] }) "
     "from the parts listed under \"Panels\" (text, note, stat, status, progress, buttons, choices, segmented, "
@@ -267,6 +274,8 @@ async def gate_node(state: LessonState) -> dict[str, Any]:
     attempts = [*state["attempts"][:-1], attempt]
     if result.get("ok") and (result.get("stats") or {}).get("rawPanels", 0) > 0:
         result = {"ok": False, "stage": "dry-run", "error": HAND_MADE_PANEL}
+    if result.get("ok") and UNFINISHED_STARTER.search(state.get("code") or ""):
+        result = {"ok": False, "stage": "dry-run", "error": STARTER_LEFT}
     if not result.get("ok"):
         attempt["stage"] = result.get("stage") or "dry-run"
         attempt["error"] = result.get("error") or ""

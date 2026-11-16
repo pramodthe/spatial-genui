@@ -3,7 +3,7 @@
     {
       "pattern": "softClayLook\\(THREE, kit\\)",
       "when": "absent",
-      "message": "The soft-clay look module is not used: start from scripts/new-lesson.mjs.",
+      "message": "The soft-clay look module is not used: start from scripts/new-lesson.mjs (a game: /skills/play/learning-game/scripts/new-game.mjs soft-clay).",
       "whole": true
     },
     {

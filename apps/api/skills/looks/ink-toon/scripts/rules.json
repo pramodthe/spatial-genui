@@ -3,7 +3,7 @@
     {
       "pattern": "inkToonLook\\(THREE, kit\\)",
       "when": "absent",
-      "message": "The ink-toon look module is not used: start from scripts/new-lesson.mjs.",
+      "message": "The ink-toon look module is not used: start from scripts/new-lesson.mjs (a game: /skills/play/learning-game/scripts/new-game.mjs ink-toon).",
       "whole": true
     },
     {
@@ -36,7 +36,8 @@
     {
       "pattern": "look\\.stepWord\\(",
       "when": "absent",
-      "message": "No step word: name each step's action with one big lettered word on paper (look.stepWord), low at the front of the sheet."
+      "message": "No step word: name each step's action with one big lettered word on paper (look.stepWord), low at the front of the sheet.",
+      "lessonOnly": true
     }
   ]
 }

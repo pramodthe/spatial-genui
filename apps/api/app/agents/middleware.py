@@ -16,9 +16,11 @@ _FALLBACK_IN = 3.0
 _FALLBACK_OUT = 15.0
 
 
-def _prices(model_id: str) -> tuple[float, float]:
+def _prices(model_id: str) -> tuple[float, float, float]:
+    """Input, cached input and output price per million tokens. Without a cached price, cached input pays full price."""
     entry = model_prices().get(model_id) or {}
-    return float(entry.get("priceIn") or _FALLBACK_IN), float(entry.get("priceOut") or _FALLBACK_OUT)
+    price_in = float(entry.get("priceIn") or _FALLBACK_IN)
+    return price_in, float(entry.get("priceCached") or price_in), float(entry.get("priceOut") or _FALLBACK_OUT)
 
 
 class CostMeterMiddleware(AgentMiddleware):
@@ -39,10 +41,13 @@ class CostMeterMiddleware(AgentMiddleware):
             return None
         last = messages[-1]
         usage = getattr(last, "usage_metadata", None) or {}
-        price_in, price_out = _prices(self.model_id)
+        price_in, price_cached, price_out = _prices(self.model_id)
         prompt = int(usage.get("input_tokens") or 0)
+        # An agent re-sends its whole history every call, so most of its input is a cache read (95% on Sol's runs).
+        cached = min(prompt, int((usage.get("input_token_details") or {}).get("cache_read") or 0))
         completion = int(usage.get("output_tokens") or 0)
-        spent = float(state.get(self.key) or 0) + (prompt * price_in + completion * price_out) / 1e6
+        cost = (prompt - cached) * price_in + cached * price_cached + completion * price_out
+        spent = float(state.get(self.key) or 0) + cost / 1e6
         if spent < self.budget_usd:
             return {self.key: spent}
         note = AIMessage(content=f"Stopped: this run reached its ${self.budget_usd:.2f} budget.")

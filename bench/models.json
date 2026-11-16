@@ -82,6 +82,21 @@
       "note": "Planner for parallel generation (RQ4): Ember with low reasoning, for speed."
     },
     {
+      "id": "muse-wonder-1.0-max",
+      "family": "Meta",
+      "baseURL": "https://api.meta.ai/v1",
+      "apiKeyEnv": "META_API_KEY",
+      "model": "muse-wonder-1.0",
+      "extraBody": {
+        "reasoning_effort": "max"
+      },
+      "enabled": false,
+      "priceIn": 4,
+      "priceOut": 20,
+      "priceCached": 0.2,
+      "note": "Meta's largest Muse model. Prices from third-party listings of the Meta Model API (Nov 2026); Meta's page lists the API as preview."
+    },
+    {
       "id": "kimi-k3.1-pro-fw",
       "family": "Moonshot",
       "baseURL": "https://api.fireworks.ai/inference/v1",

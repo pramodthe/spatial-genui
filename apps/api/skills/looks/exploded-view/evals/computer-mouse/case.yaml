@@ -1,0 +1,11 @@
+schema_version: "1.1"
+name: computer-mouse
+expected_outcome: |
+  A mixed-reality lesson module (/work/module.js) that passes the app's gate and the exploded-view check, drawn as an
+  enlarged computer mouse taken apart along one axis (a stack rising from a pale floor slab, or a row) in assembly
+  order, each part in a real finish with a numbered ink-blue callout: at least the base, the circuit board with its
+  button switches, the scroll wheel, the optical sensor with its LED and lens, and the top shell or buttons. Each
+  part's job is given when the learner presses it, what travels through the parts (a click to the switch, light from
+  the LED off the desk into the sensor, the signal to the computer) is shown in the scene, the learner pulls parts out
+  and seats them back by hand, the enlargement is stated, and the steps explain how a click and a movement reach the
+  computer.

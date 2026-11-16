@@ -1,0 +1,57 @@
+{
+  "fix": [
+    {
+      "pattern": "paperPopUpLook\\(THREE, kit\\)",
+      "when": "absent",
+      "message": "The paper-pop-up look module is not used: start from scripts/new-lesson.mjs.",
+      "whole": true
+    },
+    {
+      "pattern": "kit\\.material\\(\\s*'(chrome|glossy|metal|steel|brushedMetal|gold|glass|plastic|ceramic)'",
+      "when": "present",
+      "message": "Shiny kit materials break the pop-up look: every piece is matt printed card (look.card, look.flat, look.number)."
+    },
+    {
+      "pattern": "new THREE\\.Mesh(Standard|Physical|Basic|Phong|Lambert|Toon)Material",
+      "when": "present",
+      "message": "Own materials break the pop-up look: build every piece as card (look.card / look.flat / look.number), which prints its ink and the pale cut edge."
+    }
+  ],
+  "note": [
+    {
+      "pattern": "look\\.(card|flat|vFold|box|float|layer)\\(",
+      "when": "absent",
+      "message": "No card pieces: build the spreads from look.card outlines on look.vFold / look.box / look.float (references/recipes.md)."
+    },
+    {
+      "pattern": "look\\.vFold\\(",
+      "when": "absent",
+      "message": "No V-fold: the subject of each spread stands on a V-fold across the gutter so it rises as the page turns (references/recipes.md, How a spread is put together)."
+    },
+    {
+      "pattern": "\\.turnTo\\(",
+      "when": "absent",
+      "message": "No page turn: one spread per step; go(n) calls book.turnTo(n) and update calls book.update(time, delta) (references/teaching.md)."
+    },
+    {
+      "pattern": "\\.update\\(time,\\s*delta\\)",
+      "when": "absent",
+      "message": "book.update(time, delta) is not called in update(): pages never turn and pieces never fold."
+    },
+    {
+      "pattern": "look\\.(pullTab|flap|wheel)\\(",
+      "when": "absent",
+      "message": "No pull tab, flap or wheel: a pop-up shows the change on the spot under the hand (references/teaching.md, section 3)."
+    },
+    {
+      "pattern": "look\\.ribbon\\(",
+      "when": "absent",
+      "message": "No paper ribbon: each spread's short line goes on look.ribbon(spread, text), sentences on the panel."
+    },
+    {
+      "pattern": "new THREE\\.(BoxGeometry|SphereGeometry|CylinderGeometry|TorusGeometry|ConeGeometry|CapsuleGeometry)|kit\\.(roundedBox|lathe|tube)\\(",
+      "when": "present",
+      "message": "Solid shapes in a pop-up book: everything is flat die-cut card (look.card outlines), depth comes from layers (references/mistakes.md)."
+    }
+  ]
+}

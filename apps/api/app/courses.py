@@ -29,13 +29,13 @@ Plan 3 to 4 lessons for the learner's request:
 - "prompt" is the full request for the agent that builds that lesson. It knows nothing else, so name the subject, what the 3D model must show, and what the learner does with it (2 to 3 sentences).
 - "model": when the course is about ONE real physical object (a jet engine, a microscope, a guitar, a heart), describe it, and a realistic 3D model of its outside is built with separate parts. "name" is its everyday name (1 to 3 words), "describe" is one sentence on what it looks like from outside, "parts" are 4 to 7 outside parts a learner could take off and name. The lessons then use this model. Use null when the course is about a process, an idea or several things (the water cycle, photosynthesis, the solar system).
 - If the request comes with a list of models already made and one of them is this course's object, use it instead of describing a new one: "model": {"use": "<its id>"}. Then plan the lessons around the parts it has.
-- "style" is the look every lesson of the course is drawn in. When the request names one, use it. Otherwise pick the one that fits best, or null for plain realistic materials: "exploded-view" (what is inside an object and how it goes together), "paper-pop-up" (a story or process in a few steps), "pencil-sketch" (how something is built, anatomy of an object), "ink-toon" (steps, recipes and how-tos with a few objects), "painted" (a process or story that happens in a place), "soft-clay" (friendly objects on a table: amounts, growth, comparison), "voxel" (a small model that builds up in stages), "low-poly" (cycles and journeys in a landscape), "circuit-city" (something travelling through a system, stage by stage). With a style, set "model" to null: the lessons build everything in the look.
+- "style" is the look every lesson of the course is drawn in. When the request names one, use it. Otherwise pick the one that fits best, or null for plain realistic materials: "exploded-view" (what is inside an object and how it goes together), "paper-pop-up" (a story or process in a few steps), "ink-toon" (steps, recipes and how-tos with a few objects), "painted" (a process or story that happens in a place), "soft-clay" (friendly objects on a table: amounts, growth, comparison), "voxel" (a small model that builds up in stages), "low-poly" (cycles and journeys in a landscape), "circuit-city" (something travelling through a system, stage by stage). With a style, set "model" to null: the lessons build everything in the look.
 
 Reply with only this JSON:
 {"title": "2 to 5 words", "subtitle": "one short line", "style": null, "model": {"name": "...", "describe": "...", "parts": ["..."]}, "lessons": [{"title": "2 to 4 words", "objective": "After this you can ...", "prompt": "..."}]}"""
 
 STYLES = {
-    "exploded-view": "Exploded view", "paper-pop-up": "Paper pop-up", "pencil-sketch": "Pencil sketch",
+    "exploded-view": "Exploded view", "paper-pop-up": "Paper pop-up",
     "ink-toon": "Ink and toon", "painted": "Painted", "soft-clay": "Soft clay", "voxel": "Voxel",
     "low-poly": "Low-poly", "circuit-city": "Circuit city",
 }
@@ -273,9 +273,9 @@ async def plan(course: dict[str, Any]) -> None:
         if style in STYLES:
             course["style"] = style
         look = (
-            f"\nDraw it in the {STYLES[style]} look, like every lesson of this course: follow the styles skill (start "
-            f"with `node /skills/common/styles/scripts/new-lesson.mjs {style} /work/module.js`, read "
-            f"references/briefs/{style}.md and references/hands.md, finish with scripts/check-lesson.mjs)."
+            f"\nDraw it in the {STYLES[style]} look, like every lesson of this course: follow the {style} skill (start "
+            f"with `node /skills/looks/{style}/scripts/new-lesson.mjs /work/module.js`, finish with "
+            f"`node /skills/looks/{style}/scripts/check.mjs /work/module.js`)."
         ) if style in STYLES else ""
         course["lessons"] = []
         for index, item in enumerate(lessons):
@@ -375,9 +375,9 @@ async def build_lesson(course: dict[str, Any], lesson: dict[str, Any]) -> None:
     try:
         given = _model_for(course)
         index = course["lessons"].index(lesson)
-        # A lesson in a look needs the styles skill, which only the agent writer has (sandbox, scripts). The look is in
+        # A lesson in a look needs that look's skill, which only the agent writer has (sandbox, scripts). The look is in
         # the lesson's prompt, which is saved, so this holds after a restart. LESSON_MODE=agent sends every lesson there.
-        styled = "/skills/common/styles/" in lesson["prompt"]
+        styled = "/skills/looks/" in lesson["prompt"]
         mode = "agent" if styled or os.environ.get("LESSON_MODE") == "agent" else "classic"
         with live.watching(live.lesson_key(course["id"], index)):
             result = await run_lesson(

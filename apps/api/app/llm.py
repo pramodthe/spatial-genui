@@ -124,7 +124,12 @@ def load_model(model_id: str, file: Path = MODELS_FILE) -> LlmTarget:
 
 def model_prices() -> dict[str, dict[str, Any]]:
     models = json.loads(MODELS_FILE.read_text(encoding="utf-8"))["models"]
-    return {item["id"]: item for item in models}
+    prices = {item["id"]: item for item in models}
+    # The agents ask by the API's model name ("muse-ember-1.0"), not the catalogue id ("muse-ember-1.0-max"); a
+    # miss charged Ember at the $3/$15 stand-in and stopped its runs at the $2 budget after 6 cents of real use.
+    for item in models:
+        prices.setdefault(item["model"], item)
+    return prices
 
 
 def _message_content(content: Any) -> str:

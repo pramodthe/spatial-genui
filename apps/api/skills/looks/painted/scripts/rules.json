@@ -1,0 +1,37 @@
+{
+  "fix": [
+    {
+      "pattern": "paintedLook\\(THREE, kit\\)",
+      "when": "absent",
+      "message": "The painted look module is not used: start from scripts/new-lesson.mjs.",
+      "whole": true
+    },
+    {
+      "pattern": "new THREE\\.(Mesh(Standard|Physical|Basic|Phong|Lambert|Toon)Material|ShaderMaterial)",
+      "when": "present",
+      "message": "Own materials break the painting (and lit ones come out dark on the headset): paint every part with look.paint / look.mat(colour), lamps with look.lamp."
+    },
+    {
+      "pattern": "kit\\.material\\(\\s*'(?!light')",
+      "when": "present",
+      "message": "kit.material textures and shine fight the brush dabs: paint the part with look.paint(geometry, colour, name) (references/mistakes.md). Only lamps glow, with look.lamp."
+    }
+  ],
+  "note": [
+    {
+      "pattern": "look\\.(paint|blob|house|windmill|waterwheel|tree|hedge|field|path|river|cart|boat|sack|pile|loaf|figure|animal)\\(",
+      "when": "absent",
+      "message": "No painted builders used: build the place with the look's builders (references/recipes.md)."
+    },
+    {
+      "pattern": "look\\.(lamp|shine)\\(|userData\\.window|userData\\.lamp",
+      "when": "absent",
+      "message": "No lamp or glow marks the active stop: light the stop the learner is at with a lamp (lamp.userData.set) or look.shine(stop) (references/teaching.md)."
+    },
+    {
+      "pattern": "\\.route\\b|lookPath\\(",
+      "when": "absent",
+      "message": "Nothing travels from stop to stop: move the traveller (cart, sack, boat, wind, a person) along a route (path.userData.route.at(u, v)) so the cause visibly carries on (references/teaching.md)."
+    }
+  ]
+}

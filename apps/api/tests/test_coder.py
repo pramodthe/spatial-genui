@@ -100,7 +100,7 @@ async def test_first_run_pins_skills_and_returns_the_module(monkeypatch: pytest.
     # v2 is the async event iterator; v3 returns a run-stream object that `async for` cannot iterate.
     assert seen["version"] == "v2"
     assert seen["payload"]["pinned_skills"] == ["kit", "panels", "lesson-craft", "dry-run"]
-    assert seen["skills"] == ["/skills/common/", "/skills/lesson/"]
+    assert seen["skills"] == ["/skills/common/", "/skills/lesson/", "/skills/looks/"]
     assert seen["thread"] == "coder-run/1"
     assert "/work/module.js" not in backend.files or backend.files["/work/module.js"] == b"export default function build(){}"
     assert backend.sandbox.terminated is True

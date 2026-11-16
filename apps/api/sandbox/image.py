@@ -18,7 +18,8 @@ WORK_ROOT = "/work"
 LIBRARY_ROOT = "/data/library"
 GATE_ENTRY = "/opt/gate/gate.ts"
 
-_SKIP = {".env", "node_modules", "runs", ".venv", ".cache", "__pycache__"}
+# evals/: a skill's test cases (skill-creator); the agent under test must not read them.
+_SKIP = {".env", "node_modules", "runs", ".venv", ".cache", "__pycache__", "evals"}
 
 
 def _ignore(path: Path) -> bool:
@@ -41,7 +42,9 @@ def image_layout() -> list[tuple[Path, str]]:
 def coder_image() -> modal.Image:
     image = (
         modal.Image.from_registry("node:22-bookworm-slim")
-        .apt_install("ca-certificates")
+        # python3: the Deep Agents sandbox backend runs its file tools (write_file, edit_file, glob) through python3;
+        # without it write_file fails and a coder that writes its module with it leaves no module at all.
+        .apt_install("ca-certificates", "python3")
         .run_commands("npm install -g tsx@4")
     )
     for source, dest in image_layout():

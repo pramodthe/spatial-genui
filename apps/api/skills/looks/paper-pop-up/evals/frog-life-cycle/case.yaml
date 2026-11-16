@@ -1,0 +1,9 @@
+schema_version: "1.1"
+name: frog-life-cycle
+expected_outcome: |
+  A mixed-reality lesson module (/work/module.js) that passes the app's gate and the paper-pop-up check, drawn as an
+  open pop-up book of die-cut card, with one spread per stage of the frog's life cycle (spawn, tadpole, tadpole with
+  legs, froglet, adult frog) turned by the corner tabs or Next, where on each spread the learner makes the change by
+  hand (a pull tab grows the legs or moves the tadpole, a flap reveals the spawn, a wheel turns through the stages), the
+  stages carry true approximate timings, and the steps explain that the frog's body is rebuilt in stages and that the
+  adult lays the spawn that starts the cycle again.

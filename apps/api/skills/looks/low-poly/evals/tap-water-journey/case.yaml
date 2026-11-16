@@ -1,0 +1,8 @@
+schema_version: "1.1"
+name: tap-water-journey
+expected_outcome: |
+  A mixed-reality lesson module (/work/module.js) that passes the app's gate and the low-poly check, drawn as a
+  faceted low-poly island, where the journey of tap water is a route of stages marked by numbered paper flags (a river
+  or reservoir, treatment, storage such as a water tower or reservoir, and homes with taps), water travels the pipes
+  between them, an amount of water is shown in the landscape (a level, droplets or a count), the learner presses the
+  stages and changes the water by hand, and the steps explain what happens to the water at each stage and why.

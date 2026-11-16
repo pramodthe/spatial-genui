@@ -41,7 +41,7 @@ register_harness_profile("openai", OPENAI_PROFILE)
 
 MODEL_CALLS = 40
 TOOL_CALLS = 80
-# A lesson in a look (styles skill: new-lesson, build, check-lesson) takes 5-8 minutes on gpt-6.1-sol; 8 minutes ran out.
+# A lesson in a look (its skill: new-lesson, build, check) takes 5-8 minutes on gpt-6.1-sol; 8 minutes ran out.
 WALL_S = int(os.environ.get("AGENT_WALL_S") or 15 * 60)
 RUN_BUDGET_USD = 2.0
 APP_NAME = "genui-coder"
@@ -74,8 +74,8 @@ def _prompt(kind: str) -> str:
         "Do not delegate to model-maker unless the player asked for one realistic scanned object."
         if kind == "game"
         else "Delegate the main realistic 3D model to model-maker with task(), then place what it returns. "
-        "When the request names a look, follow the styles skill: start the module with its new-lesson.mjs script and "
-        "check it with its check-lesson.mjs."
+        "When the request names a look (soft clay, voxel, low-poly, ...), follow that look's skill: start the module "
+        "with its scripts/new-lesson.mjs and check it with its scripts/check.mjs."
     )
     return (
         f"You write one JavaScript module for a mixed-reality {subject} and save it at /work/module.js. "
@@ -88,7 +88,8 @@ def _prompt(kind: str) -> str:
 def _skills(kind: str) -> list[str]:
     if kind == "game":
         return ["/skills/common/", "/skills/game/"]
-    return ["/skills/common/", "/skills/lesson/"]
+    # /skills/looks/: one skill per look (soft-clay, voxel, ...); looks/shared holds their common code and has no SKILL.md.
+    return ["/skills/common/", "/skills/lesson/", "/skills/looks/"]
 
 
 def skills_fingerprint() -> str:

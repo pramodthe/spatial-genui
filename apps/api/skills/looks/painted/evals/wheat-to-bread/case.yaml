@@ -1,0 +1,9 @@
+schema_version: "1.1"
+name: wheat-to-bread
+expected_outcome: |
+  A mixed-reality lesson module (/work/module.js) that passes the app's gate and the painted check, drawn as a
+  picture-book oil painting of a place on a painted canvas ground, where the journey from wheat to bread is a row of
+  stops (at least the field, a mill and the bakery) along a track or river, something travels from stop to stop
+  carrying the grain or flour, a warm lamp marks the stop the story is at, the amount changes visibly as stuff (cut
+  wheat, a sack filling with flour, loaves appearing), the learner moves the story on with their hands, and the
+  steps explain what each stop does.

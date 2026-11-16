@@ -1,0 +1,42 @@
+{
+  "fix": [
+    {
+      "pattern": "explodedViewLook\\(THREE, kit\\)",
+      "when": "absent",
+      "message": "The exploded-view look module is not used: start from scripts/new-lesson.mjs.",
+      "whole": true
+    }
+  ],
+  "note": [
+    {
+      "pattern": "look\\.row\\(",
+      "when": "absent",
+      "message": "No look.row: lay the parts on one axis in assembly order with look.row, so they come apart and seat back (references/recipes.md, The row)."
+    },
+    {
+      "pattern": "look\\.callouts?\\(",
+      "when": "absent",
+      "message": "No numbered callouts: name each part with look.callouts(row, names) (one ink-blue tag straight above each part)."
+    },
+    {
+      "pattern": "\\.hands\\(|(grab:\\s*true[\\s\\S]*){3}",
+      "when": "absent",
+      "message": "Fewer than 3 grabbable parts: wire row.hands(traits, isGrabbed, { ... }) so the learner can pull every part out of the row and put it back."
+    },
+    {
+      "pattern": "\\.hands\\(|onSeat|[=(,]\\s*lookSeat\\(",
+      "when": "absent",
+      "message": "No seat-back behaviour: a part let go near its place should slide home with a click and the lesson should react (row.hands onSeat / onOut, references/teaching.md)."
+    },
+    {
+      "pattern": "real:\\s*\\{",
+      "when": "absent",
+      "message": "No real size: the object is enlarged, so return real: { size: largest / ENLARGE } and say 'shown N x real size' on the panel (references/teaching.md, True numbers)."
+    },
+    {
+      "pattern": "look\\.powerPath\\(|kit\\.arrow\\(",
+      "when": "absent",
+      "message": "Nothing shows what travels through the parts: trace the current, force, air or ink with look.powerPath (or kit.arrow) so the learner sees how the parts work together."
+    }
+  ]
+}

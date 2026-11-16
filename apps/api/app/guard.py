@@ -201,10 +201,11 @@ async def admit(visitor: str, prompt: str) -> dict[str, Any] | None:
     budget = _check_budget()
     if budget:
         return budget
+    # Counted before the screen: each screen is a paid call, so refused prompts must use up the limit too.
+    _recent[visitor].append(time.time() * 1000)
     screened = await _check_content(prompt)
     if screened.get("usage"):
         await record_spend([screened["usage"]])
     if screened.get("refusal"):
         return screened["refusal"]
-    _recent[visitor].append(time.time() * 1000)
     return None

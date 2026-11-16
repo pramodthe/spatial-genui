@@ -105,7 +105,8 @@ def merge(plan: dict[str, Any], ready: dict[str, dict[str, Any]], placeholders: 
             components.extend(built["components"])
         elif placeholders:
             panel = part.get("kind") != "object"
-            width = min(max(part.get("width") or 0.3, 0.2), 0.6)
+            width = part.get("width")
+            width = min(max(width, 0.2), 0.6) if isinstance(width, (int, float)) and not isinstance(width, bool) and width else 0.3
             children.append(f"{part['id']}__placeholder")
             components.append({
                 "id": f"{part['id']}__placeholder",

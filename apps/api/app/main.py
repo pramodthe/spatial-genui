@@ -234,12 +234,16 @@ async def generate_stream(request: Request) -> Response:
                 queue.put_nowait(None)
 
         task = asyncio.create_task(run())
-        while True:
-            item = await queue.get()
-            if item is None:
-                break
-            yield json.dumps(item, ensure_ascii=False) + "\n"
-        await task
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                yield json.dumps(item, ensure_ascii=False) + "\n"
+            await task
+        finally:
+            # The visitor left (or the server is stopping): don't keep generating, and spending, for no one.
+            task.cancel()
 
     return StreamingResponse(chunks(), media_type="application/x-ndjson", headers={"cache-control": "no-cache"})
 

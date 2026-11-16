@@ -204,9 +204,11 @@ async def look_and_fix(state: LessonState) -> dict[str, Any]:
 async def write(state: LessonState) -> dict[str, Any]:
     if state.get("kept"):
         return {}
+    watcher = live.current()
+    if watcher is not None:
+        watcher.known_assets = list(library.library_catalog()) if state.get("use_library") else []
     if state.get("mode") == "agent":
         return await write_with_agent(state)
-    watcher = live.current()
     if watcher is not None:
         watcher.begin_attempt()
         reply = await llm.complete(state["messages"], _target_from(state), on_text=watcher.on_text)

@@ -1,7 +1,7 @@
 // Live preview of a module still being written (src/snapshot.ts): its runnable prefix, through the same gate.
 // JSON in on stdin: { reply, knownAssets?: string[] }   (reply: the model's text so far)
 // JSON out: { ok, code?, meshes?, error? }
-import { assetStubs, libraryCatalog } from './src/library.js';
+import { assetStubs } from './src/library.js';
 import { dryRun } from './src/sandbox.js';
 import { runnablePrefix } from './src/snapshot.js';
 import { validateModule } from './src/validate.js';
@@ -22,9 +22,10 @@ async function main() {
     if (!code) {
       out = { ok: false, error: 'nothing runnable yet' };
     } else {
+      // Like the final gate: no assets unless the caller lists them, so a preview never shows what it would reject.
       const known = new Set<string>(Array.isArray(body.knownAssets)
         ? body.knownAssets.filter((id): id is string => typeof id === 'string')
-        : [...libraryCatalog().keys()]);
+        : []);
       const validation = validateModule(code, known);
       if (!validation.ok) {
         out = { ok: false, error: validation.error };

@@ -43,6 +43,8 @@ class Live:
         self.seq = 0
         self.done = False
         self.ok = False
+        # The assets the final gate will allow (app/graphs/lesson.py); previews are checked against the same list.
+        self.known_assets: list[str] = []
         self._snapping: asyncio.Task[Any] | None = None
         self._snapped_len = 0
 
@@ -79,7 +81,7 @@ class Live:
                 text = self.text
                 self._snapped_len = len(text)
                 began = time.monotonic()
-                result = await gate.snapshot(text)
+                result = await gate.snapshot(text, self.known_assets)
                 # A repair writes the module again from the top: keep showing the fuller scene until it catches up.
                 if result.get("ok") and result.get("code") and int(result.get("meshes") or 0) >= self.meshes:
                     self.code = result["code"]

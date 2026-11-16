@@ -115,7 +115,11 @@ def surface_from(messages: Any) -> dict[str, Any]:
         elif message.get("updateComponents"):
             if surface is None:
                 return {"error": "updateComponents came before createSurface."}
-            for component in message["updateComponents"].get("components") or []:
+            update = message["updateComponents"]
+            components = (update.get("components") or []) if isinstance(update, dict) else None
+            if not isinstance(components, list) or not all(isinstance(item, dict) for item in components):
+                return {"error": "updateComponents needs a components list of objects."}
+            for component in components:
                 at = next((index for index, item in enumerate(surface["components"]) if item.get("id") == component.get("id")), -1)
                 if at >= 0:
                     surface["components"][at] = component
@@ -125,6 +129,8 @@ def surface_from(messages: Any) -> dict[str, Any]:
             if surface is None:
                 return {"error": "updateDataModel came before createSurface."}
             update = message["updateDataModel"]
+            if not isinstance(update, dict):
+                return {"error": "updateDataModel needs an object with path and value."}
             path = update.get("path") or "/"
             if path == "/":
                 surface["dataModel"] = update.get("value") if update.get("value") is not None else {}

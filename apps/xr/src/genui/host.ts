@@ -485,32 +485,20 @@ function ownRaycast(object: Object3D): boolean {
  * Hidden by the lesson (or by a card slot the lesson closed), not by UIKit's own visibility flag.
  * Once a UIKit element is in the chain, its `visible` and its descendants' `visible` no longer count,
  * until a plain object above that element is hidden: a closed card slot still stops rays.
+ * Worked out from the root down in one pass (it runs twice a frame), each object from its parent's answer.
  */
-function hiddenByLesson(object: Object3D): boolean {
-  const chain: Object3D[] = [];
-  for (let node: Object3D | null = object; node; node = node.parent) chain.push(node);
-  let underOwnRaycast = false;
-  for (let i = chain.length - 1; i >= 0; i--) {
-    const node = chain[i]!;
-    if (ownRaycast(node)) underOwnRaycast = true;
-    if (!node.visible && !underOwnRaycast) return true;
-  }
-  return false;
-}
-
-function syncRaycastVisibility(root: Object3D) {
-  root.traverse((object) => {
-    const saved = savedRaycast.get(object);
-    if (!hiddenByLesson(object)) {
-      if (!saved) return;
-      object.raycast = saved;
-      savedRaycast.delete(object);
-      return;
-    }
-    if (saved || object.raycast.length === 0) return;
+function syncRaycastVisibility(object: Object3D, parentHidden = false, parentUnderOwnRaycast = false) {
+  const underOwnRaycast = parentUnderOwnRaycast || ownRaycast(object);
+  const hidden = parentHidden || (!object.visible && !underOwnRaycast);
+  const saved = savedRaycast.get(object);
+  if (!hidden && saved) {
+    object.raycast = saved;
+    savedRaycast.delete(object);
+  } else if (hidden && !saved && object.raycast.length > 0) {
     savedRaycast.set(object, object.raycast);
     object.raycast = silencedRaycast;
-  });
+  }
+  for (const child of object.children) syncRaycastVisibility(child, hidden, underOwnRaycast);
 }
 
 /** Whether `object` is `ancestor` or sits inside it. */

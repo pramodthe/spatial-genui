@@ -234,6 +234,7 @@ export async function generate(prompt: string, extra: { previousCode?: string; c
   prompt = prompt.trim();
   if (!prompt || state.busy) return state;
   liveWatch++; // a live lesson replaces the one being watched
+  streaming = false; // the superseded watch leaves the flag to whoever runs now
   if (PARALLEL && !extra.previousCode) return generateStream(prompt);
   state.busy = true;
   repairPending = false;
@@ -483,6 +484,7 @@ export async function startLesson(prompt: string) {
 export async function openWritten(code: string, prompt: string, kind: LessonKind = 'lesson') {
   if (state.busy) return state;
   liveWatch++; // opening something else stops watching one being written
+  streaming = false; // otherwise the stopped watch would keep repairs off for this lesson
   state.prompt = prompt;
   state.kind = kind;
   state.autoRepaired = false;

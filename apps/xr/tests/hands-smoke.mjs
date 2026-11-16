@@ -5,7 +5,9 @@
 //   and let go below the floor it comes back up; a card with nothing to press moves by its frame too; the picker
 //   is held by its frame too;
 // - two hands hold a model (and don't resize it: the view pill sizes lessons);
-// - a pointer over a pressable object makes it glow.
+// - a pointer over a pressable object makes it glow;
+// - a hidden mesh in front of a grabbable is not a ray hit, a card frame hit is the border, and a card that
+//   starts on the model ends beside it.
 // Returns the measurements; fails (ok: false) listing any check that didn't hold.
 // Usage: npx @iwsdk/cli browser run tests/hands-smoke.mjs --timeout 100000
 
@@ -35,10 +37,30 @@ const LESSON = `export default function build({ THREE, traits, kit, ui }) {
   return { root };
 }`;
 
+// A hidden mesh in front of a grabbable, and a card placed on that grabbable.
+const PROBE = `export default function build({ THREE, traits, kit, ui }) {
+  const root = new THREE.Group();
+  const material = new THREE.MeshStandardMaterial({ color: '#8899aa' });
+  const box = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.16), material);
+  box.name = 'target';
+  box.position.set(0, 0.1, 0);
+  root.add(box);
+  traits(box, { grab: true });
+  const blocker = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.02), material);
+  blocker.name = 'blocker';
+  blocker.position.set(0, 0.1, 0.12);
+  blocker.visible = false;
+  root.add(blocker);
+  const panel = kit.panel(ui, { width: 0.24, position: [0, 0.1, 0], title: 'Cover', items: [{ text: 'On the model.' }] });
+  panel.object3D.name = 'cover card';
+  root.add(panel.object3D);
+  return { root };
+}`;
+
 export default async function run({ frame, page }) {
   const target = frame ?? page;
   await target.waitForFunction(() => Boolean(window.genui?.inspect && window.IWER_DEVICE?.remote), null, { timeout: 30000 });
-  return target.evaluate(async (code) => {
+  return target.evaluate(async ({ lesson, probe }) => {
     const r = window.IWER_DEVICE.remote;
     const genui = window.genui;
     const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
@@ -60,7 +82,7 @@ export default async function run({ frame, page }) {
       for (const hand of ['hand-left', 'hand-right']) await r.dispatch('set_transform', { device: hand, position: { x: hand === 'hand-left' ? -0.35 : 0.35, y: 0.6, z: 0.1 } });
       // Sitting low: eyes 0.9 m above the floor, looking a little down.
       await r.dispatch('set_transform', { device: 'headset', position: { x: 0, y: 0.9, z: 0 }, orientation: { x: -0.1736, y: 0, z: 0, w: 0.9848 } });
-      out.mount = (await genui.mount(code)).ok;
+      out.mount = (await genui.mount(lesson)).ok;
       await sleep(2500);
 
       // Room frame and saved spot.
@@ -94,6 +116,20 @@ export default async function run({ frame, page }) {
       if (frame) {
         frame.geometry.computeBoundingBox();
         const fb = frame.geometry.boundingBox;
+        const midY = (fb.min.y + fb.max.y) / 2;
+        // A ray through the face misses the frame; a ray through the border hits it.
+        const rayLocal = (x, y) => {
+          frame.updateWorldMatrix(true, false);
+          const at = frame.localToWorld(frame.position.clone().set(x, y, 0));
+          const from = frame.localToWorld(frame.position.clone().set(x, y, 0.25));
+          return genui.debugRay([from.x, from.y, from.z], [at.x, at.y, at.z]);
+        };
+        const centerHits = rayLocal(0, midY);
+        const borderHits = rayLocal(fb.min.x + 0.012, midY);
+        out.centerHit = centerHits[0]?.chain ?? '';
+        out.borderHit = borderHits[0]?.chain ?? '';
+        out.frameCenterOpen = !centerHits.some((hit) => hit.chain.includes('Card frame'));
+        out.frameBorderHit = borderHits.some((hit) => hit.chain.includes('Card frame'));
         // A point on the frame's margin at the card's left or right edge, in the world.
         const edge = (side) => { frame.updateWorldMatrix(true, false); const v = frame.position.clone().set(side < 0 ? fb.min.x + 0.012 : fb.max.x - 0.012, (fb.min.y + fb.max.y) / 2, 0); return worldOfLocal(frame, v); };
         const worldOfLocal = (o, v) => { const w = o.localToWorld(v); return [w.x, w.y, w.z]; };
@@ -254,6 +290,52 @@ export default async function run({ frame, page }) {
       await sleep(150);
       out.scaleRatio = round(box.scale.x / scaleBefore);
       for (const hand of ['hand-left', 'hand-right']) await r.dispatch('set_select_value', { device: hand, value: 0 });
+
+      // Hidden mesh in front of a grabbable, and a card that starts on the model.
+      for (const hand of ['hand-left', 'hand-right']) await r.dispatch('set_transform', { device: hand, position: { x: hand === 'hand-left' ? -0.35 : 0.35, y: 0.6, z: 0.1 } });
+      out.probeMount = (await genui.mount(probe)).ok;
+      await sleep(2500);
+      const blocker = find('blocker');
+      if (blocker) {
+        blocker.updateWorldMatrix(true, false);
+        const origin = blocker.localToWorld(blocker.position.clone().set(0, 0, 0.25));
+        const through = blocker.localToWorld(blocker.position.clone().set(0, 0, -0.4));
+        const hits = genui.debugRay([origin.x, origin.y, origin.z], [through.x, through.y, through.z]);
+        out.hiddenHits = hits.slice(0, 3).map((hit) => hit.chain);
+        out.hiddenSkipped = !hits.some((hit) => hit.chain.includes('blocker'));
+      }
+      const spanX = (object) => {
+        object.updateWorldMatrix(true, true);
+        let min = Infinity;
+        let max = -Infinity;
+        object.traverse((o) => {
+          const geo = o.geometry;
+          if (!geo || !o.visible) return;
+          geo.computeBoundingBox();
+          const bb = geo.boundingBox;
+          if (!bb) return;
+          const v = o.position.clone();
+          for (const x of [bb.min.x, bb.max.x]) {
+            for (const y of [bb.min.y, bb.max.y]) {
+              for (const z of [bb.min.z, bb.max.z]) {
+                o.localToWorld(v.set(x, y, z));
+                if (v.x < min) min = v.x;
+                if (v.x > max) max = v.x;
+              }
+            }
+          }
+        });
+        return { min, max };
+      };
+      const targetBox = find('target');
+      const cover = find('cover card');
+      if (targetBox && cover) {
+        const modelSpan = spanX(targetBox);
+        const cardSpan = spanX(cover);
+        out.modelSpan = modelSpan;
+        out.cardSpan = cardSpan;
+        out.cardBeside = Number.isFinite(cardSpan.min) && (cardSpan.max <= modelSpan.min + 0.001 || cardSpan.min >= modelSpan.max - 0.001);
+      }
     } finally {
       genui.setOverlayHidden(true);
       genui.clear(); // also forgets the spot this test saved
@@ -267,6 +349,8 @@ export default async function run({ frame, page }) {
       glowWhileOver: out.glowWhileOver >= 1,
       glowAfter: out.glowAfter === 0,
       cardFrame: out.cardFrame === true,
+      frameCenterOpen: out.frameCenterOpen === true,
+      frameBorderHit: out.frameBorderHit === true,
       cardMovedM: out.cardMovedM >= 0.05,
       lessonStayedPut: out.lessonStayedPut === true,
       buttonPressed: out.buttonPressed === true,
@@ -280,9 +364,12 @@ export default async function run({ frame, page }) {
       pickerMovedM: out.pickerMovedM >= 0.05,
       heldByTwo: out.heldByTwo === true,
       scaleRatio: Math.abs(out.scaleRatio - 1) < 0.02, // objects don't change size by hand: the view pill sizes lessons
+      probeMount: out.probeMount === true,
+      hiddenSkipped: out.hiddenSkipped === true,
+      cardBeside: out.cardBeside === true,
     };
     const failed = Object.entries(expect).filter(([, ok]) => !ok).map(([check]) => `${check} (${JSON.stringify(out[check])})`);
     if (failed.length) throw new Error(`hands-smoke failed: ${failed.join(', ')}; measured ${JSON.stringify(out)}`);
     return out;
-  }, LESSON);
+  }, { lesson: LESSON, probe: PROBE });
 }

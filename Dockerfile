@@ -1,32 +1,40 @@
-# The deployed app (SPEC.md Phase 6): one container where the GenUI agent server answers /api and serves
-# the built XR app from the same origin. API keys come from the host's secrets, never from the image.
+# The deployed app: the Python API answers /api and serves the built XR app from the same origin.
+# apps/gate (Node 22) runs the static check and the dry run with the same three.js and kit.js as the headset.
+# API keys come from the host, never the image.
 #
-# Build the XR app first, then the image, from the repo root:
 #   (cd apps/xr && npm run build)
 #   docker build -t spatial-genui .
 #   docker run -p 8080:8080 -e LLM_API_KEY=... -e META_API_KEY=... spatial-genui
-FROM node:22-slim
+FROM python:3.12-slim-bookworm
 
-# COURSE_MODELS=0: the image has no Python worker, so courses are written without building their own 3D
-# model (models already in data/library are still used). APP_DB: put the database on a mounted disk to keep
-# saved courses across restarts (default: data/app.db inside the container).
-ENV NODE_ENV=production \
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
     COURSE_MODELS=0 \
-    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
     GENUI_PORT=8080 \
-    STATIC_DIR=/app/apps/xr/dist
+    STATIC_DIR=/app/apps/xr/dist \
+    UV_LINK_MODE=copy
+
 WORKDIR /app
 
-# Dependencies first, so code changes don't reinstall them. tsx (a dev dependency) runs the server.
-COPY apps/server/package.json apps/server/package-lock.json apps/server/
-RUN cd apps/server && npm ci --no-audit --no-fund
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir uv
 
-COPY apps/server/ apps/server/
-# Model catalogue (ids, endpoints, prices) and the 3D library lessons use.
+COPY apps/api/pyproject.toml apps/api/uv.lock apps/api/
+RUN cd apps/api && uv sync --frozen --no-dev
+
+COPY apps/gate/package.json apps/gate/package-lock.json apps/gate/
+RUN cd apps/gate && npm ci --no-audit --no-fund
+
+COPY apps/api/ apps/api/
+COPY apps/gate/ apps/gate/
 COPY bench/models.json bench/models.json
 COPY data/library/ data/library/
 COPY apps/xr/dist/ apps/xr/dist/
 
 EXPOSE 8080
-WORKDIR /app/apps/server
-CMD ["npx", "tsx", "src/server.ts"]
+WORKDIR /app/apps/api
+CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]

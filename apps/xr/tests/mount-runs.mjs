@@ -4,7 +4,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-const RUNS_DIR = new URL('../../server/runs/', import.meta.url).pathname;
+const RUNS_DIR = new URL('../../api/runs/', import.meta.url).pathname;
 
 async function loadRuns(ids) {
   const wanted = new Set(ids);

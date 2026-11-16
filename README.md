@@ -14,19 +14,25 @@ related work.
   picture (Muse Image, checked by Muse Ember), a textured body from TRELLIS.2, then an agent in Blender
   (Muse Spark) cuts it into named parts that lessons can move, highlight and pull apart. Models are kept and
   reused; the library is in `data/library/` (credits in `data/library/CREDITS.md`).
+- **Play.** A second section beside Learn, on the start page and in the headset picker: ask for any game and
+  the agent writes one tabletop game (no course plan) with a game prompt (`GAME_SYSTEM_PROMPT`: a game loop,
+  score and restart, a HUD instead of a teaching panel, no real-size view). Games are saved on a Games shelf;
+  four ready-made ones open at once (`apps/xr/public/games/`).
 - **Voice tutor.** A spoken conversation through Deepgram's Voice Agent API. It answers questions about the
   subject and the lesson on the desk, quizzes you aloud when you ask, and can plan a course or open a lesson.
 - **Look-and-fix.** The first time a course lesson opens, the headset sends three pictures of it to the
   agent, which revises it once from what it sees.
-- **Hands-first.** Pinch or poke panels, pick up parts, drag a lesson or the picker by its move bar. Every
-  panel is built from one set of parts in the style of the Meta Horizon OS UI Set (`kit.panel`).
+- **Hands-first.** Pinch or poke panels and pick up parts. A lesson moves, turns and scales by thin handles on
+  its frame (rods on the bottom edges, knobs on the upright ones, the corners), by fingertip or by pointing; a
+  game has the same move and turn handles, fingertip only, and its code reads the live hands. Every panel is
+  built from one set of parts in the style of the Meta Horizon OS UI Set (`kit.panel`).
 
 ## How it works
 
 ```
-headset browser (apps/xr)                agent server (apps/server)               3D backend (apps/worker3d, Modal)
+headset browser (apps/xr)                agent server (apps/api)                 3D backend (apps/worker3d, Modal)
 start page, picker, voice tutor  --->   courses (SQLite), lesson agent,     --->  TRELLIS.2, Blender sandbox,
-GenUI host: runs lesson modules         safety check, dry run, repair,            P3-SAM parts
+GenUI host: runs lesson modules         host gate (apps/gate, Node), repair,      P3-SAM parts
                                         model library, Deepgram tokens
 ```
 
@@ -39,9 +45,12 @@ the headset, and failures go back to the agent for repair.
 ```
 apps/xr/                 the headset app (TypeScript, IWSDK WebXR): GenUI host, picker, start page, voice tutor
                          (src/genui/); emulator test scripts (tests/)
-apps/server/src/         the agent server the app talks to (TypeScript): lesson agent, courses and database,
-                         safety check, dry run, kit.js, voice token, course 3D models (three-d/)
-apps/server/research/    benchmark and paper scripts (npm run bench*, review); not used by the running app
+apps/api/                the agent server the app talks to (Python, FastAPI): lesson, game and course graphs,
+                         courses, games and database, guard, voice token, library, the Deep Agent coder
+apps/gate/               the Node half (TypeScript): the gate every lesson passes (static check and a locked-down
+                         dry run with the headset's three.js and kit.js) and the course 3D model pipeline the API
+                         drives (src/); the research harness: the published one-call agent loop and the
+                         benchmark, judge and 3D scripts behind the paper's numbers (research/, npm run bench*)
 apps/worker3d/           Python 3D worker for course models: TRELLIS.2 on Modal (fetch_trellis.py), the Blender
                          part-splitting agent (blender_build/), model ingest, retrieval and segmentation (library/)
 apps/worker3d/research/  the Phase 3 experiments: CadQuery, the Blender MCP server and its Modal backend, repair kit
@@ -50,20 +59,20 @@ bench/                   benchmark prompts, model catalogue (models.json) and re
 docs/                    architecture notes and the paper's related work
 ```
 
-The backend is two languages on purpose: the server is TypeScript because it runs each lesson's JavaScript in a
-sandbox with the same three.js and kit.js as the headset before the learner sees it; the 3D worker is Python
-because Blender, TRELLIS.2 and the mesh tools only exist there. The server starts the Python programs and they
+The API is Python. Each lesson is still checked by a Node gate (`apps/gate`) that runs the same three.js and
+kit.js as the headset, in a locked-down child process, before the learner sees it. The 3D worker is Python
+because Blender, TRELLIS.2 and the mesh tools only exist there. The API starts those programs and they
 exchange files (GLB, JSON).
 
 ## Setup
 
-1. Node 22.12+ and, for 3D models, Python 3.12 with [uv](https://docs.astral.sh/uv/).
+1. Node 22.12+ and Python 3.12 with [uv](https://docs.astral.sh/uv/).
 2. Copy `.env.example` to `.env` and fill in:
    - `LLM_API_KEY` (and `OPENAI_API_KEY`): the lesson agent, course planner and screener (OpenAI by default).
    - `DEEPGRAM_API_KEY`: the voice tutor.
    - `META_API_KEY`: reference pictures, checks and the Blender agent for course models, and the voice
      fallback when there is no Deepgram key.
-3. `cd apps/server && npm install`, `cd apps/xr && npm install`, and for 3D models `cd apps/worker3d && uv sync`.
+3. `cd apps/api && uv sync`, `cd apps/gate && npm install` (the gate and the 3D pipeline), `cd apps/xr && npm install`, and for 3D models `cd apps/worker3d && uv sync`.
 4. For course models, deploy the Modal apps once (`uv run modal setup` first):
    `modal deploy modal_trellis.py`, `modal deploy blender_build/sandbox.py` and `modal deploy modal_parts.py`
    from `apps/worker3d` (TRELLIS.2 and P3-SAM need the Modal secret `genui-hf-v2` with `HF_TOKEN`).
@@ -72,8 +81,8 @@ exchange files (GLB, JSON).
 ## Run
 
 ```bash
-# Terminal 1: agent server on :8787 (restarts on code changes; restart it by hand after editing .env)
-cd apps/server && npm run dev
+# Terminal 1: Python API on :8787 (restart it by hand after editing .env)
+cd apps/api && uv run uvicorn app.main:app --host 0.0.0.0 --port 8787
 
 # Terminal 2: IWSDK dev server and emulator browser on https://localhost:8081
 cd apps/xr && npx @iwsdk/cli dev up --allow-browser-automation
@@ -89,11 +98,12 @@ inside XR), then **Enter mixed reality**. In XR, pinch **Talk to the tutor**, a 
 ## Useful commands
 
 ```bash
-# Write one lesson from the command line; every run is logged to apps/server/runs/
-cd apps/server && npm run gen -- "how blood flows through the human heart"
+# Write one lesson through the API; every run is logged to apps/api/runs/
+curl -s -X POST localhost:8787/api/generate -H 'content-type: application/json' \
+  -d '{"prompt": "how blood flows through the human heart"}'
 
-# Look-and-fix by hand: revise a lesson from pictures of it
-npm run review -- --code lesson.js --prompt "..." --out revised.js pic1.jpg pic2.jpg
+# Look-and-fix by hand: revise a lesson from pictures of it (the research harness)
+cd apps/gate && npm run review -- --code lesson.js --prompt "..." --out revised.js pic1.jpg pic2.jpg
 
 # Mount the latest successful run in the emulator
 cd apps/xr && npx @iwsdk/cli browser run tests/mount-last-run.mjs
@@ -113,11 +123,11 @@ in `bench/prompts/test-12.json` (the dev prompts were used to tune the system pr
 for scoring). Add `OPENROUTER_API_KEY` to `.env` for non-Anthropic models.
 
 ```bash
-cd apps/server
+cd apps/gate
 npm run bench -- --runs 2 --out ../../bench/results/run-1          # 1. generate (resumable)
 cd ../xr && npx @iwsdk/cli xr enter                                 # 2. mount + hand probes in the emulator
 node scripts/bench-browser.mjs "$PWD/../../bench/results/run-1"
-cd ../server && npm run bench:judge -- ../../bench/results/run-1    # 3. vision-model quality scores
+cd ../gate && npm run bench:judge -- ../../bench/results/run-1      # 3. vision-model quality scores
 npm run bench:report -- ../../bench/results/run-1                   # 4. summary.md leaderboard
 npm run bench:gallery -- ../../bench/results/run-1 --export-images # 5. gallery.md (GitHub) + gallery.html
 ```
@@ -147,7 +157,7 @@ cd apps/worker3d && uv sync                                          # Python 3.
 uv run modal setup                                                   # log in to Modal (once per machine)
 uv run modal secret create genui-worker3d WORKER3D_TOKEN=<from .env> # once per Modal workspace
 uv run modal deploy research/modal_app.py                            # then set WORKER3D_URL in .env
-cd ../server
+cd ../gate
 npm run bench3d -- --out ../../bench/results/3d-run-2                # build: 12 objects x 3 pipelines x 2 variants
 npm run bench3d:judge -- ../../bench/results/3d-run-2                # Opus 5.5 scores the renders
 npm run bench3d:report -- ../../bench/results/3d-run-2               # summary.md + gallery

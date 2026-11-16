@@ -1,11 +1,11 @@
-// Mount the most recent successful generation logged by the agent server (apps/server/runs/*.jsonl).
-// Useful when generation takes longer than a browser-run lease: generate with `npm run gen` in
-// apps/server, then: npx @iwsdk/cli browser run tests/mount-last-run.mjs
+// Mount the most recent successful generation logged by the agent server (apps/api/runs/*.jsonl).
+// Useful when generation takes longer than a browser-run lease: generate through the agent server
+// (curl -X POST localhost:8787/api/generate -d '{"prompt":"..."}'), then: npx @iwsdk/cli browser run tests/mount-last-run.mjs
 
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-const RUNS_DIR = new URL('../../server/runs/', import.meta.url).pathname;
+const RUNS_DIR = new URL('../../api/runs/', import.meta.url).pathname;
 
 async function lastSuccessfulRun() {
   const files = (await readdir(RUNS_DIR)).filter((f) => f.endsWith('.jsonl')).sort();

@@ -14,8 +14,8 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 8081,
     open: false,
-    // GenUI agent server (apps/server); keeps API keys off the client.
-    proxy: { '/api': 'http://localhost:8787' },
+    // The agent server (apps/api) listens on 8787; GENUI_API_URL points the proxy elsewhere.
+    proxy: { '/api': process.env.GENUI_API_URL || 'http://localhost:8787' },
   },
   build: {
     outDir: 'dist',

@@ -28,7 +28,7 @@ World.create(
       if (prompt) void generate(prompt);
     },
     ask: (prompt) => void generate(prompt),
-    open: (code, prompt) => void openWritten(code, prompt),
+    open: (code, prompt, kind) => void openWritten(code, prompt, kind),
     onStatus: onLessonStatus,
   });
   createStartPage(world, createOverlay());

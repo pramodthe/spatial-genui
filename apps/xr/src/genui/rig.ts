@@ -19,7 +19,7 @@ import {
 /**
  * Teaching rig for a library model: the tools lessons need (labels, explode, cut-away, X-ray,
  * highlight, reset), done by host code so the agent states intent instead of computing geometry.
- * Mirrored by the server's dry-run stand-in (apps/server/src/dryrun.ts), which applies the same
+ * Mirrored by the server's dry-run stand-in (apps/gate/src/dryrun.ts), which applies the same
  * label panel checks.
  *
  * Labels follow SceneCraft's idea: the lesson names the parts, code places them. Labels sit in two
@@ -48,7 +48,7 @@ const XRAY_OPACITY = 0.14;
 const labelMarkup = (text: string) => `
   <style>
     .l { width: 320px; padding-left: 14px; padding-right: 14px; padding-top: 7px; padding-bottom: 7px;
-         border-radius: 1000px; background-color: rgba(21, 23, 27, 0.8);
+         border-radius: 1000px; background-color: #333333;
          border-width: 2px; border-color: rgba(255, 255, 255, 0.24); }
     .t { color: rgba(255, 255, 255, 0.9); font-size: 28px; font-weight: 600; }
   </style>

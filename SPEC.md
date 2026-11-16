@@ -4,6 +4,7 @@
 - **Status:** Draft v0.1, November 12, 2026
 - **Competition:** Meta VR Start Developer Competition 2026 (rules summary in `llm.txt`)
 - **Hard deadline:** Wed November 18, 2026, 12:00 PM PT. Target submission time: 9:00 AM PT.
+- **Backend (Nov 15):** the app server is `apps/api` (Python, FastAPI, LangGraph). `apps/gate` (Node) holds the gate every lesson passes (static check and dry run), the course 3D pipeline, and the research harness (the published agent loop and the benchmark scripts). The TypeScript server `apps/server` was removed on Nov 15; paths below were written before that. Where they say `apps/server/src/X`: the gate, kit, library, LLM client, agent loop, prompts, router, a2ui and three-d files are now `apps/gate/src/X`; `apps/server/research/X` is `apps/gate/research/X`; the server, courses, games, database, guard, voice and real-size modules were replaced by `apps/api/app` (the originals are in git history before that date).
 
 ---
 

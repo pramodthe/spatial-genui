@@ -1,6 +1,7 @@
 <!--
   In-headset lesson picker (src/genui/picker.ts). The 2D prompt box disappears in XR, so this is how a
-  learner starts a lesson with hands only: point and pinch, or touch. Styled after the Meta Horizon OS UI
+  learner starts a lesson or a game with hands only: point and pinch, or touch. A switch at the top picks
+  the section: Learn (lessons and courses) or Play (games). Styled after the Meta Horizon OS UI
   Set (Reality Labs Design System): the Horizon kit's Panel and Button, tiles, grouped list cells and
   Lucide icons, with the set's dark-mode colours and Inter type ramp (sizes in design pixels; picker.ts
   scales the whole panel with setTargetDimensions). picker.ts fills in the text and the states, and docks
@@ -290,6 +291,83 @@
     font-weight: 500;
   }
 
+  .tabs {
+    flex-direction: row;
+    gap: 4px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    padding-left: 4px;
+    padding-right: 4px;
+    border-radius: 1000px;
+    background-color: rgba(0, 0, 0, 0.25);
+  }
+
+  .tab {
+    flex-direction: row;
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 44px;
+    border-radius: 1000px;
+    background-color: rgba(255, 255, 255, 0);
+    cursor: pointer;
+  }
+
+  .tab:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .tab-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .tab-label {
+    font-size: 14px;
+    line-height: 1.429;
+    font-weight: 600;
+  }
+
+  .mini {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .mini-icon {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    color: #ffd23f;
+  }
+
+  .mini-title {
+    flex-grow: 1;
+    flex-shrink: 1;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 16px;
+    line-height: 1.25;
+    font-weight: 700;
+  }
+
+  .pager {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    margin-top: 8px;
+  }
+
+  .pager-note {
+    flex-grow: 1;
+    flex-shrink: 1;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
+    line-height: 1.333;
+    font-weight: 500;
+  }
+
   .status {
     flex-direction: row;
     align-items: center;
@@ -321,10 +399,42 @@
   }
 </style>
 <Panel id="picker" class="picker">
-  <div class="top">
+  <div id="mini" class="mini" style="display: none">
+    <Gamepad2 class="mini-icon"></Gamepad2>
+    <span id="mini-title" class="mini-title">Game</span>
+    <Button id="mini-smaller" variant="secondary" size="sm">
+      <ButtonIcon>
+        <Minus></Minus>
+      </ButtonIcon>
+    </Button>
+    <Button id="mini-bigger" variant="secondary" size="sm">
+      <ButtonIcon>
+        <Plus></Plus>
+      </ButtonIcon>
+    </Button>
+    <Button id="mini-open" variant="secondary" size="sm">
+      <ButtonIcon>
+        <LayoutGrid></LayoutGrid>
+      </ButtonIcon>
+      <ButtonLabel>Menu</ButtonLabel>
+    </Button>
+  </div>
+
+  <div id="top" class="top">
     <span id="eyebrow" class="eyebrow">LESSONS ON YOUR DESK</span>
     <span id="heading" class="heading">What do you want to learn?</span>
     <span id="hint" class="hint">Point at anything, then pinch.</span>
+  </div>
+
+  <div id="tabs" class="tabs">
+    <div id="tab-learn" class="tab">
+      <GraduationCap id="tab-learn-icon" class="tab-icon"></GraduationCap>
+      <span id="tab-learn-label" class="tab-label">Learn</span>
+    </div>
+    <div id="tab-play" class="tab">
+      <Gamepad2 id="tab-play-icon" class="tab-icon"></Gamepad2>
+      <span id="tab-play-label" class="tab-label">Play</span>
+    </div>
   </div>
 
   <div id="home" class="section">
@@ -509,6 +619,21 @@
         <ChevronRight class="chevron"></ChevronRight>
       </div>
     </div>
+    <div id="all-pager" class="pager" style="display: none">
+      <Button id="all-prev" variant="secondary" size="sm">
+        <ButtonIcon>
+          <ChevronLeft></ChevronLeft>
+        </ButtonIcon>
+        <ButtonLabel>Newer</ButtonLabel>
+      </Button>
+      <span id="all-page" class="pager-note">...</span>
+      <Button id="all-next" variant="secondary" size="sm">
+        <ButtonLabel>Older</ButtonLabel>
+        <ButtonIcon>
+          <ChevronRight></ChevronRight>
+        </ButtonIcon>
+      </Button>
+    </div>
   </div>
 
   <div id="course" class="section" style="display: none">
@@ -561,6 +686,112 @@
           <span id="step-4-state" class="cell-secondary">...</span>
         </div>
         <ChevronRight class="chevron"></ChevronRight>
+      </div>
+    </div>
+  </div>
+
+  <div id="play" class="section" style="display: none">
+    <div id="game-voice" class="ask">
+      <div id="game-voice-circle" class="ask-circle">
+        <Mic class="ask-icon"></Mic>
+      </div>
+      <div class="ask-text">
+        <span class="ask-title">Ask for a game</span>
+        <span id="game-voice-label" class="ask-sub">Pinch, say a game, then pinch again</span>
+      </div>
+      <ChevronRight class="ask-chevron"></ChevronRight>
+    </div>
+
+    <div class="block">
+      <div class="section-header">
+        <span class="section-title">Start a game</span>
+        <span class="section-note">Opens at once</span>
+      </div>
+      <div class="tiles">
+        <div id="game-0" class="tile">
+          <Gamepad2 class="tile-icon"></Gamepad2>
+          <span id="game-0-title" class="tile-title">Game</span>
+          <span id="game-0-sub" class="tile-sub">...</span>
+        </div>
+        <div id="game-1" class="tile">
+          <Trophy class="tile-icon"></Trophy>
+          <span id="game-1-title" class="tile-title">Game</span>
+          <span id="game-1-sub" class="tile-sub">...</span>
+        </div>
+        <div id="game-2" class="tile">
+          <Puzzle class="tile-icon"></Puzzle>
+          <span id="game-2-title" class="tile-title">Game</span>
+          <span id="game-2-sub" class="tile-sub">...</span>
+        </div>
+        <div id="game-3" class="tile">
+          <Joystick class="tile-icon"></Joystick>
+          <span id="game-3-title" class="tile-title">Game</span>
+          <span id="game-3-sub" class="tile-sub">...</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="games-label" class="block" style="display: none">
+      <div class="section-header">
+        <span class="section-title">My games</span>
+        <span id="games-note" class="section-note">Newest first</span>
+      </div>
+      <div class="list">
+        <div id="game-row-0" class="cell" style="display: none">
+          <Gamepad2 class="cell-icon"></Gamepad2>
+          <div class="cell-text">
+            <span id="game-row-0-title" class="cell-primary">Game</span>
+            <span id="game-row-0-state" class="cell-secondary">...</span>
+          </div>
+          <ChevronRight class="chevron"></ChevronRight>
+        </div>
+        <div id="game-row-1" class="cell" style="display: none">
+          <Gamepad2 class="cell-icon"></Gamepad2>
+          <div class="cell-text">
+            <span id="game-row-1-title" class="cell-primary">Game</span>
+            <span id="game-row-1-state" class="cell-secondary">...</span>
+          </div>
+          <ChevronRight class="chevron"></ChevronRight>
+        </div>
+        <div id="game-row-2" class="cell" style="display: none">
+          <Gamepad2 class="cell-icon"></Gamepad2>
+          <div class="cell-text">
+            <span id="game-row-2-title" class="cell-primary">Game</span>
+            <span id="game-row-2-state" class="cell-secondary">...</span>
+          </div>
+          <ChevronRight class="chevron"></ChevronRight>
+        </div>
+        <div id="game-row-3" class="cell" style="display: none">
+          <Gamepad2 class="cell-icon"></Gamepad2>
+          <div class="cell-text">
+            <span id="game-row-3-title" class="cell-primary">Game</span>
+            <span id="game-row-3-state" class="cell-secondary">...</span>
+          </div>
+          <ChevronRight class="chevron"></ChevronRight>
+        </div>
+        <div id="game-row-4" class="cell" style="display: none">
+          <Gamepad2 class="cell-icon"></Gamepad2>
+          <div class="cell-text">
+            <span id="game-row-4-title" class="cell-primary">Game</span>
+            <span id="game-row-4-state" class="cell-secondary">...</span>
+          </div>
+          <ChevronRight class="chevron"></ChevronRight>
+        </div>
+      </div>
+      <div id="games-pager" class="pager" style="display: none">
+        <Button id="games-prev" variant="secondary" size="sm">
+          <ButtonIcon>
+            <ChevronLeft></ChevronLeft>
+          </ButtonIcon>
+          <ButtonLabel>Newer</ButtonLabel>
+        </Button>
+        <span id="games-page" class="pager-note">...</span>
+        <Button id="games-next" variant="secondary" size="sm">
+          <ButtonLabel>Older</ButtonLabel>
+          <ButtonIcon>
+            <ChevronRight></ChevronRight>
+          </ButtonIcon>
+        </Button>
       </div>
     </div>
   </div>

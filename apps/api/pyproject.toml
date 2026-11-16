@@ -1,0 +1,41 @@
+[project]
+name = "genui-api"
+version = "0.1.0"
+description = "Spatial GenUI agent API: FastAPI routes, LangGraph flows, Deep Agents coder"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "deepagents>=0.7.33",
+  "fastapi>=0.115.0",
+  "httpx>=0.27.0",
+  "langchain[openai]>=1.3.14",
+  "langchain-modal>=0.0.8",
+  "langgraph>=1.0.0",
+  "langgraph-checkpoint-sqlite>=2.0.0",
+  "modal>=1.2.0",
+  "python-dotenv>=1.0.1",
+  "uvicorn>=0.32.0",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3.0",
+  "pytest-asyncio>=0.24.0",
+]
+
+[project.scripts]
+genui-api = "app.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app", "sandbox"]
+
+[tool.uv]
+package = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]

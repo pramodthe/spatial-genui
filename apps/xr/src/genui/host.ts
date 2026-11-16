@@ -23,7 +23,9 @@ import {
   type World,
 } from '@iwsdk/core';
 import { captureLesson, expandByMesh, type CaptureOptions } from './capture';
-import { boxAround, createMoveHandle, MOVE_HANDLE_RADIUS_M, setFloorHeight, type MoveHandle } from './handle';
+import { boxAround, setFloorHeight, type MoveHandle } from './handle';
+import { createLessonBounds, type LessonBounds } from './bounds';
+import { createGameHands, updateGameHands, type GameHands } from './game-hands';
 import { makeCardGrabbable, pinchAtFingertips, setGrabFilter, type CardGrab } from './grab';
 import { createGlow, glowOnHover, tickGlows, type Glow } from './hover';
 import { initViewPill, setPill } from './hud';
@@ -83,6 +85,13 @@ type Mounted = {
   handle: MoveHandle | null;
   /** The lesson's cards, held by their frames (set up once the cards have laid out). */
   cards: CardGrab[];
+  /** The box drawn around the 3D: a side push slides it, a corner pinch scales it. */
+  bounds: LessonBounds | null;
+  /** The player's hands in root's coordinates, refreshed before each update() (the module's `hands`). */
+  hands: GameHands;
+  /** Play: a game, and how far the player has zoomed it from its fitted size. */
+  game: boolean;
+  gameZoom: number;
   /** Hover glows of the lesson's grabbable and pressable objects and parts, by target. */
   glows: Map<Object3D, Glow>;
   /** The fitted view: the 3D's box as built (root's frame, before fitting) and the scale that fits it in the box. */
@@ -118,7 +127,7 @@ type Layered = {
   shown: boolean;
 };
 
-/** The paintbox for generated lessons, served by the agent server (apps/server/src/kit/kit.js). */
+/** The paintbox for generated lessons, served by the agent server (apps/gate/src/kit/kit.js). */
 type Kit = { finalize(root: Object3D): void; pump(budgetMs?: number): number; dispose(): void };
 let kitModule: Promise<{ createKit(three: unknown): Kit } | null> | null = null;
 function loadKit() {
@@ -140,9 +149,9 @@ let mountTicket = 0;
 const SUPERSEDED: MountReport = { ok: false, error: 'Another lesson was opened while this one loaded.', superseded: true };
 
 // The panel font (Inter atlas in @pmndrs/msdfonts) has plain ASCII plus these; anything else renders
-// as an empty box. Keep in sync with apps/server/src/glyphs.ts, which makes the agent fix its text.
+// as an empty box. Keep in sync with apps/gate/src/glyphs.ts, which makes the agent fix its text.
 const PANEL_GLYPHS = new Set([...Array.from({ length: 95 }, (_, i) => String.fromCharCode(32 + i)), ...'§°ÄÖÜßäöü\n\r\t']);
-// Copied from REPLACEMENTS in apps/server/src/glyphs.ts.
+// Copied from REPLACEMENTS in apps/gate/src/glyphs.ts.
 const GLYPH_FALLBACKS: Record<string, string> = {
   '–': '-', '—': '-', '−': '-', '‐': '-', '‑': '-',
   '‘': "'", '’': "'", '“': '"', '”': '"', '…': '...', '·': '-', '•': '-', '×': 'x', '÷': '/',
@@ -167,6 +176,32 @@ function asHorizonPanel(markup: string): string {
   return `${markup.slice(0, start)}${open[1]}<Panel${open[2]}>${rest}</Panel>`;
 }
 
+/**
+ * Play: a game's panel is its scoreboard. Instead of the Horizon panel it gets an arcade look: a dark board
+ * with a neon edge, a bright title in capitals and big score digits. Saved games get it too.
+ */
+// Added to the end of the kit's own rules (a second rule for a class would replace the first, layout and all).
+const ARCADE_RULES: Record<string, string> = {
+  '.panel': 'background-color: #0c0e1c; border-radius: 28px; border-width: 4px; border-color: #7c5cff;',
+  '.kp-eyebrow': 'color: #4de3ff; font-weight: 700; letter-spacing: 1.5px;',
+  '.kp-title': 'color: #ffd23f; font-size: 30px; line-height: 1.15; font-weight: 800; letter-spacing: 1px;',
+  '.kp-subtitle': 'color: #4de3ff;',
+  '.kp-stat-value': 'color: #ffffff; font-size: 60px; line-height: 1.05; font-weight: 800; letter-spacing: 0px;',
+  '.kp-status': 'background-color: rgba(124, 92, 255, 0.2);',
+  '.kp-list': 'background-color: rgba(124, 92, 255, 0.12);',
+  '.kp-seg': 'background-color: rgba(124, 92, 255, 0.2);',
+};
+
+function asArcadePanel(markup: string): string {
+  let styled = markup;
+  for (const [selector, rules] of Object.entries(ARCADE_RULES)) {
+    const at = styled.indexOf(`${selector} {`);
+    const close = at < 0 ? -1 : styled.indexOf('}', at);
+    if (close >= 0) styled = `${styled.slice(0, close)} ${rules} ${styled.slice(close)}`;
+  }
+  return styled.replace(/(<span id="title" class="kp-title">)([^<]*)(<\/span>)/, (_, open: string, text: string, close: string) => `${open}${text.toUpperCase()}${close}`);
+}
+
 /** Safety net for text that slipped past the server checks: swap or drop characters the font lacks. */
 function toPanelText(text: string): string {
   let out = '';
@@ -181,10 +216,27 @@ const BELOW_EYES_M = 0.35;
 // within these limits on the scale.
 const FIT_BOX_M = 0.5;
 const FIT_SCALE_RANGE = [0.2, 5] as const;
+// Play: a game is fitted bigger than a lesson (a playfield, not a model on a stand), and the player can zoom it
+// with the game bar's - and + by this step, within this range of the fitted size.
+const GAME_FIT_BOX_M = 0.9;
+const GAME_ZOOM_STEP = 1.25;
+const GAME_ZOOM_RANGE = [0.5, 2.5] as const;
+// A game's move and turn handles stand this far outside its playfield.
+const GAME_HANDLE_OUTSET_M = 0.04;
+// A lesson's handles stand this far outside its box: beyond the 3 cm a fingertip pinch reaches for a part (a
+// model's base sits on the bottom edge) and out of the line of a ray aimed at the model.
+const LESSON_HANDLE_OUTSET_M = 0.035;
+// A pinch counts as play over the playfield and the space around it where the player's hand is (in front of the
+// board, above it). A pinch out at the picker or the far side of the room does not.
+const PLAY_PINCH_MARGIN_XZ_M = 0.25;
+const PLAY_PINCH_MARGIN_Y_M = 0.6;
 // The real-size view is offered for subjects between these sizes (a grain of rice to a tall building); outside them
-// the pill only tells the scale. At real size the subject stands on the floor, its near side this far ahead.
+// the pill only tells the scale. At real size the subject stands on the floor. A small one stays at arm's length.
+// A person, a house, or a rocket comes in close enough that its base is on the floor in front of the learner,
+// not a long way off where the base only lines up if they look down.
 const REAL_SIZE_RANGE_M = [0.005, 150] as const;
 const REAL_VIEW_GAP_M = 1.2;
+const REAL_NEAR_M = 2.4;
 // Nothing in a lesson starts nearer the eyes than this (measured along the floor): a lesson with cards or
 // parts laid out in front of its model is set further back to make room.
 const MIN_FRONT_GAP_M = 0.3;
@@ -195,6 +247,8 @@ const KEEP_SPOT_WITHIN_M = 1.5;
 const FLOOR_CLEARANCE_M = 0.05;
 // An unlabelled horizontal surface at least this far below the eyes counts as floor.
 const FLOOR_DROP_M = 1.0;
+// At real size, a subject this tall (a person, a door, a house) is brought in close. The demo view stays the 0.5 m box.
+const FLOOR_SUBJECT_M = 1.7;
 const SPOT_STORAGE_KEY = 'genui.lessonSpot.v1';
 // A card stays at least this far from the eyes (along the floor), and starts at this share of the size the lesson
 // drew it (a card half a metre from the eyes filled the view).
@@ -224,6 +278,7 @@ let lessonSpot: { position: Vector3; surface: string | null } | null = null;
 let room: { group: Group; entity: Entity } | null = null;
 const tmpHead = new Vector3();
 const tmpForward = new Vector3();
+const playTip = new Vector3();
 
 export function initGenUIHost(w: World, handlers: { onRuntimeError: (message: string) => void }) {
   world = w;
@@ -280,6 +335,7 @@ export function lessonPosition(out: Vector3): Vector3 | null {
 
 export function unmountGenerated() {
   if (!current) return;
+  current.bounds?.dispose();
   current.kit?.dispose();
   current.handle?.dispose();
   for (const card of current.cards) card.dispose();
@@ -324,6 +380,23 @@ export function capture(options: CaptureOptions = {}): string | null {
 /** Test-only: the mounted lesson's root, for scripts that inspect what was built. */
 export function debugRoot(): Object3D | null {
   return current?.root ?? null;
+}
+
+/** Test-only: the lesson frame's handles, what is being dragged, and where the lesson stands and faces. */
+export function inspectFrame() {
+  const mounted = current;
+  const anchor = mounted?.root?.parent;
+  if (!mounted?.bounds || !anchor) return null;
+  const at = anchor.getWorldPosition(new Vector3());
+  return { ...mounted.bounds.inspect(), anchor: [at.x, at.y, at.z].map((n) => Math.round(n * 1000) / 1000), yaw: Math.round(anchor.rotation.y * 1000) / 1000, scale: Math.round((mounted.root?.scale.x ?? 1) * 1000) / 1000 };
+}
+
+/** Test-only: the hands the current module sees (root's coordinates, rounded to mm). */
+export function debugHands() {
+  if (!current) return null;
+  const round = (v: Vector3) => [v.x, v.y, v.z].map((n) => Math.round(n * 1000) / 1000);
+  const hand = (h: GameHands['left']) => ({ tracked: h.tracked, tip: round(h.tip), palm: round(h.palm), pinching: h.pinching });
+  return { left: hand(current.hands.left), right: hand(current.hands.right) };
 }
 
 /** Test-only: what a ray from `from` toward `to` passes through, nearest first (debugging blocked presses). */
@@ -497,7 +570,9 @@ function isPressableNow(element: Object3D): boolean {
 }
 
 /** Load an agent-written module and mount what it builds. Throws nothing; failures come back as a report. */
-export async function mountGenerated(code: string): Promise<MountReport> {
+export async function mountGenerated(code: string, options: { kind?: 'lesson' | 'game' } = {}): Promise<MountReport> {
+  // Play: a game has a scoreboard instead of a lesson panel, and no box around it.
+  const game = options.kind === 'game';
   if (!world) return { ok: false, error: 'GenUI host is not initialised.' };
   const ticket = ++mountTicket;
   unmountGenerated();
@@ -544,6 +619,10 @@ export async function mountGenerated(code: string): Promise<MountReport> {
     kit: (await loadKit())?.createKit(IWSDK) ?? null,
     handle: null,
     cards: [],
+    bounds: null,
+    hands: createGameHands(),
+    game,
+    gameZoom: 1,
     glows: new Map(),
     built: null,
     fitScale: 1,
@@ -568,7 +647,8 @@ export async function mountGenerated(code: string): Promise<MountReport> {
       return object;
     },
     ui(markup: string, options: PanelOptions = {}) {
-      const record = createPanelRecord(asHorizonPanel(toPanelText(String(markup))), options);
+      const text = toPanelText(String(markup));
+      const record = createPanelRecord(game ? asArcadePanel(text) : asHorizonPanel(text), options);
       panels.push(record);
       return {
         object3D: record.holder,
@@ -598,6 +678,7 @@ export async function mountGenerated(code: string): Promise<MountReport> {
     isGrabbed(object: Object3D) {
       return mounted.objectEntities.get(object)?.hasComponent(Grabbed) ?? false;
     },
+    hands: mounted.hands,
   };
 
   let result: { root?: unknown; update?: unknown; real?: { size?: unknown } };
@@ -638,12 +719,15 @@ export async function mountGenerated(code: string): Promise<MountReport> {
   // Measured before the anchor is placed, so the box is in the lesson's own frame (+Z toward the learner).
   const panelHolders = new Set(panels.map((p) => p.holder));
   const layers = splitLayers(mounted, anchor, root, panels, new Set(traitRequests.map((r) => r.object)));
-  fitToBox(mounted, root, panels);
+  // Hidden pieces don't count toward the size: a pool of enemies waiting off the board, or effects kept hidden at
+  // their build size until they play (a lesson's splash rings, 2 m across until scaled to a few centimetres,
+  // shrank its whole scene to a fifth). The frame measures what is visible too.
+  fitToBox(mounted, root, panels, game ? { boxM: GAME_FIT_BOX_M, skipHidden: true } : { skipHidden: true });
   fitCards(mounted);
   syncLayers(mounted);
   const declared = Number(result.real?.size);
   mounted.realSizeM = Number.isFinite(declared) && declared > 0 ? declared : null;
-  const extent = contentBox(root, panelHolders);
+  const extent = contentBox(root, panelHolders, true);
   for (const panel of panels) extent.expandByPoint(panel.holder.getWorldPosition(new Vector3()));
   for (const item of mounted.layered) extent.expandByPoint(item.object.getWorldPosition(new Vector3()));
   const front = extent.isEmpty() ? 0 : Math.max(0, extent.max.z);
@@ -651,14 +735,13 @@ export async function mountGenerated(code: string): Promise<MountReport> {
   mounted.onSurface = placeInSeatedReach(anchor, front, bottom);
   const anchorEntity = track(mounted, world.createTransformEntity(anchor, { parent: roomFrame().entity }), anchor);
   anchor.updateMatrixWorld(true);
-  // The handle lies on the desk in front of everything, nearest the learner.
-  mounted.handle = createMoveHandle(world, anchor, {
-    offset: [0, Math.max(-0.1, Math.min(0, extent.isEmpty() ? 0 : extent.min.y)) + MOVE_HANDLE_RADIUS_M, front + 0.07],
-    measure: root,
+  dropAboveEyes(anchor, root);
+  // A lesson is moved, turned and scaled by the handles on its frame. A game gets the move and turn handles only,
+  // a little outside its playfield (no lines, no corners: its size is the game bar's - and +).
+  mounted.bounds = createLessonBounds(world, anchor, anchorEntity, root, {
     onMoved: () => setLessonSpot({ position: anchor.position.clone(), surface: null }),
+    ...(game ? { frame: false, outset: GAME_HANDLE_OUTSET_M, pointing: false } : { outset: LESSON_HANDLE_OUTSET_M }),
   });
-  mounted.handle.setShown(true);
-  mounted.handleRest = { offset: mounted.handle.offset.clone(), root: root.position.clone() };
   track(mounted, world.createTransformEntity(root, { parent: anchorEntity }), root);
   for (const layer of [layers.cards, layers.annotations]) track(mounted, world.createTransformEntity(layer, { parent: anchorEntity }), layer);
 
@@ -786,6 +869,8 @@ class GenUISystem extends createSystem({
   panelDocuments: { required: [PanelUI, PanelDocument] },
   planes: { required: [XRPlaneComponent] },
 }) {
+  private readonly eye = new Vector3();
+
   init(): void {
     planeEntities = () => this.queries.planes.entities;
     let immersive = false;
@@ -833,6 +918,8 @@ class GenUISystem extends createSystem({
       const floor = floorHeight(head);
       for (const card of mounted.cards) card.tick(head, floor);
     }
+    const held = [...mounted.grabModes.keys()].some((object) => mounted.objectEntities.get(object)?.hasComponent(Grabbed) ?? false);
+    if (mounted.bounds) mounted.bounds.tick(this.world.input, held, floorHeight(this.world.camera.getWorldPosition(this.eye)));
     if (mounted.declutterIn !== null && [...mounted.panels.values()].every((p) => p.document)) {
       // UIKit lays panels out over a few frames; measure once their sizes are real.
       if (mounted.declutterIn-- <= 0) {
@@ -856,6 +943,20 @@ class GenUISystem extends createSystem({
     }
     if (mounted.update) {
       try {
+        if (mounted.root) updateGameHands(mounted.hands, this.world.input, mounted.root);
+        // A pinch beside the playfield is not a move in the game. The hand can still hover over it.
+        if (mounted.game && mounted.bounds && mounted.root) {
+          for (const side of ['left', 'right'] as const) {
+            const hand = mounted.hands[side];
+            if (!hand.pinching) continue;
+            if (mounted.bounds.inside(mounted.root.localToWorld(playTip.copy(hand.tip)), PLAY_PINCH_MARGIN_XZ_M, PLAY_PINCH_MARGIN_Y_M)) continue;
+            hand.pinching = false;
+            hand.pinched = false;
+          }
+        }
+        // A hand moving or turning the game by its handles is not playing it.
+        const dragging = mounted.bounds?.dragging();
+        if (dragging) Object.assign(mounted.hands[dragging], { pinching: false, pinched: false });
         mounted.update(performance.now() / 1000 - mounted.startTime, delta);
       } catch (err) {
         // Stop calling a broken update; the scene stays, the error goes to the repair loop.
@@ -949,14 +1050,11 @@ function placeInSeatedReach(anchor: Group, front: number, bottom: number): strin
   }
   const spot = lessonSpot!;
   anchor.position.copy(spot.position);
-  if (spot.surface) {
-    // On a desk the lesson stands on it: anything built below y = 0 would be inside the desk.
-    if (bottom < 0) anchor.position.y -= bottom;
-  } else {
-    // Floating, nothing goes below the floor (a learner sitting low, on a bed or the floor, has little room).
-    const floor = frame.worldToLocal(new Vector3(tmpHead.x, floorHeight(tmpHead), tmpHead.z)).y;
-    anchor.position.y = Math.max(anchor.position.y, floor + FLOOR_CLEARANCE_M - bottom);
-  }
+  // The lowest point of the model rests on the desk, or on the floor when the seated spot is below it.
+  // A mesh built above its own origin used to stay up at eye height.
+  const floorY = frame.worldToLocal(new Vector3(tmpHead.x, floorHeight(tmpHead), tmpHead.z)).y;
+  const support = spot.surface ? spot.position.y : Math.max(spot.position.y, floorY + FLOOR_CLEARANCE_M);
+  anchor.position.y = support - bottom;
   const away = new Vector3(anchor.position.x - head.x, 0, anchor.position.z - head.z);
   const gap = away.length() - front;
   if (gap < MIN_FRONT_GAP_M && away.lengthSq() > 1e-6) anchor.position.addScaledVector(away.normalize(), Math.min(MIN_FRONT_GAP_M - gap, MAX_SET_BACK_M));
@@ -985,6 +1083,60 @@ export function floorHeight(head: Vector3): number {
 function floorIn(frame: Object3D): number {
   const eye = world ? world.camera.getWorldPosition(new Vector3()) : new Vector3();
   return frame.worldToLocal(new Vector3(eye.x, floorHeight(eye), eye.z)).y;
+}
+
+/**
+ * Sit `root`'s lowest point on the scanned floor, then slide it along the learner's facing so the nearest
+ * point of the model is `gap` metres ahead. Uses the box after the model has been scaled, in world space.
+ */
+function placeOnFloorInFront(root: Object3D, gap: number) {
+  if (!world || !root.parent) return;
+  root.parent.updateMatrixWorld(true);
+  const box = visibleModelBox(root);
+  if (box.isEmpty()) return;
+  const head = world.camera.getWorldPosition(tmpHead);
+  shiftWorld(root, tmpForward.set(0, floorHeight(head) - box.min.y, 0));
+  root.parent.updateMatrixWorld(true);
+  const stood = visibleModelBox(root);
+  world.camera.getWorldDirection(tmpForward);
+  tmpForward.y = 0;
+  if (tmpForward.lengthSq() < 1e-6) tmpForward.set(0, 0, -1);
+  tmpForward.normalize();
+  const center = stood.getCenter(tmpShiftA);
+  const half = stood.getSize(tmpShiftB).multiplyScalar(0.5);
+  const extent = Math.abs(tmpForward.x) * half.x + Math.abs(tmpForward.z) * half.z;
+  const dist = tmpShiftC.copy(center).sub(head).setY(0).dot(tmpForward) - extent;
+  const delta = gap - dist;
+  if (Math.abs(delta) > 0.02) shiftWorld(root, tmpForward.multiplyScalar(delta));
+}
+
+const tmpShiftA = new Vector3();
+const tmpShiftB = new Vector3();
+const tmpShiftC = new Vector3();
+
+/** Move `object` by a world-space delta, through its parent. */
+function shiftWorld(object: Object3D, delta: Vector3) {
+  const parent = object.parent;
+  if (!parent) return;
+  object.getWorldPosition(tmpShiftA);
+  tmpShiftB.copy(tmpShiftA).add(delta);
+  parent.worldToLocal(tmpShiftA);
+  parent.worldToLocal(tmpShiftB);
+  object.position.add(tmpShiftC.copy(tmpShiftB).sub(tmpShiftA));
+}
+
+/**
+ * A model whose ground is above the learner's eyes is sitting in the wrong place: put that ground on the floor.
+ * Runs once the anchor is in the room, so the box is in world space.
+ */
+function dropAboveEyes(anchor: Object3D, root: Object3D) {
+  if (!world) return;
+  anchor.updateMatrixWorld(true);
+  const box = visibleModelBox(root);
+  if (box.isEmpty()) return;
+  const head = world.camera.getWorldPosition(tmpHead);
+  if (box.min.y <= head.y - 0.15) return;
+  shiftWorld(anchor, tmpForward.set(0, floorHeight(head) + FLOOR_CLEARANCE_M - box.min.y, 0));
 }
 
 // A desk or table: 15-90 cm below the eyes (not a shelf), big enough for a lesson, ahead, and not the floor (for a
@@ -1160,13 +1312,13 @@ function syncLayers(mounted: Mounted) {
  * The fitted view: scale the lesson's 3D so its largest side is FIT_BOX_M (up or down). Only root is scaled: the
  * cards and tags are in their own layers. Only meshes count: the rigs' labels and leader lines are left out.
  */
-function fitToBox(mounted: Mounted, root: Object3D, panels: PanelRecord[]) {
-  const box = contentBox(root, new Set(panels.map((p) => p.holder)));
+function fitToBox(mounted: Mounted, root: Object3D, panels: PanelRecord[], options: { boxM?: number; skipHidden?: boolean } = {}) {
+  const box = contentBox(root, new Set(panels.map((p) => p.holder)), options.skipHidden);
   if (box.isEmpty()) return;
   const size = box.getSize(new Vector3());
   const largest = Math.max(size.x, size.y, size.z);
   mounted.built = { box: box.clone(), size: largest, rootScale: root.scale.x || 1, origin: root.position.clone() };
-  const scale = Math.min(FIT_SCALE_RANGE[1], Math.max(FIT_SCALE_RANGE[0], FIT_BOX_M / largest));
+  const scale = Math.min(FIT_SCALE_RANGE[1], Math.max(FIT_SCALE_RANGE[0], (options.boxM ?? FIT_BOX_M) / largest));
   if (Math.abs(scale - 1) < 0.02) return;
   mounted.fitScale = scale;
   root.scale.multiplyScalar(scale);
@@ -1201,7 +1353,7 @@ function canShowRealSize(mounted: Mounted): boolean {
 
 /**
  * Show the lesson's subject fitted in the box on the desk, or at its real size: standing on the floor, its near side
- * REAL_VIEW_GAP_M ahead. Only the 3D moves and changes size: the cards stay where they are, so the learner can still
+ * a short way ahead. Only the 3D moves and changes size: the cards stay where they are, so the learner can still
  * read and use them, and the tags go with their parts at their own size. The teaching rig sizes its own labels.
  */
 export function setLessonView(view: 'fit' | 'real') {
@@ -1217,12 +1369,11 @@ export function setLessonView(view: 'fit' | 'real') {
     // World metres per metre as built, and how much bigger than the fitted view.
     const k = mounted.realSizeM! / built.size;
     const grow = (built.rootScale * k) / (root.scale.x || 1);
-    const head = anchor.worldToLocal(world.camera.getWorldPosition(new Vector3()));
-    const floor = floorIn(anchor);
-    // The box was measured with root where the lesson put it: from root's origin as built.
-    const box = built.box.clone().translate(built.origin.clone().negate());
     root.scale.setScalar(built.rootScale * k);
-    root.position.set(head.x - k * ((box.min.x + box.max.x) / 2), floor - k * box.min.y, head.z - REAL_VIEW_GAP_M - k * box.max.z);
+    // Measure the scaled model and slide that box. The old offset used the model's own +Z, so a rocket
+    // whose length was not along that axis ended up a long way down the floor.
+    const gap = mounted.realSizeM! >= FLOOR_SUBJECT_M ? REAL_NEAR_M : REAL_VIEW_GAP_M;
+    placeOnFloorInFront(root, gap);
     mounted.rigs.forEach((rig, i) => rig.setLabelScale(mounted.fitPose!.labelScales[i] / grow));
   } else if (mounted.fitPose) {
     root.position.copy(mounted.fitPose.position);
@@ -1242,6 +1393,49 @@ export function setLessonRealSize(sizeM: number | null) {
   updatePill();
 }
 
+/**
+ * Play: make the game on the desk bigger (+1) or smaller (-1) by one step, about its base, with its scoreboard
+ * kept beside it. Returns the zoom (1 = fitted), or null when no game is open.
+ */
+export function zoomGame(direction: 1 | -1): number | null {
+  const mounted = current;
+  const root = mounted?.root;
+  if (!mounted?.game || !root) return null;
+  const zoom = Math.min(GAME_ZOOM_RANGE[1], Math.max(GAME_ZOOM_RANGE[0], mounted.gameZoom * (direction > 0 ? GAME_ZOOM_STEP : 1 / GAME_ZOOM_STEP)));
+  const factor = zoom / mounted.gameZoom;
+  if (Math.abs(factor - 1) < 1e-3) return zoom;
+  mounted.gameZoom = zoom;
+  // Grow away from the player: the playfield's near edge stays where it is.
+  const nearBefore = nearEdge(root);
+  root.scale.multiplyScalar(factor);
+  if (nearBefore !== null) root.position.z -= (nearEdge(root) ?? nearBefore) - nearBefore;
+  mounted.fitScale *= factor;
+  fitCards(mounted);
+  syncLayers(mounted);
+  return zoom;
+}
+
+/** How far toward the player (+Z of root's parent) the visible 3D reaches, in the parent's frame. */
+function nearEdge(root: Object3D): number | null {
+  const parent = root.parent;
+  if (!parent) return null;
+  const box = contentBox(root, new Set(), true);
+  if (box.isEmpty()) return null;
+  parent.updateWorldMatrix(true, false);
+  let near = -Infinity;
+  for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) {
+    near = Math.max(near, parent.worldToLocal(new Vector3(x, y, z)).z);
+  }
+  return near;
+}
+
+/** Play: a game has no real-size view (no view pill), even if its code declared a size. */
+export function dropLessonRealSize() {
+  if (!current) return;
+  current.realSizeM = null;
+  updatePill();
+}
+
 /** Whether the lesson open now declared its real size (no need to ask the size agent). */
 export function lessonDeclaresRealSize(): boolean {
   return current?.realSizeM != null;
@@ -1257,17 +1451,19 @@ function updatePill() {
   const mounted = current;
   if (!mounted?.built || mounted.realSizeM === null) return setPill({ shown: false, label: '', detail: '', enabled: false });
   if (mounted.view === 'real') return setPill({ shown: true, label: 'Fit', detail: '1:1', enabled: true });
-  const ratio = mounted.realSizeM / (mounted.built.size * mounted.fitScale);
+  const rootScale = mounted.root?.scale.x || 1;
+  const shown = mounted.built.size * (rootScale / (mounted.built.rootScale || 1));
+  const ratio = mounted.realSizeM / shown;
   if (canShowRealSize(mounted)) return setPill({ shown: true, label: 'Real size', detail: scaleText(ratio), enabled: mounted.declutterIn === null });
   setPill({ shown: true, label: 'Scale', detail: scaleText(ratio), enabled: false });
 }
 
 /** The box around a lesson's meshes (no panels, labels or leader lines), in world space. */
-function contentBox(root: Object3D, panelHolders: Set<Object3D>): Box3 {
+function contentBox(root: Object3D, panelHolders: Set<Object3D>, skipHidden = false): Box3 {
   root.updateMatrixWorld(true);
   const box = new Box3();
   const visit = (object: Object3D) => {
-    if (panelHolders.has(object) || (object as { isLine?: boolean }).isLine) return;
+    if (panelHolders.has(object) || (object as { isLine?: boolean }).isLine || (skipHidden && !object.visible)) return;
     if ((object as { isMesh?: boolean }).isMesh) expandByMesh(box, object);
     for (const child of object.children) visit(child);
   };
@@ -1546,15 +1742,15 @@ function separateCardsFromModel(mounted: Mounted) {
 }
 
 /** The box around a lesson's visible meshes, in world space. Hidden meshes and lines are left out. */
-function visibleModelBox(root: Object3D): Box3 {
-  const box = new Box3();
+function visibleModelBox(root: Object3D, target = new Box3()): Box3 {
+  target.makeEmpty();
   const visit = (object: Object3D) => {
     if (!shown(object) || (object as { isLine?: boolean }).isLine) return;
-    if ((object as { isMesh?: boolean }).isMesh) expandByMesh(box, object);
+    if ((object as { isMesh?: boolean }).isMesh) expandByMesh(target, object);
     for (const child of object.children) visit(child);
   };
   visit(root);
-  return box;
+  return target;
 }
 
 function describe(err: unknown): string {

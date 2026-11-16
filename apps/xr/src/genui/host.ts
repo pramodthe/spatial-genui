@@ -28,6 +28,7 @@ import { captureLesson, expandByMesh, type CaptureOptions } from './capture';
 import { boxAround, setFloorHeight, type MoveHandle } from './handle';
 import { createLessonBounds, type LessonBounds } from './bounds';
 import { createGameHands, updateGameHands, type GameHands } from './game-hands';
+import { createModuleSound } from './sound';
 import { makeCardGrabbable, pinchAtFingertips, setGrabFilter, type CardGrab } from './grab';
 import { createGlow, glowOnHover, tickGlows, type Glow } from './hover';
 import { initViewPill, setPill } from './hud';
@@ -91,6 +92,8 @@ type Mounted = {
   bounds: LessonBounds | null;
   /** The player's hands in root's coordinates, refreshed before each update() (the module's `hands`). */
   hands: GameHands;
+  /** The module's `sound`: synthesized effects, tones and hums, stopped when the lesson closes. */
+  sound: ReturnType<typeof createModuleSound>;
   /** Play: a game, and how far the player has zoomed it from its fitted size. */
   game: boolean;
   gameZoom: number;
@@ -312,6 +315,7 @@ function loadLessonSpot(): { position: Vector3; surface: string | null } | null 
   try {
     const saved = JSON.parse(localStorage.getItem(SPOT_STORAGE_KEY) ?? 'null') as { position?: number[]; surface?: string | null } | null;
     if (saved?.position?.length !== 3 || !saved.position.every(Number.isFinite)) return null;
+    if (SEAT_LABELS.test(saved.surface ?? '')) return null; // saved before seats stopped counting as desks
     return { position: new Vector3(...saved.position), surface: saved.surface ?? null };
   } catch {
     return null;
@@ -335,6 +339,14 @@ export function lessonPosition(out: Vector3): Vector3 | null {
   return current?.root?.parent?.getWorldPosition(out) ?? null;
 }
 
+/** The box of the lesson's visible model in the world, or null with no lesson. */
+export function lessonModelBox(out: Box3): Box3 | null {
+  const root = current?.root;
+  if (!root) return null;
+  visibleModelBox(root, out);
+  return out.isEmpty() ? null : out;
+}
+
 /** The centre of the lesson's cards (its panels) in the world, or null when it has none. */
 export function lessonCardsCentre(out: Vector3): Vector3 | null {
   const cards = current?.layers?.cards;
@@ -345,6 +357,7 @@ export function lessonCardsCentre(out: Vector3): Vector3 | null {
 
 export function unmountGenerated() {
   if (!current) return;
+  current.sound.dispose();
   current.bounds?.dispose();
   current.kit?.dispose();
   current.handle?.dispose();
@@ -624,6 +637,7 @@ export async function mountGenerated(code: string, options: { kind?: 'lesson' | 
     cards: [],
     bounds: null,
     hands: createGameHands(),
+    sound: createModuleSound(),
     game,
     gameZoom: 1,
     glows: new Map(),
@@ -682,6 +696,7 @@ export async function mountGenerated(code: string, options: { kind?: 'lesson' | 
       return mounted.objectEntities.get(object)?.hasComponent(Grabbed) ?? false;
     },
     hands: mounted.hands,
+    sound: mounted.sound,
   };
 
   let result: { root?: unknown; update?: unknown; real?: { size?: unknown } };
@@ -1151,6 +1166,8 @@ const DESK_ABOVE_FLOOR_M = 0.15;
 const DESK_REACH_M = [0.3, 0.9] as const;
 const DESK_MARGIN_M = 0.12;
 const DESK_AHEAD_COS = Math.cos((50 * Math.PI) / 180);
+// Surfaces people sit or lie on, never a desk for a lesson.
+const SEAT_LABELS = /bed|couch|sofa|seat|chair|bench/i;
 
 /** The point on a detected surface nearest to "REACH_DISTANCE_M straight ahead", or null. */
 function findDesk(head: Vector3, forward: Vector3): { point: Vector3; label: string } | null {
@@ -1161,6 +1178,8 @@ function findDesk(head: Vector3, forward: Vector3): { point: Vector3; label: str
     const plane = entity.getValue(XRPlaneComponent, '_plane') as { orientation?: string; semanticLabel?: string } | undefined;
     const mesh = entity.object3D as IWSDK.Mesh | undefined;
     if (!plane || !mesh?.isMesh || plane.orientation !== 'horizontal' || /floor/i.test(plane.semanticLabel ?? '')) continue;
+    // A learner sitting on a bed or sofa had every lesson put in their lap: it is low, ahead and within reach.
+    if (SEAT_LABELS.test(plane.semanticLabel ?? '')) continue;
     mesh.updateWorldMatrix(true, false);
     const height = mesh.getWorldPosition(new Vector3()).y;
     const drop = head.y - height;

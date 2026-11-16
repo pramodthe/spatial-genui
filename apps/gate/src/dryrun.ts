@@ -13,7 +13,11 @@ export type SceneStats = {
   crowdedGrabPairs: number;
   /** Panels the module wrote as its own markup instead of building them with kit.panel. */
   rawPanels: number;
+  /** Calls to the module's `sound` during build and the ten update() frames. */
+  sounds: number;
   pressables: number;
+  /** Objects whose position, turn, size, visibility or vertices changed in any of the ten update() frames (about one second). */
+  moving: number;
   size: [number, number, number];
 };
 
@@ -31,6 +35,8 @@ const COMFORT_SIZE_M = 1.0;
 const TIMEOUT_MS = 2000;
 // A near-hand pinch grabs everything within a few centimetres; closer grabbables are "crowded".
 const MIN_GRAB_GAP_M = 0.04;
+// The effects the headset's sound can play (apps/xr/src/genui/sound.ts, SoundName).
+const SOUND_NAMES = ['pop', 'click', 'good', 'bad', 'whoosh', 'tick', 'win', 'coin', 'bounce', 'splash'];
 const MAX_PANEL_YAW = 0.4; // ~23°: at 40° judges already saw text as steeply angled
 // Smallest text height in the headset; ~1.2 cm reads comfortably at seated distance (~0.55 m).
 const MIN_TEXT_CM = 1.1;
@@ -46,6 +52,7 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
   const traitTargets: { object: unknown; grab: boolean; press: boolean }[] = [];
   const panels: { markup: string; options: any; holder: THREE.Group }[] = [];
   let rawPanels = 0;
+  let sounds = 0;
 
   // The same paintbox the headset uses (kit/kit.js); dry mode builds real shapes but paints no pixels.
   const kit = createKit(THREE, { dry: true });
@@ -73,6 +80,28 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
     },
     // Games read the player's hands every frame: here the right hand sweeps across the desk and pinches on
     // frames 3 to 5, so code that follows a hand runs before the headset does; the left hand is not seen.
+    // The headset's sound (apps/xr/src/genui/sound.ts) is silent here: it counts the calls, and a call the headset
+    // would ignore (an unknown effect, a note name it cannot read, a frequency that is not a number) fails here.
+    sound: {
+      play(name: unknown) {
+        if (!SOUND_NAMES.includes(String(name))) throw new Error(`sound.play('${String(name)}'): no such sound. Sounds: ${SOUND_NAMES.join(', ')}.`);
+        sounds++;
+      },
+      tone(frequency: unknown) {
+        if (typeof frequency !== 'number' || !Number.isFinite(frequency)) throw new Error('sound.tone(frequency): frequency must be a number in Hz.');
+        sounds++;
+      },
+      note(name: unknown) {
+        if (!/^[A-G][#b]?-?\d$/.test(String(name))) throw new Error(`sound.note('${String(name)}'): write a note like 'C4', 'F#3' or 'Bb5'.`);
+        sounds++;
+      },
+      hum(id: unknown, o: unknown) {
+        if (o !== null && !(typeof o === 'object' && Number.isFinite((o as { frequency?: unknown }).frequency))) {
+          throw new Error(`sound.hum('${String(id)}', o): o is { frequency, volume?, type? } or null to stop.`);
+        }
+        sounds++;
+      },
+    },
     hands: {
       left: { tracked: false, tip: new THREE.Vector3(), palm: new THREE.Vector3(), pinching: false, pinched: false },
       right: { tracked: true, tip: new THREE.Vector3(0, 0.1, 0.15), palm: new THREE.Vector3(0, 0.08, 0.2), pinching: false, pinched: false },
@@ -99,7 +128,24 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
     }
   }
 
-  const context = vm.createContext({ __exports: {}, __api: api, __moveHand: moveHand, console: { log() {}, warn() {}, error() {} } });
+  // What every object looked like before update() ran, compared after each frame, so the stats can say whether the
+  // scene moves by itself (a bounce that settles back within the second still counts; so do vertices that heave).
+  let before = new Map<unknown, number[]>();
+  const moved = new Set<unknown>();
+  const pose = (o: THREE.Object3D) => [
+    ...o.position.toArray(), ...o.quaternion.toArray(), ...o.scale.toArray(), o.visible ? 1 : 0,
+    ((o as THREE.Mesh).geometry?.attributes?.position as THREE.BufferAttribute | undefined)?.version ?? 0,
+  ];
+  const snapshot = (root: unknown) => {
+    before = new Map();
+    if (root instanceof THREE.Object3D) root.traverse((o) => before.set(o, pose(o)));
+  };
+  const compare = () => {
+    for (const [o, was] of before) {
+      if (!moved.has(o) && pose(o as THREE.Object3D).some((v, i) => Math.abs(v - was[i]!) > 1e-4)) moved.add(o);
+    }
+  };
+  const context = vm.createContext({ __exports: {}, __api: api, __moveHand: moveHand, __snapshot: snapshot, __compare: compare, console: { log() {}, warn() {}, error() {} } });
   let result: any;
   try {
     // Browsers load the module as an ES module, which is always strict: an assignment to an
@@ -107,8 +153,9 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
     vm.runInContext(`'use strict'; ${transformed}`, context, { filename: 'component.js', timeout: TIMEOUT_MS });
     vm.runInContext(
       `__result = __exports.default(__api);
+       __snapshot(__result && __result.root);
        if (__result && typeof __result.update === 'function') {
-         for (let i = 0; i < 10; i++) { __moveHand(i); __result.update(i * 0.1, 0.1); }
+         for (let i = 0; i < 10; i++) { __moveHand(i); __result.update(i * 0.1, 0.1); __compare(); }
        }`,
       context,
       { filename: 'host-call.js', timeout: TIMEOUT_MS },
@@ -220,7 +267,9 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
       grabbables: traitTargets.filter((t) => t.grab).length,
       crowdedGrabPairs: crowdedPairs.length,
       rawPanels,
+      sounds,
       pressables: traitTargets.filter((t) => t.press).length,
+      moving: moved.size,
       size: [round(size.x), round(size.y), round(size.z)],
     },
   };

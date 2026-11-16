@@ -1,0 +1,8 @@
+schema_version: "1.1"
+name: paper-airplane
+expected_outcome: |
+  A mixed-reality lesson module (/work/module.js) that passes the app's gate and the ink-toon check, drawn as a comic
+  cel on a sheet of warm paper, where one sheet of paper (the hero) is folded into a paper airplane one bold action per
+  step, each step named by a big lettered word, the learner's hand does each fold (and the throw) and sees the paper
+  change, the effects are drawn in (fold arrows, speed lines, a flight arc), and the steps explain why the plane flies
+  far: sharp, even, symmetric folds, the weight brought forward to the nose, level wings and a gentle level throw.

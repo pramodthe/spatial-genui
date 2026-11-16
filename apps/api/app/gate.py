@@ -39,3 +39,34 @@ async def check_module(code: str, known_assets: list[str] | None = None, *, shor
     except json.JSONDecodeError:
         tail = stderr.decode()[-400:]
         return {"ok": False, "stage": "dry-run", "error": f"Gate returned no JSON. {tail}".strip()}
+
+
+SNAPSHOT = REPO_ROOT / "apps" / "gate" / "snapshot.ts"
+
+
+async def snapshot(reply: str, known_assets: list[str] | None = None) -> dict[str, Any]:
+    """The runnable prefix of a module still being written, checked like a finished one (app/live.py)."""
+    if not TSX.exists():
+        return {"ok": False, "error": "Gate runner missing."}
+    payload: dict[str, Any] = {"reply": reply}
+    if known_assets is not None:
+        payload["knownAssets"] = known_assets
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            str(TSX), str(SNAPSHOT),
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except OSError as exc:
+        return {"ok": False, "error": f"Snapshot failed to start: {exc}"}
+    try:
+        stdout, _stderr = await asyncio.wait_for(proc.communicate(json.dumps(payload).encode()), GATE_TIMEOUT_S)
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+        return {"ok": False, "error": "Snapshot timed out."}
+    try:
+        return json.loads(stdout.decode())
+    except json.JSONDecodeError:
+        return {"ok": False, "error": "Snapshot returned no JSON."}

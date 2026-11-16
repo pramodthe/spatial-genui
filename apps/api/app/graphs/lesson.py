@@ -19,7 +19,7 @@ from langgraph.graph import END, START, StateGraph
 from typing_extensions import TypedDict
 
 from app import assets, config as config_mod
-from app import gate, library, llm, router
+from app import gate, library, live, llm, router
 from app.agents.coder import write_with_agent
 from app.llm import LlmTarget
 from app.prompt import GAME_SYSTEM_PROMPT, REVIEW_MESSAGE, SYSTEM_PROMPT, repair_message
@@ -204,9 +204,16 @@ async def look_and_fix(state: LessonState) -> dict[str, Any]:
 async def write(state: LessonState) -> dict[str, Any]:
     if state.get("kept"):
         return {}
+    watcher = live.current()
+    if watcher is not None:
+        watcher.known_assets = list(library.library_catalog()) if state.get("use_library") else []
     if state.get("mode") == "agent":
         return await write_with_agent(state)
-    reply = await llm.complete(state["messages"], _target_from(state))
+    if watcher is not None:
+        watcher.begin_attempt()
+        reply = await llm.complete(state["messages"], _target_from(state), on_text=watcher.on_text)
+    else:
+        reply = await llm.complete(state["messages"], _target_from(state))
     attempt: dict[str, Any] = {
         "ms": reply.ms,
         "promptTokens": reply.prompt_tokens,
@@ -251,6 +258,9 @@ def _after_write(state: LessonState) -> Literal["gate", "repair", "done"]:
 
 
 async def gate_node(state: LessonState) -> dict[str, Any]:
+    watcher = live.current()
+    if watcher is not None:
+        watcher.set_stage("checking")
     known = list(library.library_catalog()) if state.get("use_library") else []
     result = await gate.check_module(state.get("code") or "", known)
     attempt = dict(state["attempts"][-1])
@@ -261,6 +271,8 @@ async def gate_node(state: LessonState) -> dict[str, Any]:
         attempt["stage"] = result.get("stage") or "dry-run"
         attempt["error"] = result.get("error") or ""
         _progress(f"repair {len(attempts) - 1}" if len(attempts) > 1 else "gate failed")
+        if watcher is not None:
+            watcher.set_stage("fixing", attempt["error"].splitlines()[0] if attempt["error"] else "")
         return {"attempts": attempts, "ok": False}
     _progress("gate passed")
     return {"attempts": attempts, "ok": True, "stats": result.get("stats"), "warnings": result.get("warnings") or []}
@@ -286,6 +298,9 @@ async def done(state: LessonState) -> dict[str, Any]:
     update: dict[str, Any] = {"total_ms": total}
     if not state.get("ok"):
         update["error"] = (state.get("attempts") or [{}])[-1].get("error") or "Generation failed."
+    watcher = live.current()
+    if watcher is not None:
+        watcher.finish(bool(state.get("ok")), update.get("error") or "")
     if state.get("log", True):
         await _log({**state, **update})
     return update

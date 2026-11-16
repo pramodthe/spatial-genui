@@ -1,0 +1,48 @@
+{
+  "fix": [
+    {
+      "pattern": "^export\\s+default\\s+function[\\s\\S]*voxelLook\\(THREE,\\s*kit\\)",
+      "when": "absent",
+      "message": "The voxel look module is not used: start from scripts/new-lesson.mjs and build with const look = voxelLook(THREE, kit).",
+      "whole": true,
+      "flags": "m"
+    },
+    {
+      "pattern": "new THREE\\.Mesh(Standard|Physical|Basic|Phong|Lambert|Toon)Material",
+      "when": "present",
+      "message": "Own materials break the voxel look: every cube comes from look.model (one matte painted cube material); colours come from look.PAL or a '#hex' in the cells."
+    },
+    {
+      "pattern": "new THREE\\.(Sphere|Cylinder|Cone|Capsule|Torus|TorusKnot|Circle|Ring|Lathe|Tube|Icosahedron|Dodecahedron|Octahedron|Plane)Geometry",
+      "when": "present",
+      "message": "Smooth shapes break the voxel look: build round and flat things from cubes too (look.ball, look.disc, look.box). Only the plinth is not cubes."
+    },
+    {
+      "pattern": "kit\\.(lathe|tube|gear|extrude|arrow|particles|stand)\\(",
+      "when": "present",
+      "message": "Smooth kit shapes break the voxel look: build them in cubes (look.line for a pipe or a rope, look.arrow and look.flow for arrows and flows, look.disc for a wheel)."
+    }
+  ],
+  "note": [
+    {
+      "pattern": "(look\\.(model|label|counter|arrow|flow)|lookVoxels)\\(",
+      "when": "absent",
+      "message": "No voxel models built: make the parts with look.model(cells, name) from the cell builders (references/recipes.md)."
+    },
+    {
+      "pattern": "look\\.word\\(",
+      "when": "absent",
+      "message": "No voxel word: spell each step's word in cubes on the plinth's front with look.word(text, set), one word per step."
+    },
+    {
+      "pattern": "(look\\.stages\\(|lookBounce\\()",
+      "when": "absent",
+      "message": "The cubes do the animating: drop each stage in with look.stages (column by column, layer by layer, a bounce on arrival); nothing slides or fades (references/teaching.md, Motion)."
+    },
+    {
+      "pattern": "look\\.(counter|label|arrow|flow)\\(",
+      "when": "absent",
+      "message": "No count, number or flow in cubes: show the quantity the lesson is about in the scene (look.counter, a column of cubes, look.arrow), not only on the panel (references/teaching.md)."
+    }
+  ]
+}

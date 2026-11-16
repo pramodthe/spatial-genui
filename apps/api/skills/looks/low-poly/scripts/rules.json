@@ -1,0 +1,52 @@
+{
+  "fix": [
+    {
+      "pattern": "=\\s*lowPolyLook\\(\\s*THREE\\s*,\\s*kit\\s*\\)",
+      "when": "absent",
+      "message": "The low-poly look module is not used: start from scripts/new-lesson.mjs and build with const look = lowPolyLook(THREE, kit).",
+      "whole": true
+    },
+    {
+      "pattern": "new THREE\\.(Mesh(Standard|Physical|Basic|Phong|Lambert|Toon|Normal)Material|ShaderMaterial)",
+      "when": "present",
+      "message": "Own materials break the facets: build every part with look.facet(geometry, colour, name) or the look's builders (one matte material, colour per triangle from the palette)."
+    },
+    {
+      "pattern": "kit\\.(material|texture)\\(",
+      "when": "present",
+      "message": "kit materials and textures are smooth or patterned; a low-poly scene is flat facets in the palette only: use look.facet(geometry, colour, name) or the builders."
+    }
+  ],
+  "note": [
+    {
+      "pattern": "look\\.(facet|terrain|water|mountain|hill|rock|river|road|pipe|arrow|tree|forest|field|house|factory|tank|crate|pile|vehicle|person|cloud|sun|droplet|drops|number)\\(",
+      "when": "absent",
+      "message": "No low-poly builders used: build the place and its parts with the look's builders (references/recipes.md)."
+    },
+    {
+      "pattern": "look\\.flag\\(",
+      "when": "absent",
+      "message": "No stage flags: each stage of the process is a spot in the landscape with a numbered paper flag the learner presses (look.flag; references/teaching.md)."
+    },
+    {
+      "pattern": "(look\\.follow\\(|\\.at\\()",
+      "when": "absent",
+      "message": "Nothing travels the route: a traveller (a droplet, a truck, a boat) carrying the flow along a path shows how the stages connect (look.follow with a lookPath; references/teaching.md)."
+    },
+    {
+      "pattern": "(look\\.(pile|number|tank|drops)\\(|setLevel\\(|\\.show\\()",
+      "when": "absent",
+      "message": "No amount in the scene: show the quantity the lesson is about as a pile, a level or a cut-paper number in the landscape, not only on the panel (references/teaching.md)."
+    },
+    {
+      "pattern": "(SphereGeometry\\([^,()]+,\\s*[1-9]\\d|(Cylinder|Cone)Geometry\\(([^,()]+,){2,3}\\s*(1[1-9]|[2-9]\\d)\\b|IcosahedronGeometry\\([^,()]+,\\s*[2-9]|TorusGeometry|TorusKnotGeometry|CapsuleGeometry)",
+      "when": "present",
+      "message": "Smooth, high-segment geometry reads as plastic, not cut paper: 5 to 8 sides on cylinders and cones, detail 0 or 1 on icosahedra (references/mistakes.md)."
+    },
+    {
+      "pattern": "^(?=[\\s\\S]*(look\\.(water|river)\\(|sea:\\s*'(left|right|back)'))(?![\\s\\S]*look\\.update\\()",
+      "when": "present",
+      "message": "The water stands still: call look.update(time) in update() so the sea and rivers heave."
+    }
+  ]
+}

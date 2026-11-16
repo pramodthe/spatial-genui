@@ -1,0 +1,7 @@
+schema_version: "1.1"
+name: saving-money
+expected_outcome: |
+  A mixed-reality lesson module (/work/module.js) that passes the app's gate and the soft-clay check, drawn as a
+  plasticine tabletop on a card board, where money over time is made physical as clay coin stacks (one per week or
+  period), the total is shown in the scene as well as on the panel, the learner adds coins by hand and sees the
+  stacks and total change, and the steps explain why the pile grows (and, if interest is shown, why it grows faster).

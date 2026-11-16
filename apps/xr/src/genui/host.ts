@@ -19,6 +19,8 @@ import {
   XRAnchor,
   XRPlane as XRPlaneComponent,
   type Entity,
+  type InstancedMesh,
+  type Mesh,
   type UIKitDocument,
   type World,
 } from '@iwsdk/core';
@@ -333,6 +335,14 @@ export function lessonPosition(out: Vector3): Vector3 | null {
   return current?.root?.parent?.getWorldPosition(out) ?? null;
 }
 
+/** The centre of the lesson's cards (its panels) in the world, or null when it has none. */
+export function lessonCardsCentre(out: Vector3): Vector3 | null {
+  const cards = current?.layers?.cards;
+  if (!cards || cards.children.length === 0) return null;
+  const box = boxAround(cards);
+  return box.isEmpty() ? null : box.getCenter(out);
+}
+
 export function unmountGenerated() {
   if (!current) return;
   current.bounds?.dispose();
@@ -475,32 +485,20 @@ function ownRaycast(object: Object3D): boolean {
  * Hidden by the lesson (or by a card slot the lesson closed), not by UIKit's own visibility flag.
  * Once a UIKit element is in the chain, its `visible` and its descendants' `visible` no longer count,
  * until a plain object above that element is hidden: a closed card slot still stops rays.
+ * Worked out from the root down in one pass (it runs twice a frame), each object from its parent's answer.
  */
-function hiddenByLesson(object: Object3D): boolean {
-  const chain: Object3D[] = [];
-  for (let node: Object3D | null = object; node; node = node.parent) chain.push(node);
-  let underOwnRaycast = false;
-  for (let i = chain.length - 1; i >= 0; i--) {
-    const node = chain[i]!;
-    if (ownRaycast(node)) underOwnRaycast = true;
-    if (!node.visible && !underOwnRaycast) return true;
-  }
-  return false;
-}
-
-function syncRaycastVisibility(root: Object3D) {
-  root.traverse((object) => {
-    const saved = savedRaycast.get(object);
-    if (!hiddenByLesson(object)) {
-      if (!saved) return;
-      object.raycast = saved;
-      savedRaycast.delete(object);
-      return;
-    }
-    if (saved || object.raycast.length === 0) return;
+function syncRaycastVisibility(object: Object3D, parentHidden = false, parentUnderOwnRaycast = false) {
+  const underOwnRaycast = parentUnderOwnRaycast || ownRaycast(object);
+  const hidden = parentHidden || (!object.visible && !underOwnRaycast);
+  const saved = savedRaycast.get(object);
+  if (!hidden && saved) {
+    object.raycast = saved;
+    savedRaycast.delete(object);
+  } else if (hidden && !saved && object.raycast.length > 0) {
     savedRaycast.set(object, object.raycast);
     object.raycast = silencedRaycast;
-  });
+  }
+  for (const child of object.children) syncRaycastVisibility(child, hidden, underOwnRaycast);
 }
 
 /** Whether `object` is `ancestor` or sits inside it. */
@@ -570,7 +568,12 @@ function isPressableNow(element: Object3D): boolean {
 }
 
 /** Load an agent-written module and mount what it builds. Throws nothing; failures come back as a report. */
-export async function mountGenerated(code: string, options: { kind?: 'lesson' | 'game' } = {}): Promise<MountReport> {
+/**
+ * `preview`: a scene still being written (the live preview's gate-checked snapshots, overlay.ts watchLive). It is
+ * never enlarged to fit, so it keeps its size as parts arrive, and the parts that were not in the last snapshot
+ * grow in.
+ */
+export async function mountGenerated(code: string, options: { kind?: 'lesson' | 'game'; preview?: boolean } = {}): Promise<MountReport> {
   // Play: a game has a scoreboard instead of a lesson panel, and no box around it.
   const game = options.kind === 'game';
   if (!world) return { ok: false, error: 'GenUI host is not initialised.' };
@@ -722,7 +725,7 @@ export async function mountGenerated(code: string, options: { kind?: 'lesson' | 
   // Hidden pieces don't count toward the size: a pool of enemies waiting off the board, or effects kept hidden at
   // their build size until they play (a lesson's splash rings, 2 m across until scaled to a few centimetres,
   // shrank its whole scene to a fifth). The frame measures what is visible too.
-  fitToBox(mounted, root, panels, game ? { boxM: GAME_FIT_BOX_M, skipHidden: true } : { skipHidden: true });
+  fitToBox(mounted, root, panels, { ...(game ? { boxM: GAME_FIT_BOX_M } : {}), skipHidden: true, shrinkOnly: options.preview });
   fitCards(mounted);
   syncLayers(mounted);
   const declared = Number(result.real?.size);
@@ -858,6 +861,8 @@ export async function mountGenerated(code: string, options: { kind?: 'lesson' | 
   }
 
   mounted.update = typeof result.update === 'function' ? (result.update as Mounted['update']) : undefined;
+  if (options.preview) growNewParts(mounted, root);
+  else previewParts = new Set();
   current = mounted;
   if (world) syncRaycastVisibility(world.scene);
   updatePill();
@@ -1312,14 +1317,47 @@ function syncLayers(mounted: Mounted) {
  * The fitted view: scale the lesson's 3D so its largest side is FIT_BOX_M (up or down). Only root is scaled: the
  * cards and tags are in their own layers. Only meshes count: the rigs' labels and leader lines are left out.
  */
-function fitToBox(mounted: Mounted, root: Object3D, panels: PanelRecord[], options: { boxM?: number; skipHidden?: boolean } = {}) {
+// The meshes of the last preview, by their place in the scene tree (child indices from the root). A snapshot only
+// adds code after the last one, so a part already shown keeps its place and only new parts grow in.
+let previewParts = new Set<string>();
+const PREVIEW_GROW_S = 0.35;
+
+function growNewParts(mounted: Mounted, root: Object3D) {
+  const growing: { object: Object3D; scale: Vector3 }[] = [];
+  const seen = new Set<string>();
+  const walk = (object: Object3D, path: string) => {
+    object.children.forEach((child, i) => {
+      const at = `${path}/${i}`;
+      if ((child as Mesh).isMesh || (child as InstancedMesh).isInstancedMesh) {
+        seen.add(at);
+        if (previewParts.size > 0 && !previewParts.has(at)) growing.push({ object: child, scale: child.scale.clone() });
+      }
+      walk(child, at);
+    });
+  };
+  walk(root, '');
+  previewParts = seen;
+  if (growing.length === 0) return;
+  for (const part of growing) part.object.scale.setScalar(1e-3);
+  const update = mounted.update;
+  const began = performance.now() / 1000;
+  mounted.update = (time, delta) => {
+    const t = Math.min(1, (performance.now() / 1000 - began) / PREVIEW_GROW_S);
+    const eased = 1 - (1 - t) ** 3;
+    for (const part of growing) part.object.scale.copy(part.scale).multiplyScalar(Math.max(1e-3, eased));
+    if (t >= 1) mounted.update = update;
+    update?.(time, delta);
+  };
+}
+
+function fitToBox(mounted: Mounted, root: Object3D, panels: PanelRecord[], options: { boxM?: number; skipHidden?: boolean; shrinkOnly?: boolean } = {}) {
   const box = contentBox(root, new Set(panels.map((p) => p.holder)), options.skipHidden);
   if (box.isEmpty()) return;
   const size = box.getSize(new Vector3());
   const largest = Math.max(size.x, size.y, size.z);
   mounted.built = { box: box.clone(), size: largest, rootScale: root.scale.x || 1, origin: root.position.clone() };
   const scale = Math.min(FIT_SCALE_RANGE[1], Math.max(FIT_SCALE_RANGE[0], (options.boxM ?? FIT_BOX_M) / largest));
-  if (Math.abs(scale - 1) < 0.02) return;
+  if (Math.abs(scale - 1) < 0.02 || (options.shrinkOnly && scale > 1)) return;
   mounted.fitScale = scale;
   root.scale.multiplyScalar(scale);
   for (const rig of mounted.rigs) rig.setLabelScale(1 / scale);

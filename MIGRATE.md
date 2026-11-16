@@ -439,11 +439,13 @@ Each `SKILL.md` names its scripts with absolute commands (the `execute` working 
 
 ## Phase 5: deploy and retire the TypeScript server
 
-- [x] Dockerfile: `python:3.12-slim` + Node 22 (for `apps/gate`), `uv sync`, `apps/xr/dist`, `data/library`,
-      `bench/models.json`. The Modal token is a host secret, never in the sandbox image.
-      **[verified]** `docker build -t spatial-genui .` succeeded. The image has Node v22.23.5, no `.env`, and
-      `gpt-6.1-sol` via `api.openai.com`. A container on port 8080 served `/api/health`, the built-in `/example`
-      module, `/api/kit.js`, an empty course list, and `index.html`.
+- [x] Deploy image (removed Nov 16): a `python:3.12-slim` image with Node 22 (for `apps/gate`), `uv sync`,
+      `apps/xr/dist`, `data/library`, and `bench/models.json` was built and checked, then deleted. Nothing in the
+      app, scripts, or CI builds or runs it. Local run and Modal stay as they are. The Modal token stays a host
+      secret.
+      **[verified, then removed]** `docker build -t spatial-genui .` succeeded. The image had Node v22.23.5, no
+      `.env`, and `gpt-6.1-sol` via `api.openai.com`. A container on port 8080 served `/api/health`, the built-in
+      `/example` module, `/api/kit.js`, an empty course list, and `index.html`.
 - [ ] Headset test on the Quest 3S: courses, lessons, Play, voice tutor, look-and-fix, frame handles.
 - [x] Switch the default proxy to Python; delete `apps/server`.
       **Done Nov 15, at the user's request, before the week of parity** (the contract, emulator and Python tests
@@ -451,7 +453,7 @@ Each `SKILL.md` names its scripts with absolute commands (the `execute` working 
       `src/` the gate's code (validate, dry run, sandbox, kit.js, library, glyphs, example module), the course 3D
       pipeline (`three-d/` with config, llm, models), and the research harness (the published one-call agent loop
       `agent.ts`, `prompt.ts`, `router.ts`, `a2ui/`); `research/` the benchmark, report, combine, rq4, judge,
-      gallery, batch, review and 3D scripts (`npm run bench*` in `apps/gate`). The Python API, Dockerfile and the
+      gallery, batch, review and 3D scripts (`npm run bench*` in `apps/gate`). The Python API and the
       Modal coder image point at `apps/gate`; run logs are in `apps/api/runs/` for both. Removed (replaced by
       `apps/api/app`, kept in git history): `server.ts`, `courses.ts`, `games.ts`, `db.ts`, `guard.ts`, `voice.ts`,
       `real-size.ts`, `cli.ts` (use `POST /api/generate`).

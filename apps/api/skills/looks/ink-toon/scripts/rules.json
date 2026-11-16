@@ -1,0 +1,42 @@
+{
+  "fix": [
+    {
+      "pattern": "inkToonLook\\(THREE, kit\\)",
+      "when": "absent",
+      "message": "The ink-toon look module is not used: start from scripts/new-lesson.mjs.",
+      "whole": true
+    },
+    {
+      "pattern": "kit\\.material\\(",
+      "when": "present",
+      "message": "Lit kit materials break the cel look (and come out shiny and shaded): build every drawn object with the look's builders or look.ink(geometry, colour, name)."
+    },
+    {
+      "pattern": "new THREE\\.Mesh(Standard|Physical|Basic|Phong|Lambert|Toon|Matcap)Material",
+      "when": "present",
+      "message": "Own materials break the cel look (a toon or Lambert material waits for a lamp and is black on the headset): use look.mat(colour) or the look's builders."
+    }
+  ],
+  "note": [
+    {
+      "pattern": "look\\.(ink|turned|box|ball|rod|tube|cutout)\\(",
+      "when": "absent",
+      "message": "No inked builders used: draw the hero and the props with look.ink or the look's builders, so they get two tones and an ink line (references/recipes.md)."
+    },
+    {
+      "pattern": "lookTwos\\(",
+      "when": "absent",
+      "message": "Toon props move on twos: drive their motion from lookTwos(time) and land each pose with an overshoot (references/teaching.md, Motion)."
+    },
+    {
+      "pattern": "look\\.(speedLines|impact|steam|motionArc|arrow|mark)\\(",
+      "when": "absent",
+      "message": "No effect marks: draw the action in (speed lines on what moves, impact ticks where it lands, an arrow for the push, steam, a motion arc) (references/teaching.md)."
+    },
+    {
+      "pattern": "look\\.stepWord\\(",
+      "when": "absent",
+      "message": "No step word: name each step's action with one big lettered word on paper (look.stepWord), low at the front of the sheet."
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+schema_version: "1.1"
+name: sunflower-growth
+expected_outcome: |
+  A mixed-reality lesson module (/work/module.js) that passes the app's gate and the voxel check, built from cubes on
+  an off-white plinth with the voxel look, where a sunflower grows from a seed through its stages (seed, roots and
+  shoot, leaves, bud, flower) that drop in cube by cube rather than scaling smoothly, the stage or the plant's height
+  is shown in the scene (the step's word in cubes, a cube counter or a cube ruler) as well as on the panel, the learner
+  moves the growth on with their hands (water, light or the seed placed on the model) and sees the plant change, and
+  the steps explain what each stage needs or does.

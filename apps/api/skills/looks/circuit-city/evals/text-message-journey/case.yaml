@@ -1,0 +1,10 @@
+schema_version: "1.1"
+name: text-message-journey
+expected_outcome: |
+  A mixed-reality lesson module (/work/module.js) that passes the app's gate and the circuit-city check, drawn as a
+  circuit board city (chips, capacitor towers, gold tracks with 45-degree bends, white silkscreen names), where the
+  message's journey from one phone to another is a row of distinct landmarks in order (at least the sending phone,
+  the radio link to a cell tower, the network, and the friend's phone), a pulse of light travels the tracks from stop
+  to stop carrying a token whose label changes at each stage (the text, its bits, the radio signal, the packet), the
+  learner presses the next stop (or carries the token) to move the message on, and the steps explain what each stage
+  does with true numbers.

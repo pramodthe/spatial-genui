@@ -11,7 +11,7 @@ import uuid
 from typing import Any
 
 from app import config as config_mod
-from app import library, llm
+from app import library, live, llm
 from app.a2ui.catalog import extract_json
 from app.clock import now_iso
 from app.db import count_courses, load_courses, save_course, save_model, saved_models
@@ -29,9 +29,16 @@ Plan 3 to 4 lessons for the learner's request:
 - "prompt" is the full request for the agent that builds that lesson. It knows nothing else, so name the subject, what the 3D model must show, and what the learner does with it (2 to 3 sentences).
 - "model": when the course is about ONE real physical object (a jet engine, a microscope, a guitar, a heart), describe it, and a realistic 3D model of its outside is built with separate parts. "name" is its everyday name (1 to 3 words), "describe" is one sentence on what it looks like from outside, "parts" are 4 to 7 outside parts a learner could take off and name. The lessons then use this model. Use null when the course is about a process, an idea or several things (the water cycle, photosynthesis, the solar system).
 - If the request comes with a list of models already made and one of them is this course's object, use it instead of describing a new one: "model": {"use": "<its id>"}. Then plan the lessons around the parts it has.
+- "style" is the look every lesson of the course is drawn in. When the request names one, use it. Otherwise pick the one that fits best, or null for plain realistic materials: "exploded-view" (what is inside an object and how it goes together), "paper-pop-up" (a story or process in a few steps), "ink-toon" (steps, recipes and how-tos with a few objects), "painted" (a process or story that happens in a place), "soft-clay" (friendly objects on a table: amounts, growth, comparison), "voxel" (a small model that builds up in stages), "low-poly" (cycles and journeys in a landscape), "circuit-city" (something travelling through a system, stage by stage). With a style, set "model" to null: the lessons build everything in the look.
 
 Reply with only this JSON:
-{"title": "2 to 5 words", "subtitle": "one short line", "model": {"name": "...", "describe": "...", "parts": ["..."]}, "lessons": [{"title": "2 to 4 words", "objective": "After this you can ...", "prompt": "..."}]}"""
+{"title": "2 to 5 words", "subtitle": "one short line", "style": null, "model": {"name": "...", "describe": "...", "parts": ["..."]}, "lessons": [{"title": "2 to 4 words", "objective": "After this you can ...", "prompt": "..."}]}"""
+
+STYLES = {
+    "exploded-view": "Exploded view", "paper-pop-up": "Paper pop-up",
+    "ink-toon": "Ink and toon", "painted": "Painted", "soft-clay": "Soft clay", "voxel": "Voxel",
+    "low-poly": "Low-poly", "circuit-city": "Circuit city",
+}
 
 PLAIN_NAME = re.compile(r"^[\w '-]{2,40}$", re.ASCII)
 REMOVED_KIT = re.compile(r"\bkit\.(matchQuiz|flashcards)\b")
@@ -69,8 +76,11 @@ def drain_deferred() -> None:
 
 def summary(course: dict[str, Any]) -> dict[str, Any]:
     lessons = []
-    for lesson in course["lessons"]:
+    for index, lesson in enumerate(course["lessons"]):
         rest = {key: value for key, value in lesson.items() if key not in {"code", "firstCode", "critique", "prompt"}}
+        watcher = live.get(live.lesson_key(course["id"], index)) if lesson.get("status") == "generating" else None
+        if watcher is not None:
+            rest["live"] = {"key": watcher.key, "line": watcher.line(), "seq": watcher.seq}
         lessons.append(rest)
     return {**course, "lessons": lessons}
 
@@ -258,6 +268,15 @@ async def plan(course: dict[str, Any]) -> None:
         subtitle = outline.get("subtitle") if outline else None
         course["subtitle"] = subtitle.strip()[:120] if isinstance(subtitle, str) else ""
         names = ", ".join(item["title"] for item in lessons)
+        style = outline.get("style") if outline else None
+        style = style.strip().lower() if isinstance(style, str) else None
+        if style in STYLES:
+            course["style"] = style
+        look = (
+            f"\nDraw it in the {STYLES[style]} look, like every lesson of this course: follow the {style} skill (start "
+            f"with `node /skills/looks/{style}/scripts/new-lesson.mjs /work/module.js`, finish with "
+            f"`node /skills/looks/{style}/scripts/check.mjs /work/module.js`)."
+        ) if style in STYLES else ""
         course["lessons"] = []
         for index, item in enumerate(lessons):
             objective = item.get("objective")
@@ -267,6 +286,7 @@ async def plan(course: dict[str, Any]) -> None:
                 "prompt": (
                     f"{item['prompt'].strip()[:1200]}\n(This is lesson {index + 1} of {len(lessons)} in the course "
                     f"\"{course['title']}\": {names}. Cover only this lesson's idea.)"
+                    f"{look}"
                 ),
                 "status": "pending",
             })
@@ -276,7 +296,7 @@ async def plan(course: dict[str, Any]) -> None:
         use_id = use.get("use") if isinstance(use, dict) else None
         if config_mod.config.course_models:
             reused = next((item for item in made if item["id"] == use_id), None)
-        wanted = _wanted_model(outline.get("model") if outline else None) if config_mod.config.course_models and not reused else None
+        wanted = _wanted_model(outline.get("model") if outline else None) if config_mod.config.course_models and not reused and not look else None
         if reused:
             course["model"] = {
                 "name": reused["name"], "describe": reused["describe"], "parts": reused["parts"],
@@ -354,12 +374,19 @@ async def build_lesson(course: dict[str, Any], lesson: dict[str, Any]) -> None:
     started = time.time() * 1000
     try:
         given = _model_for(course)
-        result = await run_lesson(
-            lesson["prompt"] + given["note"],
-            on_demand=False,
-            assets=given["assets"],
-            thread_id=f"{course['id']}:lesson:{course['lessons'].index(lesson)}",
-        )
+        index = course["lessons"].index(lesson)
+        # A lesson in a look needs that look's skill, which only the agent writer has (sandbox, scripts). The look is in
+        # the lesson's prompt, which is saved, so this holds after a restart. LESSON_MODE=agent sends every lesson there.
+        styled = "/skills/looks/" in lesson["prompt"]
+        mode = "agent" if styled or os.environ.get("LESSON_MODE") == "agent" else "classic"
+        with live.watching(live.lesson_key(course["id"], index)):
+            result = await run_lesson(
+                lesson["prompt"] + given["note"],
+                on_demand=False,
+                assets=given["assets"],
+                thread_id=f"{course['id']}:lesson:{index}",
+                mode=mode,
+            )
         await record_spend([
             {"model": result["model"], "promptTokens": attempt.get("promptTokens") or 0, "completionTokens": attempt.get("completionTokens") or 0}
             for attempt in result.get("attempts") or []

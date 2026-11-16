@@ -1,0 +1,37 @@
+{
+  "fix": [
+    {
+      "pattern": "softClayLook\\(THREE, kit\\)",
+      "when": "absent",
+      "message": "The soft-clay look module is not used: start from scripts/new-lesson.mjs.",
+      "whole": true
+    },
+    {
+      "pattern": "kit\\.material\\(\\s*'(chrome|glossy|metal|steel|brushedMetal|gold|glass)'",
+      "when": "present",
+      "message": "Shiny kit materials break the clay look: everything on the board is clay (look.mat(colour))."
+    },
+    {
+      "pattern": "new THREE\\.Mesh(Standard|Physical|Basic|Phong|Lambert)Material",
+      "when": "present",
+      "message": "Own materials break the clay look: use look.mat(colour) or the look's builders."
+    }
+  ],
+  "note": [
+    {
+      "pattern": "look\\.(clay|ball|capsule|slab|coin|wedge|stack|bowl|character|plank|fulcrum|arrow|number)\\(",
+      "when": "absent",
+      "message": "No clay builders used: build the parts with the look's builders (references/recipes.md)."
+    },
+    {
+      "pattern": "lookTwos\\(",
+      "when": "absent",
+      "message": "Clay moves on twos: drive the clay's motion from lookTwos(time) (references/teaching.md, Motion)."
+    },
+    {
+      "pattern": "look\\.(arrow|number)\\(",
+      "when": "absent",
+      "message": "No clay arrow or number: show the quantity the lesson is about (a force, a count, a share) in the scene, not only on the panel (references/teaching.md)."
+    }
+  ]
+}

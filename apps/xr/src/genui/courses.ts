@@ -3,7 +3,9 @@
  * background, so a learner can ask, leave, and come back to a ready course on the picker's shelf.
  */
 
-export type CourseLessonSummary = { title: string; objective: string; status: 'pending' | 'generating' | 'ready' | 'failed'; error?: string; seconds?: number };
+/** A lesson or game being written right now: its live preview (GET /api/live/<key>) and one line on it. */
+export type LiveSummary = { key: string; line: string; seq: number };
+export type CourseLessonSummary = { title: string; objective: string; status: 'pending' | 'generating' | 'ready' | 'failed'; error?: string; seconds?: number; live?: LiveSummary };
 export type CourseSummary = {
   id: string;
   title: string;
@@ -27,6 +29,13 @@ export async function createCourse(prompt: string): Promise<CourseSummary> {
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? res.statusText);
   return data as CourseSummary;
+}
+
+/** One course as the shelf has it (no code; asking starts nothing). */
+export async function fetchCourse(id: string): Promise<CourseSummary> {
+  const res = await fetch(`/api/courses/${id}`);
+  if (!res.ok) throw new Error(res.statusText || `HTTP ${res.status}`);
+  return (await res.json()) as CourseSummary;
 }
 
 /** A lesson with its code when it is ready. Asking for one that isn't written yet starts it. */

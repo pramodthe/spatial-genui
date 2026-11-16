@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from langchain.agents.middleware import ModelCallLimitMiddleware, TodoListMiddleware, ToolCallLimitMiddleware
+from langchain.agents.structured_output import ProviderStrategy
 from pydantic import BaseModel
 
 from app.agents.middleware import CostMeterMiddleware
@@ -18,6 +19,11 @@ class ModelMade(BaseModel):
     function_name: str
     dry_run_ok: bool
     triangles: int
+
+
+def _is_muse(model: object) -> bool:
+    name = str(getattr(model, "model_name", "") or "")
+    return name.startswith("muse") or "api.meta.ai" in str(getattr(model, "openai_api_base", "") or "")
 
 
 def model_maker_spec() -> dict:
@@ -40,6 +46,8 @@ def model_maker_spec() -> dict:
             CostMeterMiddleware(budget_usd=1.0, model_id=getattr(model, "model_name", None) or "muse-spark-1.3-contributor", key="model_maker_cost_usd"),
         ],
         "model": model,
-        "response_format": ModelMade,
+        # Muse accepts only tool_choice "auto"; the default tool strategy forces a tool call and every Muse call
+        # failed with a 400. Muse does take a JSON-schema response format, so ask for the result that way.
+        "response_format": ProviderStrategy(ModelMade) if _is_muse(model) else ModelMade,
         "mode": "isolated",
     }

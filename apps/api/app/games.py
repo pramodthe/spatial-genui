@@ -12,6 +12,7 @@ from app.clock import js_round, now_iso
 from app.db import load_games, save_game
 from app.graphs.game import run_game
 from app.guard import record_spend
+from app import live
 from app.background import track
 
 MAX_GAMES = 200
@@ -39,7 +40,11 @@ def panel_title(code: str) -> str | None:
 
 
 def summary(game: dict[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in game.items() if key != "code"}
+    out = {key: value for key, value in game.items() if key != "code"}
+    watcher = live.get(live.game_key(game["id"])) if game.get("status") == "writing" else None
+    if watcher is not None:
+        out["live"] = {"key": watcher.key, "line": watcher.line(), "seq": watcher.seq}
+    return out
 
 
 def load() -> None:
@@ -111,7 +116,9 @@ def queue(game: dict[str, Any]) -> None:
 async def write(game: dict[str, Any]) -> None:
     started = time.time() * 1000
     try:
-        result = await run_game(game["request"], thread_id=game["id"])
+        with live.watching(live.game_key(game["id"])) as watcher:
+            watcher.set_stage("designing")
+            result = await run_game(game["request"], thread_id=game["id"])
         await record_spend([
             {"model": result["model"], "promptTokens": attempt.get("promptTokens") or 0, "completionTokens": attempt.get("completionTokens") or 0}
             for attempt in result.get("attempts") or []

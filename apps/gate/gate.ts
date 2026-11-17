@@ -2,7 +2,7 @@
 // JSON in on stdin: { code, knownAssets?: string[], assetIds?: string[], short?: boolean }
 // JSON out: { ok, stage?, stats?, warnings?, error?, errorFile? }
 // `short` keeps a long error out of the reply (the dry-run skill); the host writer leaves it off
-// so a repair sees the same text the TypeScript server sent.
+// so a repair sees the whole error.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';

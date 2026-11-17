@@ -6,11 +6,11 @@ from __future__ import annotations
 import pytest
 from langgraph.checkpoint.memory import MemorySaver
 
-from app.graphs import lesson
-from app.graphs.course import _graph as course_graph
-from app.graphs.game import _graph as game_graph
-from app.llm import Completion
-from app.prompt import EXAMPLE_MODULE
+from app.core.llm import Completion
+from app.pipeline import lesson
+from app.pipeline.course import _graph as course_graph
+from app.pipeline.game import _graph as game_graph
+from app.pipeline.prompts import EXAMPLE_MODULE
 
 
 def _completion(text: str) -> Completion:
@@ -131,7 +131,7 @@ async def test_a_refusal_reaches_the_result(monkeypatch: pytest.MonkeyPatch, iso
         return {"attempts": [*state.get("attempts", []), attempt], "code": None, "ok": False, "error": "The model refused: no", "refused": True}
 
     monkeypatch.setattr(lesson, "write_with_agent", write_with_agent, raising=False)
-    import app.agents.coder as coder_module
+    import app.pipeline.coder.agent as coder_module
 
     monkeypatch.setattr(coder_module, "write_with_agent", write_with_agent)
     result = await lesson.run_lesson("something", use_library=False, log=False, mode="agent", thread_id="refuse-1")

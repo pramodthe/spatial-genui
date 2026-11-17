@@ -35,7 +35,7 @@ if (broken.ok || broken.error == null) {
 }
 
 // The module's own ECS (api.ecs, EliCS, as in the headset): a system that turns a box runs in the dry run.
-const ecsKit = readFileSync(new URL('../api/skills/common/ecs/assets/ecs-kit.js', import.meta.url), 'utf8');
+const ecsKit = readFileSync(new URL('../../skills/common/ecs/assets/ecs-kit.js', import.meta.url), 'utf8');
 const ecs = run(`${ecsKit}
 export default function build(api) {
   const { THREE } = api;

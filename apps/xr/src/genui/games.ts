@@ -19,14 +19,15 @@ export type GameSummary = {
 export type Game = GameSummary & { code?: string };
 
 /**
- * Example games, offered as tiles in the Play section. `saved` names a ready-made version in
- * public/games/<saved>.json (written with the game prompt and checked in advance), so a tile opens at once.
+ * Example games, offered as tiles in the Play section: four learning games written by the app's pipeline (design,
+ * planning pictures, the coder, the gate) and played on a Quest 3. `saved` names the ready-made module in
+ * public/games/<saved>.json, so a tile opens at once.
  */
 export const EXAMPLE_GAMES = [
-  { title: 'Table tennis', sub: 'Two players, first to 7', saved: 'table-tennis' },
-  { title: 'Alien invaders', sub: 'Shoot down the descending rows', saved: 'alien-invaders' },
-  { title: 'Tower defense', sub: 'Build voxel towers, stop the waves', saved: 'tower-defense' },
-  { title: 'Dino runner', sub: 'Jump the cacti, beat your score', saved: 'dino-runner' },
+  { title: 'Doodle Distance', sub: 'Fold a plane that flies far', saved: 'paper-plane' },
+  { title: 'Fernbank Dam', sub: 'Deep water pushes harder', saved: 'river-dam' },
+  { title: 'Windwoven Heights', sub: 'Tilt a kite into the wind', saved: 'kite-hill' },
+  { title: 'Grain by Grain', sub: 'Water and grit carve rock', saved: 'desert-canyon' },
 ] as const;
 
 /** A ready-made game file (public/games/<id>.json). */

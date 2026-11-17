@@ -1,4 +1,4 @@
-"""FastAPI routes. Same /api shapes as the removed TypeScript server's server.ts."""
+"""The FastAPI app: the /api routes the headset app calls, the Studio page, and the built headset app."""
 
 from __future__ import annotations
 
@@ -14,17 +14,17 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
-from app import config as config_mod, courses, games, guard, library, live
-from app.agents.coder import set_checkpointer as set_coder_checkpointer
-from app.clock import mtime_ms
-from app.config import REPO_ROOT
-from app.db import close_db, open_db
-from app.graphs.lesson import run_lesson, set_checkpointer
-from app.prompt import EXAMPLE_MODULE
-from app.real_size import known_real_size, real_size_of
-from app.voice import transcribe, voice_agent_token
-from app import background
-from app import media, studio
+from app import library
+from app.core import background, config as config_mod, guard
+from app.core.clock import mtime_ms
+from app.core.config import REPO_ROOT
+from app.core.db import close_db, open_db
+from app.library.real_size import known_real_size, real_size_of
+from app.pipeline.coder.agent import set_checkpointer as set_coder_checkpointer
+from app.pipeline.lesson import run_lesson, set_checkpointer
+from app.pipeline.prompts import EXAMPLE_MODULE
+from app.services import courses, games, live, media, studio
+from app.services.voice import transcribe, voice_agent_token
 
 MAX_BODY = 200_000
 MAX_AUDIO = 2_000_000
@@ -280,13 +280,13 @@ async def get_course(course_id: str) -> JSONResponse:
     return JSONResponse(courses.summary(course))
 
 
-STUDIO_PAGE = Path(__file__).with_name("studio.html")
+STUDIO_PAGE = Path(__file__).parent / "services" / "studio.html"
 
 
 @app.get("/studio")
 @app.get("/studio/{run_id}")
 async def studio_page(run_id: str = "") -> FileResponse:
-    """The Studio: how the design step, the coder and the grader made a game (app/studio.py). The page reads /api/studio."""
+    """The Studio: how the design step, the coder and the grader made a game (services/studio.py). The page reads /api/studio."""
     return FileResponse(STUDIO_PAGE, media_type="text/html; charset=utf-8", headers={"cache-control": "no-cache"})
 
 
@@ -314,7 +314,7 @@ async def studio_file(run_id: str, name: str) -> Response:
 
 @app.get("/api/media")
 async def media_library(run: str | None = None) -> JSONResponse:
-    """The asset library: every generated picture and sound (app/media.py), newest first; ?run= for one run's."""
+    """The asset library: every generated picture and sound (services/media.py), newest first; ?run= for one run's."""
     return JSONResponse({"media": media.library(run_id=run)}, headers={"cache-control": "no-cache"})
 
 

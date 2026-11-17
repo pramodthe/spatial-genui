@@ -1,4 +1,4 @@
-"""Build the sound library: sounds every game can use by id, made once with the media provider (app/media.py) and
+"""Build the sound library: sounds every game can use by id, made once with the media provider (app/services/media.py) and
 committed with the 3D models in data/library/sounds. Writes each sound and its record there, data/library/sounds/
 catalog.json, and the table the agents read (skills/common/sound/references/library.md). A name already in the
 catalogue is kept, so running it again only makes what is new.
@@ -15,10 +15,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app import media  # noqa: E402
-from app.config import REPO_ROOT  # noqa: E402
+from app.services import media  # noqa: E402
+from app.core.config import SKILLS_DIR  # noqa: E402
 
-TABLE = REPO_ROOT / "apps" / "api" / "skills" / "common" / "sound" / "references" / "library.md"
+TABLE = SKILLS_DIR / "common" / "sound" / "references" / "library.md"
 
 # name, kind, seconds, what it is (for the table), prompt
 SOUNDS: list[tuple[str, str, int, str, str]] = [

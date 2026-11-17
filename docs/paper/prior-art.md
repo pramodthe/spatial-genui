@@ -12,7 +12,7 @@ Items marked ✅ were opened and read at the primary source. Items marked ◻️
 
 There are still clear gaps that none of them covers:
 
-1. **Nobody compares output formats for spatial UI on the same runtime and tasks** (free code vs SDK-restricted code vs declarative JSON). LLMR (code) and LLMER (JSON) are separate Unity systems; XR Blocks tests only SDK code. *RQ1 now fills this: open code was both the most reliable and the best, against LLMER's argument for JSON (SPEC.md, "RQ1 results").*
+1. **Nobody compares output formats for spatial UI on the same runtime and tasks** (free code vs SDK-restricted code vs declarative JSON). LLMR (code) and LLMER (JSON) are separate Unity systems; XR Blocks tests only SDK code. *RQ1 now fills this: open code was both the most reliable and the best, against LLMER's argument for JSON (docs/spec.md, "RQ1 results").*
 2. **No benchmark compares several providers on runtime spatial UI with interaction-aware scoring.** XR Blocks, the closest work, tested Gemini only. Its pass@1 counts only "no runtime errors", and the authors list the missing checks themselves: semantic correctness, spatial fidelity, and "ungrabbable rackets". Multimodal autoraters are on their future-work list. *RQ2 now fills this: five models from four companies, with grabs and button presses in the emulator.*
 3. **No real A2UI renderer exists for XR.** The only 3D A2UI renderer is a 7-star browser demo with no WebXR and no hands. *Version C is one, but A2UI came second of three in RQ1, so it is a side contribution.*
 4. **AI tutors with 3D models already exist on Quest; we found none that writes the lesson.** CuriosityXR's listing says its tutor "places a matching model", and its title says "1M+ 3D Models", which suggests a library; whether it generates anything is not verified yet (item 8 below). Meta's own AI tooling (IWSDK 1.0, Oct 14, 2026) is for developers at build time, not end users at runtime. *Changed Nov 14: this gap used to read "No end-user GenUI product exists on Quest", which a judge who knows CuriosityXR would dispute.*
@@ -90,7 +90,7 @@ Added Nov 14:
 
 7. **Show the difference from CuriosityXR in the demo.** Don't open with the solar system or the heart, which are its own examples. Open with a request no model library answers, one with behaviour (a machine running, an experiment with sliders, a process to step through), so the lesson's interactions are visibly written for that topic.
 8. **Try CuriosityXR before the submission** with one request outside its examples, to confirm whether it generates anything, and update this review.
-9. **SPEC.md section 4** now states the claim above (done Nov 14).
+9. **docs/spec.md section 4** now states the claim above (done Nov 14).
 
 ## Must read in full before writing the paper
 

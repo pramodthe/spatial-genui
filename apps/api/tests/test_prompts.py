@@ -10,9 +10,9 @@ import hashlib
 import json
 from pathlib import Path
 
-from app.prompt import EXAMPLE_MODULE, GAME_SYSTEM_PROMPT, REVIEW_MESSAGE, SYSTEM_PROMPT, repair_message
+from app.pipeline.prompts import EXAMPLE_MODULE, GAME_SYSTEM_PROMPT, repair_message, REVIEW_MESSAGE, SYSTEM_PROMPT
 
-FROZEN = json.loads((Path(__file__).resolve().parents[1] / "app" / "prompt_text.json").read_text(encoding="utf-8"))
+FROZEN = json.loads((Path(__file__).resolve().parents[1] / "app" / "pipeline" / "prompt_text.json").read_text(encoding="utf-8"))
 
 FINGERPRINTS = {
     "SYSTEM_PROMPT": "c4d6eb52a0bdbc630dcf7a603244833bf1603601b08f5a0b61891ba7fb72cbee",

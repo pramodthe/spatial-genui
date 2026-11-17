@@ -1,12 +1,12 @@
-"""Restart rules from courses.ts and games.ts."""
+"""What a server restart does to courses and games that were being written."""
 
 from __future__ import annotations
 
 import pytest
 
-from app import courses, games
-from app.clock import now_iso
-from app.db import save_course, save_game
+from app.core.clock import now_iso
+from app.core.db import save_course, save_game
+from app.services import courses, games
 
 
 @pytest.mark.asyncio

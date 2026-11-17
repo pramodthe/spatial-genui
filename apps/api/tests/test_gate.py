@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from app import gate
-from app.prompt import EXAMPLE_MODULE
+from app.pipeline import gate
+from app.pipeline.prompts import EXAMPLE_MODULE
 
 
 @pytest.mark.asyncio

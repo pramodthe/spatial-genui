@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 
 import pytest
 from deepagents.profiles.harness.harness_profiles import _harness_profile_for_model
@@ -11,11 +10,12 @@ from langchain_openai import ChatOpenAI
 from langchain.agents.middleware.model_refusal import ModelRefusalError
 from langgraph.checkpoint.memory import MemorySaver
 
-from app.agents import coder, model_maker
-from app.graphs import lesson
-from app.llm import Completion
-from app.prompt import EXAMPLE_MODULE
+from app.core.llm import Completion
+from app.pipeline import lesson
+from app.pipeline.coder import agent as coder, model_maker
+from app.pipeline.prompts import EXAMPLE_MODULE
 from sandbox.image import GATE_ENTRY, GATE_ROOT, SKILLS_ROOT, WORK_ROOT, image_layout
+from app.core.config import SKILLS_DIR
 
 
 class _Model:
@@ -213,9 +213,9 @@ def test_image_puts_the_gate_and_skills_at_absolute_paths() -> None:
     assert SKILLS_ROOT in destinations
     assert WORK_ROOT == "/work"
     assert all("/opt/repo/" not in dest for dest in destinations)
-    script = Path(__file__).resolve().parents[1] / "skills" / "common" / "dry-run" / "scripts" / "check.mjs"
+    script = SKILLS_DIR / "common" / "dry-run" / "scripts" / "check.mjs"
     assert f"'{GATE_ENTRY}'" in script.read_text(encoding="utf-8")
-    for skill in (Path(__file__).resolve().parents[1] / "skills").rglob("SKILL.md"):
+    for skill in SKILLS_DIR.rglob("SKILL.md"):
         for line in skill.read_text(encoding="utf-8").splitlines():
             stripped = line.strip()
             if stripped.startswith("node "):

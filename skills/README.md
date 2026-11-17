@@ -1,0 +1,23 @@
+# Skills
+
+What the coder agent knows: instructions, references, kits and scripts. Each skill is a folder with a `SKILL.md`
+(its name and description, then the instructions) and `references/`, `assets/` and `scripts/` beside it. The sandbox
+mounts this folder at `/skills`; the coder loads the skills its task needs
+([`apps/api/app/pipeline/coder/agent.py`](../apps/api/app/pipeline/coder/agent.py)).
+
+| Folder | Skill | What it is for |
+|---|---|---|
+| `play/` | `learning-game` | How every lesson, course level and game is built: one idea learned by doing it, the moves, the challenge. Its scripts start a game (`new-game.mjs`), check it (`check.mjs`) and build the module. |
+| | `playtest` | Play the module in the real headset app, run headless in the sandbox, and look at the screenshots. |
+| `looks/` | `circuit-city`, `exploded-view`, `ink-toon`, `low-poly`, `painted`, `paper-pop-up`, `soft-clay`, `voxel` | One visual style each, with its kit (`assets/`) and recipes. `looks/shared/` is their common code. |
+| `game/` | `game-loop`, `hand-play`, `tabletop-physics`, `board-rules` | Start, score and restart; the hands API; balls, bounces and collisions; moves on a board. |
+| `common/` | `kit`, `panels`, `sound`, `ecs`, `dry-run` | The paintbox (materials, shapes, cards), panels, sound and the sound library, the ECS kit, and the gate check. |
+| `lesson/` | `lesson-craft`, `library-models` | Real proportions and detail for lesson models; using library models with `assets.get(id)`. |
+| `model/` | `lesson-craft` | The model-maker subagent's own copy. |
+
+A skill's scripts run inside the sandbox and find the gate and the headset app at `/opt/gate` and `/opt/xr`
+(or `GATE_ENTRY`, `PLAYTEST_XR` and the like, to run them locally).
+
+To add a look, copy one of `looks/*` and give it its own `SKILL.md` and kit, then list it where looks are chosen:
+`play/learning-game/scripts/new-game.mjs` (its kit), `apps/api/app/pipeline/design.py` (`LOOKS` and the pictures
+prompt) and `apps/api/app/services/courses.py` (`STYLES`).

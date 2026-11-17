@@ -8,10 +8,11 @@ import httpx
 import pytest
 from langgraph.checkpoint.memory import MemorySaver
 
-from app import live, llm
-from app.graphs import lesson
-from app.llm import Completion, LlmTarget
-from app.prompt import EXAMPLE_MODULE
+from app.core import llm
+from app.core.llm import Completion, LlmTarget
+from app.pipeline import lesson
+from app.pipeline.prompts import EXAMPLE_MODULE
+from app.services import live
 
 
 @pytest.fixture

@@ -26,8 +26,8 @@ os.environ["MODERATION"] = "off"
 os.environ["COURSE_POLISH"] = "0"
 
 # The app reads these variables when it is imported.
-from app import config as config_mod
-from app import courses, db, games, guard
+from app.core import config as config_mod, db, guard
+from app.services import courses, games
 
 
 @pytest.fixture(autouse=True)

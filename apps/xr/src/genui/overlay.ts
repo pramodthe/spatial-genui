@@ -266,7 +266,7 @@ export async function generate(prompt: string, extra: { previousCode?: string; c
   return state;
 }
 
-/** True while a parallel lesson streams in (its partial mounts don't dock the picker or trigger repairs). */
+/** True while a lesson being written streams in (live preview): its partial mounts don't dock the picker or trigger repairs. */
 let streaming = false;
 
 /** Mount a lesson that is still streaming in: no picker docking, no repair. */

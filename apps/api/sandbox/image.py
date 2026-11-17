@@ -10,7 +10,7 @@ from pathlib import Path
 
 import modal
 
-from app.config import REPO_ROOT
+from app.core.config import REPO_ROOT, SKILLS_DIR
 
 GATE_ROOT = "/opt/gate"
 SKILLS_ROOT = "/skills"
@@ -34,7 +34,7 @@ def image_layout() -> list[tuple[Path, str]]:
     """Host path and the absolute path it is copied to inside the image."""
     return [
         (REPO_ROOT / "apps" / "gate", GATE_ROOT),
-        (REPO_ROOT / "apps" / "api" / "skills", SKILLS_ROOT),
+        (SKILLS_DIR, SKILLS_ROOT),
         # The model library (82 MB): the dry run checks a module's assets.get(id) against its catalog, which
         # lists a model only when its GLB is there. /opt/gate/src/library.ts finds it at /data/library.
         (REPO_ROOT / "data" / "library", LIBRARY_ROOT),

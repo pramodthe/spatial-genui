@@ -1,23 +1,31 @@
-# IWSDK App
+# Headset app
 
-This project uses `iwsdk.config.json` for declarative scene, asset, component,
-XR, and emulator configuration. Application systems remain explicit in
-`src/index.ts`.
+The app on the Quest: WebXR in mixed reality, built on Meta's [IWSDK](https://iwsdk.dev). The authored scene holds
+only lights and a shadow catcher (`iwsdk.config.json`); everything the learner sees is built at runtime.
 
-```sh
-npm install
-npm run dev
+```
+src/index.ts            starts the world, the GenUI host and the start page
+src/genui/
+  host.ts               mounts a generated module: its entities, panels, hands, sound; desk or world mode;
+                        and cleans everything up when the next one opens
+  overlay.ts            the prompt box and status, writing, repairing and opening lessons and games
+  start-page.ts         the 2D start page (Learn and Play)
+  picker.ts             the in-headset picker (public/ui/lesson-picker.uikitml)
+  courses.ts, games.ts, lessons.ts   courses, saved games, and the example lessons and games
+  hud.ts                the title card a game opens with
+  bounds.ts, handle.ts, grab.ts, hover.ts, game-hands.ts, rig.ts   the frame, handles, grabbing and the hands
+  voice.ts, voice-agent.ts           speech to text and the voice tutor
+  sound.ts, capture.ts, library.ts   sound, pictures for look-and-fix, library models
+public/games/, public/lessons/       the example games and lessons, ready to open
+tests/                  smoke tests in the IWSDK emulator
 ```
 
-Use the Runtime and Editor controls in the managed browser to switch between
-the running experience and its authored scene.
+`src/assets.ts` and `src/components.ts` are IWSDK's (empty) asset and component manifests; its build expects them.
 
-## What is here
-
-The authored scene holds only lights and a shadow catcher: the IWSDK starter content (robot, welcome panel,
-station labels and studio props) was removed. Everything the learner sees is built at runtime by the GenUI host
-in `src/genui/` (lessons, the lesson picker in `public/ui/lesson-picker.uikitml`, labels and move handles) and
-by the 2D start page. See the repository README for how the app and the agent server fit together.
-
-- Minimal scene walkthrough: https://iwsdk.dev/guides/01b-minimal-scene.html
-- XR-enabled projects — IWER emulator controls: https://iwsdk.dev/guides/02-testing-experience.html#iwer-controls
+```bash
+npm install
+npm run dev          # the app and the emulator browser on https://localhost:8081 (/api goes to :8787)
+npm run typecheck
+npm run build
+npx @iwsdk/cli browser run tests/hands-smoke.mjs   # a smoke test, with the dev server running
+```

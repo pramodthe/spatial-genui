@@ -1,5 +1,5 @@
 /**
- * Voice requests in the headset (SPEC.md Phase 4). Quest Browser has no SpeechRecognition, but it can record
+ * Voice requests in the headset (docs/spec.md, Phase 4). Quest Browser has no SpeechRecognition, but it can record
  * the microphone: the clip is decoded, resampled to 16 kHz mono 16-bit WAV (what the transcription model
  * takes), and posted to the agent server (/api/transcribe), which keeps the API key.
  */

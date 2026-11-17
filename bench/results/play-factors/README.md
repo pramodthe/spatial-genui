@@ -85,3 +85,5 @@ All 35 games were scored the same way, on the same day, with the same code (apps
 
 - `scores.json`: every game's setup, model, build time, layout must-fixes, judge ratings with the judge's note, and hands probe.
 - `pictures/<setup>__<request>.jpg`: the opening view each game was judged on.
+- `games/<setup>__<request>.js`: the modules of the games kept after the study, the P and Sonnet games. The four P
+  games are the app's example games (`apps/xr/public/games/`).

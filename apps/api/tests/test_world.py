@@ -9,11 +9,12 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from app.core.config import SKILLS_DIR
 
 API = Path(__file__).resolve().parents[1]
 GATE = API.parent / "gate"
-NEW_GAME = API / "skills" / "play" / "learning-game" / "scripts" / "new-game.mjs"
-DRY_RUN = API / "skills" / "common" / "dry-run" / "scripts" / "check.mjs"
+NEW_GAME = SKILLS_DIR / "play" / "learning-game" / "scripts" / "new-game.mjs"
+DRY_RUN = SKILLS_DIR / "common" / "dry-run" / "scripts" / "check.mjs"
 
 pytestmark = pytest.mark.skipif(not (GATE / "node_modules" / ".bin" / "tsx").exists(), reason="the gate is not installed")
 
@@ -48,7 +49,7 @@ def test_a_desk_starter_has_no_world(tmp_path: Path) -> None:
 def test_valley_water_lies_along_a_diagonal_valley() -> None:
     """worldWater's strip runs along the riverbed for any valley direction (it was mirrored: 22 degrees off for the
     documented valley, across the bed at 45 degrees)."""
-    kit = API / "skills" / "play" / "learning-game" / "assets" / "world-kit.js"
+    kit = SKILLS_DIR / "play" / "learning-game" / "assets" / "world-kit.js"
     script = f"""
 import * as THREE from 'three';
 import {{ readFileSync }} from 'node:fs';

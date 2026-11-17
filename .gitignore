@@ -16,13 +16,13 @@ bench/results/*/shots/
 bench/results/_*/
 bench/results/_*.flag
 bench/results/*.log
-# Phase 3: per-job code, GLBs and renders, and full-size reference images (regenerate with npm run bench3d)
+# Phase 3: per-job code, GLBs and renders, and full-size reference images
 bench/results/*/jobs/
 bench/results/*/refs/
 
 # Downloaded datasets, work files, saved courses and the database (never in git)
 /data/*
-# ...except the app's 3D models, so a fresh clone or a hosted copy has them without generating them again
+# ...except the model and sound library, so a fresh clone or a hosted copy has them
 !/data/library/
 
 # Python API: generation run logs (JSONL, the benchmark's raw material) and a local server log

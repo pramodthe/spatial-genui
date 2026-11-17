@@ -5,9 +5,9 @@ from __future__ import annotations
 import asyncio
 import json
 
-from app import media, studio
-from app.agents import scope
-from app.tools.media import make_sound
+from app.pipeline.coder import scope
+from app.pipeline.coder.sound_tools import make_sound
+from app.services import media, studio
 
 
 def test_tools_say_when_media_is_not_set_up() -> None:
@@ -70,11 +70,11 @@ def test_library_sounds_are_found_after_a_games_own() -> None:
 def test_the_committed_sound_library_matches_its_table() -> None:
     import re
 
-    from app.config import REPO_ROOT
+    from app.core.config import REPO_ROOT, SKILLS_DIR
 
     library = REPO_ROOT / "data" / "library" / "sounds"
     catalog = json.loads((library / "catalog.json").read_text())
-    table = (REPO_ROOT / "apps" / "api" / "skills" / "common" / "sound" / "references" / "library.md").read_text()
+    table = (SKILLS_DIR / "common" / "sound" / "references" / "library.md").read_text()
     assert len(catalog) >= 30
     for entry in catalog:
         assert re.fullmatch(r"snd-[0-9a-f]{10}", entry["id"]) and f"`{entry['id']}`" in table

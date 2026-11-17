@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-import json
 
 import pytest
 from langgraph.checkpoint.memory import MemorySaver
 
-from app.graphs import lesson
-from app.graphs.course import _graph as course_graph
-from app.graphs.game import _graph as game_graph
-from app.graphs.stream import lesson_events
-from app.llm import Completion
-from app.prompt import EXAMPLE_MODULE
+from app.core.llm import Completion
+from app.pipeline import lesson
+from app.pipeline.course import _graph as course_graph
+from app.pipeline.game import _graph as game_graph
+from app.pipeline.prompts import EXAMPLE_MODULE
 
 
 def _completion(text: str) -> Completion:
@@ -101,26 +99,6 @@ async def test_resume_retries_the_gate(monkeypatch: pytest.MonkeyPatch, isolated
 
 
 @pytest.mark.asyncio
-async def test_stream_chunks_are_v2_dicts(monkeypatch: pytest.MonkeyPatch, isolated_graph: None) -> None:
-    async def complete(_messages, _target=None):
-        return _completion("```js\n" + EXAMPLE_MODULE + "\n```")
-
-    async def check(_code, _known=None, *, short=False):
-        return {"ok": True, "stats": {"triangles": 10, "rawPanels": 0}, "warnings": []}
-
-    monkeypatch.setattr(lesson.llm, "complete", complete)
-    monkeypatch.setattr(lesson.gate, "check_module", check)
-    chunks = []
-    async for line in lesson_events(
-        {"request": "a lighthouse", "kind": "lesson", "mode": "classic", "use_library": False, "log": False, "pictures": []},
-        {"configurable": {"thread_id": "stream-1"}},
-    ):
-        chunks.append(json.loads(line))
-    assert chunks
-    assert all(isinstance(chunk, dict) and chunk.get("type") in {"updates", "custom"} for chunk in chunks)
-
-
-@pytest.mark.asyncio
 async def test_a_retried_lesson_starts_clean(monkeypatch: pytest.MonkeyPatch, isolated_graph: None) -> None:
     """A course lesson written again on its thread must not keep the failed run's error, id or timing."""
     replies = {"ok": False}
@@ -153,7 +131,7 @@ async def test_a_refusal_reaches_the_result(monkeypatch: pytest.MonkeyPatch, iso
         return {"attempts": [*state.get("attempts", []), attempt], "code": None, "ok": False, "error": "The model refused: no", "refused": True}
 
     monkeypatch.setattr(lesson, "write_with_agent", write_with_agent, raising=False)
-    import app.agents.coder as coder_module
+    import app.pipeline.coder.agent as coder_module
 
     monkeypatch.setattr(coder_module, "write_with_agent", write_with_agent)
     result = await lesson.run_lesson("something", use_library=False, log=False, mode="agent", thread_id="refuse-1")

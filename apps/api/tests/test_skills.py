@@ -4,8 +4,9 @@ from pathlib import Path
 
 import pytest
 from deepagents.middleware.skills import _parse_skill_metadata
+from app.core.config import SKILLS_DIR
 
-SKILLS = Path(__file__).resolve().parents[1] / "skills"
+SKILLS = SKILLS_DIR
 
 
 @pytest.mark.parametrize("path", sorted(SKILLS.rglob("SKILL.md")), ids=lambda p: str(p.relative_to(SKILLS)))

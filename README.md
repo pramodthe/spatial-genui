@@ -1,166 +1,135 @@
-# Spatial Generative UI (Meta VR Start Developer Competition 2026)
+# Spatial GenUI
 
-Ask for any subject, by voice or by typing, and an AI agent builds a hands-on course in mixed reality on
-Meta Quest. Each lesson is a 3D model on your desk that you pick up, turn and take apart with your hands,
-with a panel to step through it. The agent writes every lesson as code at runtime, and a small host runs it
-in a WebXR passthrough scene. See `SPEC.md` for the plan and results, and `docs/paper/prior-art.md` for
-related work.
+Hands-on learning games, generated live for mixed reality on Meta Quest.
 
-## What it does
+Ask for a subject or a game, by voice or by typing, and an AI agent designs and writes it while you wait. You
+play it with your hands, on your real desk or as a place you walk around. Every lesson, course level and game
+teaches one real idea by doing it: folding a paper plane that flies farther, building a dam that holds deeper
+water, tilting a kite into the wind. The agent writes each one as code at runtime; a checker tests it before the
+headset loads it.
 
-- **Courses.** A subject becomes a planned course of three or four hands-on lessons. Lessons are written in
-  the background and saved, so you can leave and come back.
-- **A 3D model per course.** A course about one physical object first gets its own model: a reference
-  picture (Muse Image, checked by Muse Ember), a textured body from TRELLIS.2, then an agent in Blender
-  (Muse Spark) cuts it into named parts that lessons can move, highlight and pull apart. Models are kept and
-  reused; the library is in `data/library/` (credits in `data/library/CREDITS.md`).
-- **Play.** A second section beside Learn, on the start page and in the headset picker: ask for any game and
-  the agent writes one tabletop game (no course plan) with a game prompt (`GAME_SYSTEM_PROMPT`: a game loop,
-  score and restart, a HUD instead of a teaching panel, no real-size view). Games are saved on a Games shelf;
-  four ready-made ones open at once (`apps/xr/public/games/`).
-- **Voice tutor.** A spoken conversation through Deepgram's Voice Agent API. It answers questions about the
-  subject and the lesson on the desk, quizzes you aloud when you ask, and can plan a course or open a lesson.
-- **Look-and-fix.** The first time a course lesson opens, the headset sends three pictures of it to the
-  agent, which revises it once from what it sees.
-- **Hands-first.** Pinch or poke panels and pick up parts. A lesson moves, turns and scales by thin handles on
-  its frame (rods on the bottom edges, knobs on the upright ones, the corners), by fingertip or by pointing; a
-  game has the same move and turn handles, fingertip only, and its code reads the live hands. Every panel is
-  built from one set of parts in the style of the Meta Horizon OS UI Set (`kit.panel`).
+Built for the Meta VR Start Developer Competition 2026 ([docs/competition.md](docs/competition.md)).
 
-## How it works
+## Features
 
-```
-headset browser (apps/xr)                agent server (apps/api)                 3D backend (apps/worker3d, Modal)
-start page, picker, voice tutor  --->   courses (SQLite), lesson agent,     --->  TRELLIS.2, Blender sandbox,
-GenUI host: runs lesson modules         host gate (apps/gate, Node), repair,      P3-SAM parts
-                                        model library, Deepgram tokens
-```
+- **Play.** Ask for any game and get one that teaches by playing. Desk games are toy-sized on your real desk in
+  passthrough; world games are a place you stand in and walk around. Four ready-made games open at once.
+- **Learn.** A subject becomes a course of 3 to 5 hands-on levels, written in the background and saved, so you
+  can leave and come back. Lessons can use accurate 3D models from the library (a heart, a microscope, planets,
+  molecules), with named parts you can pick up and take apart.
+- **Voice tutor.** A spoken conversation (Deepgram Voice Agent) that answers questions about what is on the
+  desk, tests you aloud when you ask, and can plan a course or open a lesson.
+- **Look-and-fix.** The first time a course lesson opens, the headset sends three pictures of it to the agent,
+  which revises it once from what it sees.
+- **Hands-first.** Pinch, poke and grab. Lessons and games move, turn and scale by handles on their frame; the
+  game's own code reads the live hands.
+- **Studio.** Every game run is kept at `/studio`: the design, the planning pictures, the coder's steps,
+  play-test screenshots and the grader's verdicts.
 
-The lesson agent and the course planner use OpenAI `gpt-6.1-sol` (any OpenAI-compatible endpoint works; the
-benchmark compares others). Generated code is checked statically and in a sandboxed dry run before it reaches
-the headset, and failures go back to the agent for repair.
-
-## Layout
+## How a game is made
 
 ```
-apps/xr/                 the headset app (TypeScript, IWSDK WebXR): GenUI host, picker, start page, voice tutor
-                         (src/genui/); emulator test scripts (tests/)
-apps/api/                the agent server the app talks to (Python, FastAPI): lesson, game and course graphs,
-                         courses, games and database, guard, voice token, library, the Deep Agent coder
-apps/gate/               the Node half (TypeScript): the gate every lesson passes (static check and a locked-down
-                         dry run with the headset's three.js and kit.js) and the course 3D model pipeline the API
-                         drives (src/); the research harness: the published one-call agent loop and the
-                         benchmark, judge and 3D scripts behind the paper's numbers (research/, npm run bench*)
-apps/worker3d/           Python 3D worker for course models: TRELLIS.2 on Modal (fetch_trellis.py), the Blender
-                         part-splitting agent (blender_build/), model ingest, retrieval and segmentation (library/)
-apps/worker3d/research/  the Phase 3 experiments: CadQuery, the Blender MCP server and its Modal backend, repair kit
-data/library/            the 3D model library (in git); the rest of data/ is local only (downloads, work files, app.db)
-bench/                   benchmark prompts, model catalogue (models.json) and results
-docs/                    architecture notes and the paper's related work
+request ─▶ design ─────────────▶ coder ──────────────────────────────▶ gate ──────────▶ headset
+           one model call:        a Deep Agent in a Modal sandbox:       static check,     mounts the
+           the rules, the idea,   writes game.js with the skills,        locked-down dry   module and
+           desk or world, and     checks it, play-tests it in the        run and layout    shows its
+           two planning pictures  headless headset app; a grader         check, on the     name as a
+                                  sends it back once if it falls short   host              title card
 ```
 
-The API is Python. Each lesson is still checked by a Node gate (`apps/gate`) that runs the same three.js and
-kit.js as the headset, in a locked-down child process, before the learner sees it. The 3D worker is Python
-because Blender, TRELLIS.2 and the mesh tools only exist there. The API starts those programs and they
-exchange files (GLB, JSON).
+| Stage | Code | What it does |
+|---|---|---|
+| Design | [`apps/api/app/pipeline/design.py`](apps/api/app/pipeline/design.py) | One call designs the game; two reference pictures (the first view, and a front/side/top sheet of the main thing) guide the coder and are never shown in the game. |
+| Code | [`apps/api/app/pipeline/coder/`](apps/api/app/pipeline/coder) | The coder agent edits `/work/game.js` with the [skills](skills), runs the check, and play-tests the game in the real headset app run headless in its sandbox. |
+| Grade | [`apps/api/app/pipeline/grader.py`](apps/api/app/pipeline/grader.py) | Grades the game against a rubric made for the request and the planning pictures. |
+| Check | [`apps/gate`](apps/gate) | Static validation, a dry run with the headset's own three.js and kit, and a layout check (nothing hidden, out of reach, or in the player's face). |
 
-## Setup
+Lessons follow the same path: the router picks library models, then the writer, the gate and repairs
+([`apps/api/app/pipeline/lesson.py`](apps/api/app/pipeline/lesson.py)). See
+[`apps/api/app/pipeline/README.md`](apps/api/app/pipeline/README.md) for the details.
 
-1. Node 22.12+ and Python 3.12 with [uv](https://docs.astral.sh/uv/).
-2. Copy `.env.example` to `.env` and fill in:
-   - `LLM_API_KEY` (and `OPENAI_API_KEY`): the lesson agent, course planner and screener (OpenAI by default).
-   - `DEEPGRAM_API_KEY`: the voice tutor.
-   - `META_API_KEY`: reference pictures, checks and the Blender agent for course models, and the voice
-     fallback when there is no Deepgram key.
-3. `cd apps/api && uv sync`, `cd apps/gate && npm install` (the gate and the 3D pipeline), `cd apps/xr && npm install`, and for 3D models `cd apps/worker3d && uv sync`.
-4. For course models, deploy the Modal apps once (`uv run modal setup` first):
-   `modal deploy modal_trellis.py`, `modal deploy blender_build/sandbox.py` and `modal deploy modal_parts.py`
-   from `apps/worker3d` (TRELLIS.2 and P3-SAM need the Modal secret `genui-hf-v2` with `HF_TOKEN`).
-   Without them, courses are written with drawn shapes (`COURSE_MODELS=0` turns model building off).
+## Repository layout
 
-## Run
+```
+apps/
+  xr/          the headset app: WebXR on Meta's IWSDK. Start page, picker, voice tutor, and the GenUI host that
+               mounts generated modules (src/genui/)
+  api/         the server (Python, FastAPI, LangGraph, Deep Agents)
+    app/core/       settings, database, model calls, spending limits
+    app/pipeline/   design, the coder agent, the grader, the lesson, game and course graphs
+    app/library/    the 3D model library: catalogue, model routing, real sizes
+    app/services/   courses, saved games, live previews, voice, generated media, the Studio
+  gate/        the module checker (TypeScript): validation, sandboxed dry run, layout check, the kit
+skills/        the agent's skills: the learning game, looks, game patterns, sound, panels (mounted at /skills)
+data/library/  the 3D model library and the sound library (credits in data/library/CREDITS.md)
+bench/         benchmark prompts and results
+docs/          the project spec, the competition brief, related work
+```
+
+## Getting started
+
+Requirements: Node 22.12+, Python 3.12 with [uv](https://docs.astral.sh/uv/), a [Modal](https://modal.com)
+account (the coder's sandbox), and an OpenAI-compatible API key.
 
 ```bash
-# Terminal 1: Python API on :8787 (restart it by hand after editing .env)
+cp .env.example .env                  # then fill in LLM_API_KEY and the keys you use (see Configuration)
+cd apps/api && uv sync && uv run modal setup
+cd ../gate && npm install
+cd ../xr && npm install
+```
+
+Run the server and the headset app:
+
+```bash
+# Terminal 1: the API on :8787
 cd apps/api && uv run uvicorn app.main:app --host 0.0.0.0 --port 8787
 
-# Terminal 2: IWSDK dev server and emulator browser on https://localhost:8081
-cd apps/xr && npx @iwsdk/cli dev up --allow-browser-automation
+# Terminal 2: the headset app and the emulator browser on https://localhost:8081
+cd apps/xr && npm run dev
 ```
 
-On a desktop, the start page lets you ask for a course, preview lessons and enter the emulator's XR.
+On a Quest, connect it by USB, run `adb reverse tcp:8081 tcp:8081` and open `https://localhost:8081` in the
+headset browser (accept the local certificate warning). On the start page, tap **Allow microphone** first, then
+**Enter mixed reality**.
 
-**On a Quest:** open the `network` URL from `npx @iwsdk/cli dev status` (same Wi-Fi; accept the local
-certificate warning), or connect it by USB and run `adb reverse tcp:8081 tcp:8081`, then open
-`https://localhost:8081`. On the start page, tap **Allow microphone** first (the headset cannot ask for it
-inside XR), then **Enter mixed reality**. In XR, pinch **Talk to the tutor**, a lesson tile, or a course.
-
-## Useful commands
+## Tests
 
 ```bash
-# Write one lesson through the API; every run is logged to apps/api/runs/
-curl -s -X POST localhost:8787/api/generate -H 'content-type: application/json' \
-  -d '{"prompt": "how blood flows through the human heart"}'
-
-# Look-and-fix by hand: revise a lesson from pictures of it (the research harness)
-cd apps/gate && npm run review -- --code lesson.js --prompt "..." --out revised.js pic1.jpg pic2.jpg
-
-# Mount the latest successful run in the emulator
-cd apps/xr && npx @iwsdk/cli browser run tests/mount-last-run.mjs
-
-# Grab a generated object with an emulated hand
-npx @iwsdk/cli xr set-input-mode --input-json '{"mode":"hand"}'
-npx @iwsdk/cli xr run-sequence --input-json '{"device":"hand-right","steps":[{"pinch":0,"duration":0.2},{"target":"Mars","approach":{"distance":0.1},"pinch":{"value":1,"at":"arrival"}}]}'
+cd apps/api && uv run pytest                      # the server, the pipeline and the skills' scripts
+cd apps/gate && npm test && npm run typecheck     # the checker
+cd apps/xr && npm run typecheck && npm run build  # the headset app
 ```
 
-## Benchmark (Phase 2)
+The headset app's smoke tests run in the IWSDK emulator while the dev server is up, for example
+`cd apps/xr && npx @iwsdk/cli browser run tests/hands-smoke.mjs`.
 
-**See the results: [which model built what](bench/results/run-1/gallery.md)** (Claude Sonnet 5.5, Meta Muse Spark 1.3
-and DeepSeek V4.1 Flash on 12 requests, side by side, with scores) · [numbers](bench/results/run-1/summary.md)
+## Configuration
 
-Compares models on the same agent loop. Candidates are in `bench/models.json`; the held-out test prompts
-in `bench/prompts/test-12.json` (the dev prompts were used to tune the system prompt, so they are not used
-for scoring). Add `OPENROUTER_API_KEY` to `.env` for non-Anthropic models.
+Settings come from `.env` at the repo root ([`.env.example`](.env.example)).
 
-```bash
-cd apps/gate
-npm run bench -- --runs 2 --out ../../bench/results/run-1          # 1. generate (resumable)
-cd ../xr && npx @iwsdk/cli xr enter                                 # 2. mount + hand probes in the emulator
-node scripts/bench-browser.mjs "$PWD/../../bench/results/run-1"
-cd ../gate && npm run bench:judge -- ../../bench/results/run-1      # 3. vision-model quality scores
-npm run bench:report -- ../../bench/results/run-1                   # 4. summary.md leaderboard
-npm run bench:gallery -- ../../bench/results/run-1 --export-images # 5. gallery.md (GitHub) + gallery.html
-```
+| Setting | Default | What it does |
+|---|---|---|
+| `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` | OpenAI, `gpt-6.1-sol` | The model for design, coding and lessons. Any OpenAI-compatible endpoint; models and prices are in [`apps/api/models.json`](apps/api/models.json). |
+| `META_API_KEY` | | Meta's Muse models, and speech to text when there is no Deepgram key. |
+| `DEEPGRAM_API_KEY` | | The voice tutor. |
+| `MEDIA_BASE_URL`, `MEDIA_API_KEY` | | Planning pictures and generated sounds. Without them, games use the sound library and no pictures. |
+| `PLAN_PICTURES` | on | `0` turns the planning pictures off. |
+| `CODER_BUDGET_USD` | 3 | The most one coder attempt may spend. |
+| `DAILY_BUDGET_USD`, `RATE_LIMIT_PER_10_MIN` | 15, 6 | Per-day spending cap and per-visitor rate limit. |
+| `COURSE_PLANNER`, `MODERATION_MODEL` | `LLM_MODEL` | The course planner's and the request screen's model. |
 
-Metrics: pass@1 (valid first try, comparable to XR Blocks), success with ≤2 repairs, clean mount in the
-emulator, grab works and press works (emulated hand), quality 1–5 from a cross-provider judge panel
-(also reported with same-provider judges excluded), latency, output tokens and estimated cost.
+## Results
 
-The benchmark used Claude Sonnet 5.5 as the app's model at the time; the app now uses OpenAI `gpt-6.1-sol`
-(see `SPEC.md`).
+[`bench/results/play-factors`](bench/results/play-factors) measures what made the games good: 35 games from 11
+setups, judged blind from the same opening view, with a layout check and a hands probe. The model was the largest
+factor, then the pipeline and the layout checker; the games built with planning pictures were the ones preferred in
+headset play. Earlier results (model comparisons, 3D pipelines, the paper's research questions) are in
+[`bench/`](bench).
 
-## 3D generation (Phase 3)
+## Documentation
 
-**See the results: [every object from every pipeline](bench/results/3d-run-1/gallery.md)** · [numbers](bench/results/3d-run-1/summary.md)
-
-Three ways for the agent to build a 3D learning object with named parts, compared on 12 objects: **P1** writes
-Three.js code (runs in the browser), **P2** writes a CadQuery (Python CAD) script, **P3** is an agent with Blender
-tools served by a Blender MCP server. Add-ons: a reference image from Muse Image (M1) and a vision critic that
-reviews four rendered views and asks for fixes (M2). Every GLB is rendered the same way and judged by Opus 5.5.
-
-Agent-written Python runs on the 3D backend in `apps/worker3d/`: on Modal, each CadQuery script and each Blender
-session gets its own Modal Sandbox (network blocked, no secrets); without `WORKER3D_URL` the same workers run
-locally under a macOS sandbox profile.
-
-```bash
-cd apps/worker3d && uv sync                                          # Python 3.12 env with CadQuery, MCP, Modal
-uv run modal setup                                                   # log in to Modal (once per machine)
-uv run modal secret create genui-worker3d WORKER3D_TOKEN=<from .env> # once per Modal workspace
-uv run modal deploy research/modal_app.py                            # then set WORKER3D_URL in .env
-cd ../gate
-npm run bench3d -- --out ../../bench/results/3d-run-2                # build: 12 objects x 3 pipelines x 2 variants
-npm run bench3d:judge -- ../../bench/results/3d-run-2                # Opus 5.5 scores the renders
-npm run bench3d:report -- ../../bench/results/3d-run-2               # summary.md + gallery
-```
-
-Local runs need Blender at `/Applications/Blender.app` (or `BLENDER_BIN`). `--backend local|modal` overrides the default.
+- [docs/spec.md](docs/spec.md): the project spec and its phases
+- [docs/paper/prior-art.md](docs/paper/prior-art.md): related work
+- [apps/api/app/pipeline/README.md](apps/api/app/pipeline/README.md): how lessons and games are made
+- [skills/README.md](skills/README.md): the agent's skills
+- [apps/gate/README.md](apps/gate/README.md): what the checker tests

@@ -1,10 +1,8 @@
-"""FastAPI routes. Same /api shapes as the removed TypeScript server's server.ts."""
+"""The FastAPI app: the /api routes the headset app calls, the Studio page, and the built headset app."""
 
 from __future__ import annotations
 
-import asyncio
 import json
-import os
 import re
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -13,21 +11,20 @@ from urllib.parse import unquote
 
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
-from app import assets, config as config_mod, courses, games, guard, library, live, llm
-from app.agents.coder import set_checkpointer as set_coder_checkpointer
-from app.a2ui.parallel import run_parallel
-from app.clock import mtime_ms
-from app.config import REPO_ROOT
-from app.db import close_db, open_db
-from app.graphs.lesson import run_lesson, set_checkpointer
-from app.prompt import EXAMPLE_MODULE
-from app.real_size import known_real_size, real_size_of
-from app.voice import transcribe, voice_agent_token
-from app import background
-from app import media, studio
+from app import library
+from app.core import background, config as config_mod, guard
+from app.core.clock import mtime_ms
+from app.core.config import REPO_ROOT
+from app.core.db import close_db, open_db
+from app.library.real_size import known_real_size, real_size_of
+from app.pipeline.coder.agent import set_checkpointer as set_coder_checkpointer
+from app.pipeline.lesson import run_lesson, set_checkpointer
+from app.pipeline.prompts import EXAMPLE_MODULE
+from app.services import courses, games, live, media, studio
+from app.services.voice import transcribe, voice_agent_token
 
 MAX_BODY = 200_000
 MAX_AUDIO = 2_000_000
@@ -35,7 +32,6 @@ MAX_PICTURES = 2_500_000
 KIT_FILE = REPO_ROOT / "apps" / "gate" / "src" / "kit" / "kit.js"
 _HEX = re.compile(r"^[a-f0-9]{8}$")
 _ASSET = re.compile(r"^[a-z0-9-]+$")
-_JOB = re.compile(r"^[a-z0-9-]+$")
 
 CONTENT_TYPES = {
     ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".mjs": "text/javascript", ".css": "text/css",
@@ -121,10 +117,10 @@ def _prompt(body: dict[str, Any]) -> str:
     return body["prompt"].strip() if isinstance(body.get("prompt"), str) else ""
 
 
-async def _spend(result: dict[str, Any], planner_id: str | None = None) -> None:
+async def _spend(result: dict[str, Any]) -> None:
     calls = []
     for attempt in result.get("attempts") or []:
-        model = planner_id if attempt.get("role") == "planner" and planner_id else result.get("model")
+        model = result.get("model")
         if not model:
             continue
         calls.append({
@@ -197,64 +193,12 @@ async def generate(request: Request) -> JSONResponse:
         prompt,
         previous_code=body.get("previousCode") if isinstance(body.get("previousCode"), str) else None,
         client_error=body.get("clientError") if isinstance(body.get("clientError"), str) else None,
-        on_demand=config_mod.config.on_demand_assets,
         kind="game" if body.get("kind") == "game" else "lesson",
     )
     await _spend(result)
     if result.get("refused"):
         return JSONResponse({"ok": False, "error": result.get("error"), "reason": "content"}, status_code=422)
     return JSONResponse(result)
-
-
-@app.post("/api/generate-stream")
-async def generate_stream(request: Request) -> Response:
-    body = await _json(request)
-    prompt = _prompt(body)
-    if not prompt or len(prompt) > 2000:
-        return JSONResponse({"error": 'Send { "prompt": "…" } (1–2000 characters).'}, status_code=400)
-    refusal = await guard.admit(_visitor(request), prompt)
-    if refusal:
-        return JSONResponse({"ok": False, "error": refusal["error"], "reason": refusal["reason"]}, status_code=refusal["status"])
-    planner = _parallel_planner()
-    target = llm.default_target()
-
-    async def chunks():
-        queue: asyncio.Queue = asyncio.Queue()
-
-        def on_event(event: dict[str, Any]) -> None:
-            queue.put_nowait(event)
-
-        async def run() -> None:
-            try:
-                result = await run_parallel(prompt, target, planner=planner, on_event=on_event, planner_fallback=True)
-                await _spend(result, planner.id if planner else None)
-                queue.put_nowait({"type": "RESULT", "result": result})
-            except Exception as exc:
-                queue.put_nowait({"type": "RESULT", "result": {"ok": False, "error": str(exc), "prompt": prompt, "attempts": []}})
-            finally:
-                queue.put_nowait(None)
-
-        task = asyncio.create_task(run())
-        try:
-            while True:
-                item = await queue.get()
-                if item is None:
-                    break
-                yield json.dumps(item, ensure_ascii=False) + "\n"
-            await task
-        finally:
-            # The visitor left (or the server is stopping): don't keep generating, and spending, for no one.
-            task.cancel()
-
-    return StreamingResponse(chunks(), media_type="application/x-ndjson", headers={"cache-control": "no-cache"})
-
-
-def _parallel_planner() -> llm.LlmTarget | None:
-    try:
-        return llm.load_model(os.environ.get("PARALLEL_PLANNER") or config_mod.config.model)
-    except Exception as exc:
-        print(f"Parallel planner unavailable ({exc}); the main model plans.")
-        return None
 
 
 @app.post("/api/transcribe")
@@ -336,13 +280,13 @@ async def get_course(course_id: str) -> JSONResponse:
     return JSONResponse(courses.summary(course))
 
 
-STUDIO_PAGE = Path(__file__).with_name("studio.html")
+STUDIO_PAGE = Path(__file__).parent / "services" / "studio.html"
 
 
 @app.get("/studio")
 @app.get("/studio/{run_id}")
 async def studio_page(run_id: str = "") -> FileResponse:
-    """The Studio: how the design step, the coder and the grader made a game (app/studio.py). The page reads /api/studio."""
+    """The Studio: how the design step, the coder and the grader made a game (services/studio.py). The page reads /api/studio."""
     return FileResponse(STUDIO_PAGE, media_type="text/html; charset=utf-8", headers={"cache-control": "no-cache"})
 
 
@@ -370,7 +314,7 @@ async def studio_file(run_id: str, name: str) -> Response:
 
 @app.get("/api/media")
 async def media_library(run: str | None = None) -> JSONResponse:
-    """The asset library: every generated picture and sound (app/media.py), newest first; ?run= for one run's."""
+    """The asset library: every generated picture and sound (services/media.py), newest first; ?run= for one run's."""
     return JSONResponse({"media": media.library(run_id=run)}, headers={"cache-control": "no-cache"})
 
 
@@ -436,21 +380,6 @@ async def get_game(game_id: str) -> JSONResponse:
         return JSONResponse({"error": "Unknown game"}, status_code=404)
     games.retry_game(game)
     return JSONResponse(game)
-
-
-@app.get("/api/assets/jobs")
-async def jobs() -> JSONResponse:
-    return JSONResponse({"jobs": assets.asset_jobs()})
-
-
-@app.get("/api/assets/jobs/{job_id}")
-async def job(job_id: str) -> JSONResponse:
-    if not _JOB.fullmatch(job_id):
-        return JSONResponse({"error": "Not found"}, status_code=404)
-    found = assets.asset_job(job_id)
-    if found is None:
-        return JSONResponse({"error": "Unknown job"}, status_code=404)
-    return JSONResponse(found)
 
 
 @app.get("/{full_path:path}")

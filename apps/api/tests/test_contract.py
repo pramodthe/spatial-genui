@@ -1,11 +1,11 @@
-"""Routes that do not call a model. Shapes match the removed TypeScript server's server.ts."""
+"""Routes that do not call a model, and the shapes the headset app reads from them."""
 
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.prompt import EXAMPLE_MODULE
+from app.pipeline.prompts import EXAMPLE_MODULE
 
 
 def test_health_catalog_example_and_errors() -> None:
@@ -56,7 +56,6 @@ def test_health_catalog_example_and_errors() -> None:
 
         assert client.get("/api/courses").json() == {"courses": []}
         assert client.get("/api/games").json() == {"games": []}
-        assert client.get("/api/assets/jobs").json() == {"jobs": []}
         assert client.get("/api/nope").json()["error"] == "Not found"
 
         size = client.post("/api/real-size", json={})
@@ -64,7 +63,7 @@ def test_health_catalog_example_and_errors() -> None:
 
 
 def test_static_files_stay_inside_the_directory(tmp_path, monkeypatch) -> None:
-    from app import config as config_mod
+    from app.core import config as config_mod
 
     site = tmp_path / "site"
     assets = site / "assets"

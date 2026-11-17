@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from app import guard
-from app.config import config
+from app.core import guard
+from app.core.config import config
 
 
 @pytest.mark.asyncio

@@ -3,8 +3,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
- * The 3D asset library (tier A of docs/3d-architecture.md): accurate models with named parts, built
- * by apps/worker3d/library from authoritative data. Generated modules use them via `assets.get(id)`.
+ * The 3D model library: accurate models with named parts, built
+ * from authoritative data (credits in data/library/CREDITS.md). Generated modules use them via `assets.get(id)`.
  * Files: <LIBRARY_DIR>/catalog/<id>.json and <LIBRARY_DIR>/assets/<id>.glb.
  */
 

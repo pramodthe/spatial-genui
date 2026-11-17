@@ -499,7 +499,7 @@ class LessonPickerSystem extends createSystem({
   /** Keep asking while something is being planned or written. */
   private pollCourses() {
     clearTimeout(this.coursePoll);
-    const active = this.courses.some((c) => c.status === 'planning' || c.model?.status === 'building' || c.lessons.some((l) => l.status === 'generating'))
+    const active = this.courses.some((c) => c.status === 'planning' || c.lessons.some((l) => l.status === 'generating'))
       || this.games.some((g) => g.status === 'writing');
     if (active) this.coursePoll = window.setTimeout(() => void this.refreshCourses(), COURSE_POLL_MS);
   }
@@ -563,10 +563,8 @@ class LessonPickerSystem extends createSystem({
     for (let i = 0; i < SHELF_ROWS; i++) fillRow('course', i);
     if (listing) for (let i = 0; i < ALL_ROWS; i++) fillRow('all', i, this.allPage * ALL_ROWS + i);
     if (!course) return;
-    const modelling = course.model?.status === 'building';
     document.getElementById('course-sub')?.setProperties({
       text: ascii(course.status === 'failed' ? `Could not be planned: ${course.error ?? ''}`
-        : modelling ? `Building its 3D model: ${course.model?.stage ?? 'starting'}`
         : course.subtitle || 'Pinch a lesson to open it.'),
     });
     for (let i = 0; i < COURSE_STEPS; i++) {
@@ -577,8 +575,7 @@ class LessonPickerSystem extends createSystem({
       document.getElementById(`step-${i}-num`)?.setProperties({ color: STEP_BADGES[lesson.status].number });
       document.getElementById(`step-${i}-title`)?.setProperties({ text: ascii(lesson.title) });
       document.getElementById(`step-${i}-state`)?.setProperties({
-        text: modelling && lesson.status === 'pending' ? 'Waits for the 3D model'
-          : lesson.status === 'generating' && lesson.live ? ascii(`${lesson.live.line}: pinch to watch`)
+        text: lesson.status === 'generating' && lesson.live ? ascii(`${lesson.live.line}: pinch to watch`)
           : STEP_STATES[lesson.status],
       });
     }

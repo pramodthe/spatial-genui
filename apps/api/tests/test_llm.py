@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 
 import pytest
 
-from app.llm import LlmTarget, complete, default_target, load_model, refuse_anthropic
+from app.core.llm import complete, default_target, LlmTarget, load_model, refuse_anthropic
 
 CLAUDE_IDS = ("claude-opus-5-5", "claude-fable-5-2", "claude-sonnet-5-5", "claude-haiku-5-5")
 
@@ -43,7 +43,7 @@ async def test_complete_refuses_anthropic_before_http(monkeypatch: pytest.Monkey
     async def fail_post(*_args: object, **_kwargs: object) -> None:
         raise AssertionError("HTTP was attempted")
 
-    monkeypatch.setattr("app.llm._post", fail_post)
+    monkeypatch.setattr("app.core.llm._post", fail_post)
     anthropic = LlmTarget(
         id="claude-opus-5-5",
         base_url="https://api.anthropic.com/v1/",
@@ -64,7 +64,7 @@ async def test_complete_refuses_anthropic_before_http(monkeypatch: pytest.Monkey
 
 
 async def test_reasoning_effort_reaches_the_app_model_only(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.config import config
+    from app.core.config import config
 
     sent: list[dict] = []
 
@@ -76,7 +76,7 @@ async def test_reasoning_effort_reaches_the_app_model_only(monkeypatch: pytest.M
         sent.append(body)
         return Reply()
 
-    monkeypatch.setattr("app.llm._post", record)
+    monkeypatch.setattr("app.core.llm._post", record)
     monkeypatch.setenv("LLM_REASONING_EFFORT", "max")
     app_model = LlmTarget(id=config.model, base_url="https://api.openai.com/v1/", api_key="k", model=config.model)
     router = LlmTarget(**{**app_model.__dict__, "extra_body": {"reasoning_effort": "low"}})

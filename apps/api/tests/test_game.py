@@ -1,4 +1,4 @@
-"""The game graph, with the model calls stubbed: the one-call design step (and where the game plays), and the plan's
+"""The game pipeline with the model calls stubbed: the design stage (and where the game plays), and the design's
 reference pictures handed to the coder."""
 
 from __future__ import annotations
@@ -6,12 +6,12 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from app import studio
-from app.graphs import game
+from app.pipeline import design, game
+from app.services import studio
 
 
 def test_default_plan_is_one_call_and_picks_where_it_plays(monkeypatch) -> None:
-    from app import llm
+    from app.core import llm
 
     replies = []
 
@@ -40,8 +40,9 @@ def test_default_plan_is_one_call_and_picks_where_it_plays(monkeypatch) -> None:
 def test_plan_pictures_are_drawn_for_the_coder(monkeypatch, tmp_path) -> None:
     """PLAN_PICTURES=1: the design step draws the first view and a sheet of the main thing, and the coder's task names
     them as references (in the sandbox's /work/plan), never as pictures for the game."""
-    from app import llm, media
-    from app.agents import coder
+    from app.core import llm
+    from app.services import media
+    from app.pipeline.coder import agent as coder
 
     calls = []
 
@@ -84,13 +85,13 @@ def test_plan_pictures_are_drawn_for_the_coder(monkeypatch, tmp_path) -> None:
 
 
 def test_plan_pictures_are_on_by_default_and_can_be_turned_off(monkeypatch) -> None:
-    from app import media
+    from app.services import media
 
     monkeypatch.setattr(media, "enabled", lambda: True)
     monkeypatch.delenv("PLAN_PICTURES", raising=False)
-    assert game.pictures_enabled()
+    assert design.pictures_enabled()
     monkeypatch.setenv("PLAN_PICTURES", "0")
-    assert not game.pictures_enabled()
+    assert not design.pictures_enabled()
     monkeypatch.delenv("PLAN_PICTURES", raising=False)
     monkeypatch.setattr(media, "enabled", lambda: False)
-    assert not game.pictures_enabled()
+    assert not design.pictures_enabled()

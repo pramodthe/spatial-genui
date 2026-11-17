@@ -81,6 +81,19 @@ def test_grading_is_skipped_once_the_budget_is_spent() -> None:
     assert grader.after_agent({"cost_usd": 3.2, "rubric": "- x", "messages": []}, None) is None
 
 
+def test_studio_reads_survive_a_half_written_file_and_refuse_dot_ids() -> None:
+    from app.studio import StudioRun, read_run, run_dir
+
+    run = StudioRun("studio-torn-run", "a kite", "game", "m")
+    run.event("director", "plan", "wrote the plan")
+    (run.dir / "events.json").write_text('[{"t": 0, "who": "dir')  # another process caught mid-write
+    assert read_run("studio-torn-run")["events"] == []
+    run.event("grader", "verdict", "pass")
+    assert [e["what"] for e in read_run("studio-torn-run")["events"]] == ["plan", "verdict"]
+    assert not list(run.dir.glob(".*.part"))  # written whole, by rename
+    assert run_dir("..") is None and run_dir(".") is None and run_dir("ok-run.1") is not None
+
+
 def test_studio_keeps_a_runs_record_across_a_repair() -> None:
     from app.studio import StudioRun, read_run
 

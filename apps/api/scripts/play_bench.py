@@ -54,7 +54,11 @@ def check_module(code: str) -> dict[str, Any]:
         module = Path(tmp) / "module.js"
         module.write_text(code)
         env = {**os.environ, "GATE_TSX": str(GATE / "node_modules" / ".bin" / "tsx"), "GATE_ENTRY": str(GATE / "gate.ts")}
-        run = subprocess.run(["node", str(CHECK), str(module)], capture_output=True, text=True, env=env, timeout=300)
+        try:
+            run = subprocess.run(["node", str(CHECK), str(module)], capture_output=True, text=True, env=env, timeout=300)
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            # One game's check that hangs (or a missing node) is that game's result, not the end of the run.
+            return {"runs": False, "check": False, "fixes": [], "layout_fixes": None, "gate_error": f"check did not run: {type(exc).__name__}"}
     out = run.stdout + run.stderr
     lines = out.splitlines()
     return {

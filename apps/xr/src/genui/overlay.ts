@@ -242,7 +242,11 @@ export async function generate(prompt: string, extra: { previousCode?: string; c
   state.busy = true;
   repairPending = false;
   if (!extra.previousCode) state.autoRepaired = false; // a new lesson gets its own automatic repair
-  if (!extra.previousCode) state.kind = 'lesson'; // the prompt box writes lessons; a repair keeps the kind
+  if (!extra.previousCode) {
+    // The prompt box writes lessons, on the desk unless they say otherwise; a repair keeps the kind and the mode.
+    state.kind = 'lesson';
+    state.mode = null;
+  }
   state.prompt = prompt;
   repairButton.hidden = true;
   stopWatchingAssets();
@@ -297,6 +301,7 @@ async function generateStream(prompt: string) {
   state.autoRepaired = false;
   state.prompt = prompt;
   state.kind = 'lesson';
+  state.mode = null;
   repairButton.hidden = true;
   stopWatchingAssets();
   setStatus('Planning…');
@@ -396,6 +401,7 @@ export async function watchLive(key: string, prompt: string, kind: LessonKind, o
   const watch = ++liveWatch;
   state.prompt = prompt;
   state.kind = kind;
+  state.mode = null;
   state.autoRepaired = false;
   repairPending = false;
   stopWatchingAssets();
@@ -469,6 +475,7 @@ export async function startLesson(prompt: string) {
     const saved = (await res.json()) as SavedLesson;
     state.prompt = prompt;
     state.kind = 'lesson';
+    state.mode = null;
     state.autoRepaired = false;
     repairPending = false;
     stopWatchingAssets();

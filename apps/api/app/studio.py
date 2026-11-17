@@ -20,7 +20,8 @@ from app import media
 from app.config import REPO_ROOT
 
 STUDIO_ROOT = Path(os.environ.get("STUDIO_DIR") or REPO_ROOT / "data" / "studio")
-RUN_ID = re.compile(r"^[A-Za-z0-9._-]{1,80}$")
+# A folder name: letters, digits, dot, dash and underscore, never starting with a dot (no "." or "..").
+RUN_ID = re.compile(r"^[A-Za-z0-9_-][A-Za-z0-9._-]{0,79}$")
 SYNC_EVERY_S = 6
 # What the Studio copies from the sandbox: the plan, the game's parts and the module as it is (the play-test pictures
 # are listed and copied as they appear). The module is kept even when the run fails, to see how far it got.
@@ -29,6 +30,20 @@ SANDBOX_FILES = ("/work/plan.md", "/work/parts/identity.js", "/work/parts/sounds
 
 def run_dir(run_id: str) -> Path | None:
     return STUDIO_ROOT / run_id if RUN_ID.match(run_id) else None
+
+
+def _write_json(path: Path, data: Any) -> None:
+    """Whole or not at all: another process (the API, a benchmark) may read the file while a run writes it."""
+    part = path.with_name(f".{path.name}.{os.getpid()}.part")
+    part.write_text(json.dumps(data, indent=1))
+    os.replace(part, path)
+
+
+def _read_json(path: Path, default: Any) -> Any:
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError):
+        return default
 
 
 class StudioRun:
@@ -40,11 +55,10 @@ class StudioRun:
         (self.dir / "files").mkdir(parents=True, exist_ok=True)
         # Later stages of the same run (the design step, then the coder, then a repair) carry on its record: its
         # start, its timeline and the player's own words as the request.
-        previous = json.loads((self.dir / "meta.json").read_text()) if (self.dir / "meta.json").exists() else {}
+        previous = _read_json(self.dir / "meta.json", {})
         self.started = float(previous.get("started") or time.time())
         self.meta = {"runId": run_id, "request": previous.get("request") or request, "kind": kind, "model": model, "status": status, "started": self.started}
-        events = self.dir / "events.json"
-        self.events: list[dict[str, Any]] = json.loads(events.read_text()) if events.exists() else []
+        self.events: list[dict[str, Any]] = _read_json(self.dir / "events.json", [])
         if previous.get("status") in ("ready", "failed"):
             # Keep the last attempt's module: this attempt's sync would overwrite it with its own start.
             module = self.dir / "files" / "module.js"
@@ -55,11 +69,11 @@ class StudioRun:
         self._write_meta()
 
     def _write_meta(self) -> None:
-        (self.dir / "meta.json").write_text(json.dumps(self.meta, indent=1))
+        _write_json(self.dir / "meta.json", self.meta)
 
     def event(self, who: str, what: str, detail: str = "", **extra: Any) -> None:
         self.events.append({"t": round(time.time() - self.started, 1), "who": who, "what": what, "detail": detail[:1500], **extra})
-        (self.dir / "events.json").write_text(json.dumps(self.events, indent=1))
+        _write_json(self.dir / "events.json", self.events)
 
     def save(self, name: str, data: bytes) -> bool:
         """Keep a file the run made; True when it is new or changed."""
@@ -112,26 +126,26 @@ def list_runs(limit: int = 40) -> list[dict[str, Any]]:
     if not STUDIO_ROOT.exists():
         return []
     runs = []
-    for meta in STUDIO_ROOT.glob("*/meta.json"):
-        try:
-            runs.append(json.loads(meta.read_text()))
-        except ValueError:
-            continue
+    for path in STUDIO_ROOT.glob("*/meta.json"):
+        meta = _read_json(path, None)
+        if isinstance(meta, dict):
+            runs.append(meta)
     return sorted(runs, key=lambda r: r.get("started", 0), reverse=True)[:limit]
 
 
 def read_run(run_id: str) -> dict[str, Any] | None:
     folder = run_dir(run_id)
-    if folder is None or not (folder / "meta.json").exists():
+    meta = _read_json(folder / "meta.json", None) if folder is not None else None
+    if not isinstance(meta, dict):
         return None
-    events = json.loads((folder / "events.json").read_text()) if (folder / "events.json").exists() else []
+    events = _read_json(folder / "events.json", [])
     files = sorted(str(p.relative_to(folder / "files")) for p in (folder / "files").rglob("*") if p.is_file())
     texts = {}
     for name in ("plan.md", "parts/identity.js", "parts/sounds.js"):
         path = folder / "files" / name
         if path.exists():
             texts[name] = path.read_text(errors="replace")[:20000]
-    return {**json.loads((folder / "meta.json").read_text()), "events": events, "files": files, "texts": texts,
+    return {**meta, "events": events, "files": files, "texts": texts,
             "media": media.library(run_id=run_id),
             "identity": _identity(texts.get("parts/identity.js", "")), "sounds": _sounds(texts.get("parts/sounds.js", ""))}
 

@@ -132,7 +132,7 @@ function worldWater(THREE, land, o = {}) {
     const length = Math.hypot(bx - ax, bz - az);
     mesh = new THREE.Mesh(new THREE.PlaneGeometry(valley.width * 1.1, length + valley.width), material);
     mesh.rotation.x = -Math.PI / 2;
-    mesh.rotation.z = -Math.atan2(bx - ax, bz - az);
+    mesh.rotation.z = Math.atan2(bx - ax, bz - az); // the plane's long side along the valley
     mesh.position.set((ax + bx) / 2, -valley.depth * 0.45, (az + bz) / 2);
   } else {
     throw new Error('worldWater(): give the land a valley, or pass { x, z, r } for a pond.');

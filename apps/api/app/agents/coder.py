@@ -50,6 +50,8 @@ TOOL_CALLS = 80
 # A lesson in a look (its skill: new-lesson, build, check) takes 5-8 minutes on gpt-6.1-sol; 8 minutes ran out.
 WALL_S = int(os.environ.get("AGENT_WALL_S") or 15 * 60)
 SANDBOX_GRACE_S = 180
+# Out of time, how long the cancelled agent gets to stop before its module is read.
+STOP_WAIT_S = 5
 # A play-test (screenshots, hand runs) and a grading round cost more than writing alone; two runs stopped at $2.
 # Per attempt. Priced without a cached rate, $3 is about 30 model calls, and the grading round is skipped once it is
 # spent (Nov 17: every side-by-side run ended at it); CODER_BUDGET_USD sets it.
@@ -261,6 +263,10 @@ async def write_with_agent(state: dict[str, Any]) -> dict[str, Any]:
     tokens = [scope.run_id.set(run_id), scope.studio.set(studio), scope.made.set({})]
     try:
         result = await _write_with_agent(state, studio)
+    except Exception as exc:
+        if studio is not None:
+            studio.finish("failed", error=f"{type(exc).__name__}: {str(exc)[:300]}")  # not left "writing" for ever
+        raise
     finally:
         for var, token in zip((scope.run_id, scope.studio, scope.made), tokens):
             var.reset(token)
@@ -346,14 +352,18 @@ async def _write_with_agent(state: dict[str, Any], studio: StudioRun | None) -> 
                 if studio is not None:
                     _record(studio, event)
 
-        # Out of time: stop waiting at once (a tool running in a thread cannot be cancelled, and wait_for would wait for
-        # it) and keep what was written. The gate judges it (an unfinished starter fails there), and a repair starts
-        # from it instead of from nothing.
+        # Out of time: cancel the agent and keep what was written. The gate judges it (an unfinished starter fails
+        # there), and a repair starts from it instead of from nothing. The cancel gets a few seconds to land, so the
+        # module is read from a sandbox the agent no longer edits and nothing reaches the Studio after its finish; a
+        # tool running in a thread cannot be cancelled, so it is not waited for beyond that (wait_for would).
         streaming = asyncio.ensure_future(_stream())
         finished, _ = await asyncio.wait({streaming}, timeout=max(1.0, deadline - time.monotonic()))
         timed_out = not finished
         if timed_out:
             streaming.cancel()
+            await asyncio.wait({streaming}, timeout=STOP_WAIT_S)
+            if streaming.done() and not streaming.cancelled() and isinstance(streaming.exception(), ModelRefusalError):
+                return _failed(state, f"The model refused: {streaming.exception()}", refused=True)
         else:
             try:
                 streaming.result()

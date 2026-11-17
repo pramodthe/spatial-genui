@@ -43,3 +43,27 @@ def test_the_world_starter_builds_land_and_passes_the_gate(tmp_path: Path) -> No
 def test_a_desk_starter_has_no_world(tmp_path: Path) -> None:
     code = Path(_start(tmp_path)).read_text()
     assert "const WORLD = false;" in code and "function worldTerrain" not in code
+
+
+def test_valley_water_lies_along_a_diagonal_valley() -> None:
+    """worldWater's strip runs along the riverbed for any valley direction (it was mirrored: 22 degrees off for the
+    documented valley, across the bed at 45 degrees)."""
+    kit = API / "skills" / "play" / "learning-game" / "assets" / "world-kit.js"
+    script = f"""
+import * as THREE from 'three';
+import {{ readFileSync }} from 'node:fs';
+const kit = new Function('THREE', readFileSync({json.dumps(str(kit))}, 'utf8') + '; return {{ worldTerrain, worldWater }};')(THREE);
+const out = [];
+for (const [from, to] of [[[0.9, -1.1], [0.5, 0.9]], [[-1, -1], [1, 1]], [[0, -1], [0, 1]]]) {{
+  const land = kit.worldTerrain(THREE, {{ size: 2.4, valley: {{ from, to, width: 0.12, depth: 0.03 }} }});
+  const water = kit.worldWater(THREE, land);
+  water.updateMatrixWorld();
+  const axis = new THREE.Vector3(0, 1, 0).transformDirection(water.matrixWorld);
+  const along = Math.abs(axis.x * (to[0] - from[0]) + axis.z * (to[1] - from[1])) / Math.hypot(to[0] - from[0], to[1] - from[1]);
+  out.push(along);
+}}
+console.log(JSON.stringify(out));
+"""
+    run = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True, cwd=GATE, timeout=60)
+    assert run.returncode == 0, run.stderr
+    assert all(value > 0.999 for value in json.loads(run.stdout)), run.stdout

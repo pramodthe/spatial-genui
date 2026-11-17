@@ -15,6 +15,7 @@ os.environ["APP_DB"] = str(_ROOT / "app.db")
 os.environ["COURSES_DIR"] = str(_ROOT / "courses")
 os.environ["RUNS_DIR"] = str(_ROOT / "runs")
 os.environ["STUDIO_DIR"] = str(_ROOT / "studio")
+os.environ["PICTURES_DIR"] = str(_ROOT / "pictures")
 os.environ["MEDIA_DIR"] = str(_ROOT / "media")
 os.environ["SOUND_LIBRARY_DIR"] = str(_ROOT / "sound-library")
 # Never the real media provider in tests (an empty value also keeps .env from setting it).

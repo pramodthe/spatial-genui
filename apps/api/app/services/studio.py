@@ -32,6 +32,30 @@ def run_dir(run_id: str) -> Path | None:
     return STUDIO_ROOT / run_id if RUN_ID.match(run_id) else None
 
 
+# Card pictures for the start page and the headset dashboard: each game's and course level's final view, by name.
+PICTURES = Path(os.environ.get("PICTURES_DIR") or REPO_ROOT / "data" / "pictures")
+PICTURE_NAME = re.compile(r"^[a-z0-9-]{1,60}$")
+
+
+def keep_picture(name: str, run_id: str | None) -> bool:
+    """Keep the run's final view (the finished game as it opens) as the picture of what it made. True when kept."""
+    folder = run_dir(run_id) if run_id else None
+    source = folder / "files" / "final-view.png" if folder is not None else None
+    if source is None or not source.is_file() or not PICTURE_NAME.fullmatch(name):
+        return False
+    try:
+        PICTURES.mkdir(parents=True, exist_ok=True)
+        (PICTURES / f"{name}.png").write_bytes(source.read_bytes())
+    except OSError:
+        return False  # a picture only: the game is saved without it
+    return True
+
+
+def picture(name: str) -> Path | None:
+    path = PICTURES / f"{name}.png"
+    return path if PICTURE_NAME.fullmatch(name) and path.is_file() else None
+
+
 def _write_json(path: Path, data: Any) -> None:
     """Whole or not at all: another process (the API, a benchmark) may read the file while a run writes it."""
     part = path.with_name(f".{path.name}.{os.getpid()}.part")

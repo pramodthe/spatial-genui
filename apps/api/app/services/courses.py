@@ -17,7 +17,7 @@ from app.core.db import count_courses, load_courses, save_course
 from app.core.guard import record_spend
 from app.core.json_reply import extract_json
 from app.pipeline.lesson import run_lesson
-from app.services import live
+from app.services import live, studio
 
 PLANNER_PROMPT = """You plan a short learning adventure for a mixed-reality headset, for players from about 9 years old to adults. Each level is one learning game on the player's desk: the player does the real thing with their hands, one move at a time, each move says in one line why it matters, and the level ends with a challenge that measures the same idea (a distance, a time, a score) with stars and Try again. Like folding a paper plane fold by fold and then throwing it to see how far it flies. No video, no long reading, no typing.
 
@@ -78,6 +78,7 @@ def summary(course: dict[str, Any]) -> dict[str, Any]:
         watcher = live.get(live.lesson_key(course["id"], index)) if lesson.get("status") == "generating" else None
         if watcher is not None:
             rest["live"] = {"key": watcher.key, "line": watcher.line(), "seq": watcher.seq}
+        rest["picture"] = studio.picture(f"course-{course['id']}-{index}") is not None
         lessons.append(rest)
     return {**course, "lessons": lessons}
 
@@ -299,6 +300,7 @@ async def build_lesson(course: dict[str, Any], lesson: dict[str, Any]) -> None:
         if not result.get("ok") or not result.get("code"):
             raise RuntimeError(result.get("error") or "The lesson could not be written.")
         lesson.update(status="ready", code=result["code"], model=result["model"], generatedAt=now_iso())
+        studio.keep_picture(f"course-{course['id']}-{index}", result.get("id"))
     except Exception as exc:
         lesson.update(status="failed", error=str(exc)[:300])
     lesson["seconds"] = js_round((time.time() * 1000 - started) / 1000)

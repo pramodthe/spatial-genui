@@ -354,6 +354,28 @@ async def get_lesson(course_id: str, index: str) -> JSONResponse:
     return JSONResponse(lesson)
 
 
+def _picture(name: str) -> Response:
+    """A card picture (services/studio.py): the finished game as it opens. 404 until its run has made one."""
+    path = studio.picture(name)
+    if path is None:
+        return JSONResponse({"error": "No picture"}, status_code=404)
+    return FileResponse(path, media_type="image/png", headers={"cache-control": "public, max-age=3600"})
+
+
+@app.get("/api/games/{game_id}/picture")
+async def game_picture(game_id: str) -> Response:
+    if not _HEX.fullmatch(game_id):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    return _picture(f"game-{game_id}")
+
+
+@app.get("/api/courses/{course_id}/lessons/{index}/picture")
+async def lesson_picture(course_id: str, index: str) -> Response:
+    if not _HEX.fullmatch(course_id) or not re.fullmatch(r"\d", index):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    return _picture(f"course-{course_id}-{index}")
+
+
 @app.post("/api/games")
 async def post_game(request: Request) -> JSONResponse:
     body = await _json(request)

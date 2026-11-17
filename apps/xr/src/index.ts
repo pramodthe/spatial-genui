@@ -10,7 +10,7 @@ import projectOptions from 'virtual:iwsdk-project';
 import { initMoveHandles } from './genui/handle.js';
 import { initGenUIHost } from './genui/host.js';
 import { createStartPage } from './genui/start-page.js';
-import { createOverlay, generate, onLessonStatus, repair, reportRuntimeError, startLesson, lessonPrompt, openWritten, watchLive } from './genui/overlay.js';
+import { closeGame, createOverlay, onLessonStatus, repair, reportRuntimeError, startLesson, openWritten, watchLive } from './genui/overlay.js';
 import { initLessonPicker } from './genui/picker.js';
 
 World.create(
@@ -19,17 +19,13 @@ World.create(
 ).then((world) => {
   initMoveHandles(world);
   initGenUIHost(world, { onRuntimeError: reportRuntimeError });
-  // In XR the prompt box is not visible; the picker is how a lesson starts there (hands only).
+  // In XR the start page is not visible; the dashboard is the home screen there (hands only).
   initLessonPicker(world, {
     start: (prompt) => void startLesson(prompt),
     fix: () => void repair(),
-    fresh: () => {
-      const prompt = lessonPrompt();
-      if (prompt) void generate(prompt);
-    },
-    ask: (prompt) => void generate(prompt),
     open: (code, prompt, kind) => void openWritten(code, prompt, kind),
     watch: (key, prompt, kind, outcome) => void watchLive(key, prompt, kind, outcome),
+    close: closeGame,
     onStatus: onLessonStatus,
   });
   createStartPage(world, createOverlay());

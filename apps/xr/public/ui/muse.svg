@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-16 -20 232 250" width="464" height="500" role="img" aria-label="Muse">
+  <g class="muse-all">
+    <path d="M44 204 C22 204 14 184 14 142 C14 74 50 36 100 36 C150 36 186 74 186 142 C186 184 178 204 156 204 Z" fill="#ffffff" stroke="#ffffff" stroke-width="24" stroke-linejoin="round"/>
+    <g class="muse-arm"><path d="M30 150 C12 150 2 138 4 124" fill="none" stroke="#ffffff" stroke-width="30" stroke-linecap="round"/>
+      <path d="M30 150 C12 150 2 138 4 124" fill="none" stroke="#12063b" stroke-width="20" stroke-linecap="round"/>
+      <path d="M30 150 C12 150 2 138 4 124" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round"/></g>
+    <path d="M170 150 C188 150 198 162 196 176" fill="none" stroke="#12063b" stroke-width="20" stroke-linecap="round"/>
+    <path d="M170 150 C188 150 198 162 196 176" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round"/>
+    <path d="M44 204 C22 204 14 184 14 142 C14 74 50 36 100 36 C150 36 186 74 186 142 C186 184 178 204 156 204 Z" fill="#ffffff" stroke="#12063b" stroke-width="7" stroke-linejoin="round"/>
+    <path d="M52 176 C70 190 130 190 148 176" fill="none" stroke="#b5e2ff" stroke-width="10" stroke-linecap="round"/>
+    <g class="muse-eyes">
+      <ellipse cx="70" cy="118" rx="22" ry="26" fill="#ffffff" stroke="#12063b" stroke-width="6"/>
+      <ellipse cx="130" cy="118" rx="22" ry="26" fill="#ffffff" stroke="#12063b" stroke-width="6"/>
+      <g class="muse-pupils" transform="translate(0.0 0.0)">
+        <circle cx="70" cy="120" r="10" fill="#12063b"/><circle cx="130" cy="120" r="10" fill="#12063b"/>
+        <circle cx="74" cy="115" r="3.5" fill="#ffffff"/><circle cx="134" cy="115" r="3.5" fill="#ffffff"/>
+      </g>
+    </g>
+    <path class="muse-smile" d="M86 160 C94 170 106 170 114 160" fill="none" stroke="#12063b" stroke-width="6" stroke-linecap="round"/>
+    <path class="muse-open" d="M84 158 C88 180 112 180 116 158 Z" fill="#12063b" stroke="#12063b" stroke-width="6" stroke-linejoin="round" display="none"/>
+  </g>
+</svg>

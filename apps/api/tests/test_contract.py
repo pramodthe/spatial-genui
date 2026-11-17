@@ -83,3 +83,24 @@ def test_static_files_stay_inside_the_directory(tmp_path, monkeypatch) -> None:
         assert missing.status_code == 404
         escaped = client.get("/../pyproject.toml")
         assert escaped.status_code in {403, 404}
+
+
+def test_a_game_card_gets_the_picture_of_its_finished_run() -> None:
+    """The run's final view is kept as the game's card picture; until then (and for a bad name) there is none."""
+    from app.services import studio
+
+    run = studio.StudioRun("picture-run", "a kite", "game", "m")
+    with TestClient(app) as client:
+        assert client.get("/api/games/0a1b2c3d/picture").status_code == 404
+        assert studio.keep_picture("game-0a1b2c3d", "picture-run") is False  # the run has no final view yet
+        run.save("final-view.png", b"\x89PNG picture")
+        assert studio.keep_picture("game-0a1b2c3d", "picture-run") is True
+        assert studio.keep_picture("../escape", "picture-run") is False
+        got = client.get("/api/games/0a1b2c3d/picture")
+        assert got.status_code == 200 and got.headers["content-type"] == "image/png" and got.content == b"\x89PNG picture"
+        assert client.get("/api/games/not-an-id/picture").status_code == 404
+        from app.services import games
+
+        assert games.summary({"id": "0a1b2c3d", "status": "ready", "code": "x"}) == {"id": "0a1b2c3d", "status": "ready", "picture": True}
+        assert games.summary({"id": "ffffffff", "status": "ready"})["picture"] is False
+        assert client.get("/api/courses/0a1b2c3d/lessons/0/picture").status_code == 404

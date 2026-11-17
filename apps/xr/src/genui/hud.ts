@@ -155,3 +155,101 @@ class ViewPillSystem extends createSystem({ pressed: { required: [Pressed] } }) 
     pill.mesh.quaternion.slerp(this.facing, follow);
   }
 }
+
+/**
+ * The title card: a game's name, big, in the middle of the view when the game opens, like a game's opening. It grows
+ * in, holds, fades and is gone; nothing of it stays in the room. Drawn over everything, it follows the head softly.
+ */
+const TITLE_OFFSET = new Vector3(0, 0.04, -1.0);
+const TITLE_WIDTH_M = 0.8;
+const TITLE_HEIGHT_M = 0.2;
+const TITLE_IN_S = 0.35;
+const TITLE_FADE_AT_S = 2.6;
+const TITLE_GONE_S = 3.3;
+
+let title: { mesh: Mesh; canvas: HTMLCanvasElement; texture: CanvasTexture; material: MeshBasicMaterial; age: number } | null = null;
+
+export function initTitleCard(world: World) {
+  world.registerSystem(TitleCardSystem);
+}
+
+/** Show a game's name as its opening title card (replacing one still showing). */
+export function showTitle(text: string) {
+  if (!title || !inXR || hidden) return;
+  const { canvas, texture } = title;
+  const g = canvas.getContext('2d')!;
+  const w = canvas.width;
+  const h = canvas.height;
+  g.clearRect(0, 0, w, h);
+  g.fillStyle = 'rgba(20, 22, 30, 0.86)';
+  g.beginPath();
+  g.roundRect(4, 4, w - 8, h - 8, 56);
+  g.fill();
+  g.strokeStyle = 'rgba(255, 255, 255, 0.28)';
+  g.lineWidth = 4;
+  g.stroke();
+  const words = text.trim().toUpperCase();
+  let size = 132;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  do {
+    g.font = `800 ${size}px Inter, system-ui, sans-serif`;
+    size -= 6;
+  } while (g.measureText(words).width > w - 140 && size > 48);
+  g.fillStyle = '#ffffff';
+  g.fillText(words, w / 2, h / 2 + 6);
+  texture.needsUpdate = true;
+  title.age = 0;
+  title.mesh.visible = true;
+}
+
+/** For tests: whether the title card shows and what it says is drawn, not read back. */
+export function inspectTitle() {
+  return title ? { visible: title.mesh.visible, age: Math.round(title.age * 100) / 100 } : null;
+}
+
+class TitleCardSystem extends createSystem({}) {
+  private readonly target = new Vector3();
+  private readonly facing = new Quaternion();
+
+  init(): void {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1440;
+    canvas.height = 360;
+    const texture = new CanvasTexture(canvas);
+    texture.colorSpace = SRGBColorSpace;
+    const material = new MeshBasicMaterial({ map: texture, transparent: true, opacity: 0, depthTest: false, depthWrite: false });
+    const mesh = new Mesh(new PlaneGeometry(TITLE_WIDTH_M, TITLE_HEIGHT_M), material);
+    mesh.name = 'Title card';
+    mesh.renderOrder = 1001; // over the game, the room and the pill
+    mesh.visible = false;
+    mesh.raycast = () => {}; // the hands point through it
+    this.world.createTransformEntity(mesh, { persistent: true });
+    title = { mesh, canvas, texture, material, age: 0 };
+  }
+
+  update(delta: number): void {
+    if (!title?.mesh.visible) return;
+    if (!inXR || hidden) {
+      title.mesh.visible = false;
+      return;
+    }
+    const first = title.age === 0;
+    title.age += Math.min(delta, 0.05);
+    const t = title.age;
+    if (t >= TITLE_GONE_S) {
+      title.mesh.visible = false;
+      return;
+    }
+    const grow = Math.min(1, t / TITLE_IN_S);
+    title.material.opacity = Math.min(grow, Math.max(0, (TITLE_GONE_S - t) / (TITLE_GONE_S - TITLE_FADE_AT_S)));
+    title.mesh.scale.setScalar(0.88 + 0.12 * (1 - (1 - grow) ** 3));
+    const camera = this.world.camera;
+    camera.updateMatrixWorld();
+    this.target.copy(TITLE_OFFSET).applyMatrix4(camera.matrixWorld);
+    camera.getWorldQuaternion(this.facing);
+    const follow = first ? 1 : FOLLOW;
+    title.mesh.position.lerp(this.target, follow);
+    title.mesh.quaternion.slerp(this.facing, follow);
+  }
+}

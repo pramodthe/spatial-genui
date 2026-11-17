@@ -3,7 +3,7 @@
     {
       "pattern": "paperPopUpLook\\(THREE, kit\\)",
       "when": "absent",
-      "message": "The paper-pop-up look module is not used: start from scripts/new-lesson.mjs.",
+      "message": "The paper-pop-up look module is not used: start from scripts/new-lesson.mjs (a game: /skills/play/learning-game/scripts/new-game.mjs paper-pop-up).",
       "whole": true
     },
     {
@@ -31,7 +31,8 @@
     {
       "pattern": "\\.turnTo\\(",
       "when": "absent",
-      "message": "No page turn: one spread per step; go(n) calls book.turnTo(n) and update calls book.update(time, delta) (references/teaching.md)."
+      "message": "No page turn: one spread per step; go(n) calls book.turnTo(n) and update calls book.update(time, delta) (references/teaching.md).",
+      "lessonOnly": true
     },
     {
       "pattern": "\\.update\\(time,\\s*delta\\)",

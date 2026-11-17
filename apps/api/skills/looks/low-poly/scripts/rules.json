@@ -3,7 +3,7 @@
     {
       "pattern": "=\\s*lowPolyLook\\(\\s*THREE\\s*,\\s*kit\\s*\\)",
       "when": "absent",
-      "message": "The low-poly look module is not used: start from scripts/new-lesson.mjs and build with const look = lowPolyLook(THREE, kit).",
+      "message": "The low-poly look module is not used: start from scripts/new-lesson.mjs (a game: /skills/play/learning-game/scripts/new-game.mjs low-poly) and build with const look = lowPolyLook(THREE, kit).",
       "whole": true
     },
     {
@@ -26,12 +26,14 @@
     {
       "pattern": "look\\.flag\\(",
       "when": "absent",
-      "message": "No stage flags: each stage of the process is a spot in the landscape with a numbered paper flag the learner presses (look.flag; references/teaching.md)."
+      "message": "No stage flags: each stage of the process is a spot in the landscape with a numbered paper flag the learner presses (look.flag; references/teaching.md).",
+      "lessonOnly": true
     },
     {
       "pattern": "(look\\.follow\\(|\\.at\\()",
       "when": "absent",
-      "message": "Nothing travels the route: a traveller (a droplet, a truck, a boat) carrying the flow along a path shows how the stages connect (look.follow with a lookPath; references/teaching.md)."
+      "message": "Nothing travels the route: a traveller (a droplet, a truck, a boat) carrying the flow along a path shows how the stages connect (look.follow with a lookPath; references/teaching.md).",
+      "lessonOnly": true
     },
     {
       "pattern": "(look\\.(pile|number|tank|drops)\\(|setLevel\\(|\\.show\\()",

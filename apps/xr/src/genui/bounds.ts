@@ -45,29 +45,38 @@ type HandPose = { side: Side; tip: Object3D; pinching: boolean };
 
 const EDGE_M = 0.003;
 const CORNER_M = 0.008;
-// A move handle is a thin rod along a bottom edge; its pinchable volume is fatter than what is drawn.
-const ROD_M = 0.004;
-const ROD_HIT_M = 0.016;
-const KNOB_M = 0.011;
-const KNOB_HIT_M = 0.03;
+// A move handle is a short, thin grip in the middle of a bottom edge; its pinchable volume is fatter than what is
+// drawn. On the headset the old rods (70% of each edge, 4 mm) ran along the front of the lesson and took pinches
+// meant for the model, so they are short and thin, and a pinch has to be closer to take one.
+const ROD_M = 0.0025;
+const ROD_HIT_M = 0.012;
+const ROD_MAX_M = 0.08;
+const KNOB_M = 0.008;
+const KNOB_HIT_M = 0.022;
 // A fingertip this close to a handle (or a corner) takes it with a pinch. It is measured where the fingertip was
 // just before the pinch: closing a pinch pulls the index tip a few centimetres toward the thumb.
-const TOUCH_REACH_M = 0.04;
+const TOUCH_REACH_M = 0.03;
 const CORNER_REACH_M = 0.04;
 const PRE_PINCH_MS = 120;
 // Lessons: a pinch this soon after a handle was pointed at still takes it (closing the pinch moves the ray).
 const POINT_GRACE_MS = 200;
-// A hand this close to the box brightens the frame.
+// A hand this close to the box, coming from outside it, may want to move it: the frame shows, and the grip nearest
+// that hand. A hand over the playfield (inside the box's footprint, by more than PLAY_INSET_M, up to PLAY_ABOVE_M
+// above it) is playing: nothing shows and its pinches are never a handle's. On the headset an always-visible frame
+// kept catching the eye and the fingers during play.
 const NEAR_M = 0.22;
+const REVEAL_M = 0.15;
+const PLAY_INSET_M = 0.02;
+const PLAY_ABOVE_M = 0.3;
 const FLOOR_CLEARANCE_M = 0.02;
 const SCALE_RANGE = [0.35, 3] as const;
 // Idle, a hand near, pointed at, held.
-const LINE_OPACITY = [0.12, 0.45] as const;
+const LINE_OPACITY = [0, 0.3] as const;
 const HANDLE_LOOK = [
-  { color: '#ffffff', opacity: 0.3, grow: 1 },
+  { color: '#ffffff', opacity: 0, grow: 1 },
   { color: '#ffffff', opacity: 0.85, grow: 1 },
-  { color: '#31a8f3', opacity: 1, grow: 1.7 },
-  { color: '#31a8f3', opacity: 1, grow: 1.7 },
+  { color: '#31a8f3', opacity: 1, grow: 1.5 },
+  { color: '#31a8f3', opacity: 1, grow: 1.5 },
 ] as const;
 
 const SIDES: Side[] = ['left', 'right'];
@@ -167,7 +176,7 @@ export function createLessonBounds(
   const toAnchor = new Matrix4();
   const meshToAnchor = new Matrix4();
   const meshBox = new Box3();
-  const v = [new Vector3(), new Vector3(), new Vector3()];
+  const v = [new Vector3(), new Vector3(), new Vector3(), new Vector3(), new Vector3(), new Vector3(), new Vector3()];
   const tipNow = new Vector3();
   const insidePoint = new Vector3();
   const wasPinching: Record<Side, boolean> = { left: false, right: false };
@@ -232,17 +241,20 @@ export function createLessonBounds(
   function place() {
     const empty = box.isEmpty();
     group.visible = !empty && withFrame;
-    for (const handle of handles) handle.hit.visible = !empty;
+    // Which grips are shown (and so can be hit) is decided in tick(); with no box, none.
+    if (empty) for (const handle of handles) handle.hit.visible = false;
     if (empty) return;
     EDGES.forEach(([i, j], n) => lay(lines[n]!, local[i]!, local[j]!, EDGE_M));
     for (let n = 0; n < 8; n++) corners[n]!.position.copy(local[n]!);
     for (const handle of handles) {
       const [i, j] = handle.edge;
       if (handle.kind === 'move') {
-        // The rod leaves the corners free for scaling. Pushed out from the middle of its edge, so it stays parallel.
+        // A short grip in the middle of its edge (at most ROD_MAX_M), leaving the corners free for scaling. Pushed
+        // out from the middle of its edge, so it stays parallel.
+        const half = Math.min(0.35, ROD_MAX_M / 2 / Math.max(local[i]!.distanceTo(local[j]!), 1e-6));
         const mid = pushOut(v[1]!.lerpVectors(local[i]!, local[j]!, 0.5)).sub(v[0]!.lerpVectors(local[i]!, local[j]!, 0.5));
-        const a = v[0]!.lerpVectors(local[i]!, local[j]!, 0.15).add(mid);
-        const b = new Vector3().lerpVectors(local[i]!, local[j]!, 0.85).add(mid);
+        const a = v[0]!.lerpVectors(local[i]!, local[j]!, 0.5 - half).add(mid);
+        const b = new Vector3().lerpVectors(local[i]!, local[j]!, 0.5 + half).add(mid);
         lay(handle.hit, a, b);
       } else {
         pushOut(handle.hit.position.lerpVectors(local[i]!, local[j]!, 0.5));
@@ -262,6 +274,19 @@ export function createLessonBounds(
       if (tip) found.push({ side, tip, pinching: xr.getSelectState?.(side)?.active === true });
     }
     return found;
+  }
+
+  const revealed = new Set<Handle>();
+  const playPoint = new Vector3();
+  /** A fingertip (world) over the playfield: inside the box's footprint, from its bottom to PLAY_ABOVE_M above its top. */
+  function overPlay(tip: Vector3): boolean {
+    if (box.isEmpty()) return false;
+    anchor.updateWorldMatrix(true, false);
+    const p = anchor.worldToLocal(playPoint.copy(tip));
+    const scale = anchor.getWorldScale(v[4]!).x || 1;
+    const inset = PLAY_INSET_M / scale;
+    return p.x > box.min.x + inset && p.x < box.max.x - inset && p.z > box.min.z + inset && p.z < box.max.z - inset
+      && p.y > box.min.y - 0.03 / scale && p.y < box.max.y + PLAY_ABOVE_M / scale;
   }
 
   /** Distance from `tip` to a handle: to the rod's segment, or to the knob's centre. */
@@ -290,6 +315,7 @@ export function createLessonBounds(
     let best: Handle | null = null;
     let bestDist = TOUCH_REACH_M;
     for (const handle of handles) {
+      if (!handle.hit.visible) continue; // a hidden grip is not there
       const dist = Math.min(...tips.map((t) => distanceToHandle(handle, t)));
       if (dist <= bestDist) [best, bestDist] = [handle, dist];
     }
@@ -383,6 +409,7 @@ export function createLessonBounds(
     const look = HANDLE_LOOK[state]!;
     handle.material.color.set(look.color);
     handle.material.opacity = look.opacity;
+    handle.look.visible = look.opacity > 0;
     // A rod gets thicker, never longer (its length is the edge's); a knob grows all round.
     if (handle.kind === 'move') handle.look.scale.set(1, look.grow, look.grow);
     else handle.look.scale.setScalar(look.grow);
@@ -399,10 +426,11 @@ export function createLessonBounds(
         const on = handles.filter((h) => h.entity.hasComponent(Hovered));
         if (on.length) lastPointed = { handle: on.find((h) => h.kind === 'turn') ?? on[0]!, at: now };
       }
-      // Start: a pinch that begins on a handle or a corner (never one that began elsewhere and slid over).
+      // Start: a pinch that begins on a handle or a corner (never one that began elsewhere and slid over, and never
+      // one made over the playfield: that is play).
       for (const pose of poses) {
         pose.tip.getWorldPosition(tip);
-        if (!held && !drag && pose.pinching && !wasPinching[pose.side] && !box.isEmpty()) begin(pose, tip, now);
+        if (!held && !drag && pose.pinching && !wasPinching[pose.side] && !box.isEmpty() && !overPlay(tip)) begin(pose, tip, now);
         // Keep this fingertip's last few places (after the start check, so "before" is never this frame).
         const kept = trail[pose.side];
         kept.push({ at: now, tip: tip.clone() });
@@ -438,26 +466,46 @@ export function createLessonBounds(
         }
       }
       place();
-      // The frame shows itself when a hand comes near.
+      // Quiet while playing: the frame shows only for a hand near the box from outside it, and only the grip
+      // nearest that hand; a hand over the playfield hides it all.
       near = false;
+      let playing = false;
+      revealed.clear();
       if (!box.isEmpty()) {
-        const reach = v[0]!.copy(box.min).subScalar(NEAR_M);
-        const far = v[1]!.copy(box.max).addScalar(NEAR_M);
+        // Own vectors: distanceToHandle below uses v[0] to v[2].
+        const reach = v[5]!.copy(box.min).subScalar(NEAR_M);
+        const far = v[6]!.copy(box.max).addScalar(NEAR_M);
         for (const pose of poses) {
-          anchor.worldToLocal(pose.tip.getWorldPosition(v[2]!));
-          if (v[2]!.x > reach.x && v[2]!.y > reach.y && v[2]!.z > reach.z && v[2]!.x < far.x && v[2]!.y < far.y && v[2]!.z < far.z) near = true;
+          const world = pose.tip.getWorldPosition(v[3]!);
+          if (overPlay(world)) {
+            playing = true;
+            continue;
+          }
+          anchor.worldToLocal(v[2]!.copy(world));
+          if (!(v[2]!.x > reach.x && v[2]!.y > reach.y && v[2]!.z > reach.z && v[2]!.x < far.x && v[2]!.y < far.y && v[2]!.z < far.z)) continue;
+          near = true;
+          let closest: Handle | null = null;
+          let closestDist = REVEAL_M;
+          for (const handle of handles) {
+            const dist = distanceToHandle(handle, world);
+            if (dist < closestDist) [closest, closestDist] = [handle, dist];
+          }
+          if (closest) revealed.add(closest);
         }
       }
-      const show = near || drag !== null;
+      const show = drag !== null || (near && !playing);
       lineMat.opacity = LINE_OPACITY[show ? 1 : 0];
       cornerMat.opacity = drag?.kind === 'scale' ? 1 : LINE_OPACITY[show ? 1 : 0];
-      // Blue means a pinch now would take it: pointed at (lessons) or a fingertip on it.
-      const fingertips = poses.map((p) => p.tip.getWorldPosition(new Vector3()));
+      // Blue means a pinch now would take it: pointed at (lessons) or a fingertip on it, from outside the playfield.
+      const fingertips = poses.map((p) => p.tip.getWorldPosition(new Vector3())).filter((t) => !overPlay(t));
       const onHandle = held || !fingertips.length ? null : touched(fingertips);
       for (const handle of handles) {
         const dragging = drag !== null && drag.kind !== 'scale' && drag.handle === handle;
-        const ready = !held && (handle === onHandle || (pointing && handle.entity.hasComponent(Hovered)));
-        setLook(handle, dragging ? 3 : ready ? 2 : show ? 1 : 0);
+        // A grip that is not shown is not there: it catches no ray, so a ray aimed past it (at a card's frame, at
+        // the model) reaches what is behind it. Hidden objects lose their raycast in the host.
+        handle.hit.visible = !box.isEmpty() && (dragging || (!playing && revealed.has(handle)));
+        const ready = !held && !playing && (handle === onHandle || (pointing && handle.entity.hasComponent(Hovered)));
+        setLook(handle, dragging ? 3 : ready ? 2 : show && revealed.has(handle) ? 1 : 0);
       }
     },
     dragging() {

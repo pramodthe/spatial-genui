@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: sailing-wind
+expected_outcome: |
+  A learning game in the low-poly look where the player steers a clearly visible sailboat by following the hand,
+  learns that the wind pushes a sail best from behind or beside and stalls it head-on, then collects crates against
+  a timer with stars and Try again.

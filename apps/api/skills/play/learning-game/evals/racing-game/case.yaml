@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: racing-game
+expected_outcome: |
+  A learning game that keeps it a racing game but teaches the idea under it (speed, grip and turning: too fast into
+  a bend and the car slides out), in a look the agent picks, with a lap or time challenge, stars and Try again.

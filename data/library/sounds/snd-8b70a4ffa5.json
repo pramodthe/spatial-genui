@@ -1,0 +1,17 @@
+{
+ "id": "snd-8b70a4ffa5",
+ "kind": "sound",
+ "file": "snd-8b70a4ffa5.mp3",
+ "prompt": "a sheet of paper folded and creased by hand, quick",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.0023,
+ "length": 1,
+ "loop": false,
+ "seconds": 5.2,
+ "runId": null,
+ "status": "ready",
+ "created": 1794871989.507448,
+ "name": "paper-rustle",
+ "library": true,
+ "bytes": 17179
+}

@@ -1,0 +1,17 @@
+{
+ "id": "snd-2c9f851c14",
+ "kind": "sound",
+ "file": "snd-2c9f851c14.mp3",
+ "prompt": "a soft low wooden double knock for a gentle wrong answer",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.0023,
+ "length": 1,
+ "loop": false,
+ "seconds": 4.5,
+ "runId": null,
+ "status": "ready",
+ "created": 1794872005.728176,
+ "name": "knock-soft-miss",
+ "library": true,
+ "bytes": 17179
+}

@@ -44,6 +44,8 @@ if (look && existsSync(rulesFile)) {
   const lesson = at >= 0 ? code.slice(at) : code;
   for (const [kind, list] of [['fix', rules.fix ?? []], ['note', rules.note ?? []]]) {
     for (const rule of list) {
+      // A learning game (LOOK_CHECK_GAME) skips the rules about a lesson's structure: stage flags, a route, a word per step.
+      if (rule.lessonOnly && process.env.LOOK_CHECK_GAME) continue;
       const found = new RegExp(rule.pattern, rule.flags ?? '').test(rule.whole ? code : lesson);
       if ((rule.when === 'absent' && !found) || (rule.when !== 'absent' && found)) (kind === 'fix' ? fix : note).push(rule.message);
     }
@@ -56,4 +58,6 @@ console.log(`gate ok: ${s.meshes} meshes, ${s.drawCalls} draw calls, ${s.triangl
 for (const f of fix) console.log(`FIX: ${f}`);
 for (const n of note) console.log(`NOTE: ${n}`);
 if (!fix.length) console.log('lesson ok');
+// The play check (/skills/play/learning-game) reads the dry run's numbers from here instead of running it again.
+if (process.env.LOOK_CHECK_STATS) console.log(`STATS ${JSON.stringify(s)}`);
 process.exit(fix.length ? 1 : 0);

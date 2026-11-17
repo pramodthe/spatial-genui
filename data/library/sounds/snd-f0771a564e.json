@@ -1,0 +1,17 @@
+{
+ "id": "snd-f0771a564e",
+ "kind": "sound",
+ "file": "snd-f0771a564e.mp3",
+ "prompt": "a rope tightening on a wooden post, a short creak",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.0023,
+ "length": 1,
+ "loop": false,
+ "seconds": 4.4,
+ "runId": null,
+ "status": "ready",
+ "created": 1794871996.335194,
+ "name": "rope-creak",
+ "library": true,
+ "bytes": 17179
+}

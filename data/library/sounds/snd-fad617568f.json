@@ -1,0 +1,17 @@
+{
+ "id": "snd-fad617568f",
+ "kind": "sound",
+ "file": "snd-fad617568f.mp3",
+ "prompt": "a quiet echoing cave with slow water drips, no music",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.023,
+ "length": 10,
+ "loop": true,
+ "seconds": 7.1,
+ "runId": null,
+ "status": "ready",
+ "created": 1794872015.186558,
+ "name": "cave-drips",
+ "library": true,
+ "bytes": 160957
+}

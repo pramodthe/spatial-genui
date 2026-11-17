@@ -1,0 +1,17 @@
+{
+ "id": "snd-748a96c201",
+ "kind": "sound",
+ "file": "snd-748a96c201.mp3",
+ "prompt": "gentle ocean waves rolling onto a sandy beach, no music",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.023,
+ "length": 10,
+ "loop": true,
+ "seconds": 10.1,
+ "runId": null,
+ "status": "ready",
+ "created": 1794872020.901396,
+ "name": "ocean-waves",
+ "library": true,
+ "bytes": 160957
+}

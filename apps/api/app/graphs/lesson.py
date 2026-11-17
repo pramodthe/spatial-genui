@@ -24,6 +24,13 @@ from app.agents.coder import write_with_agent
 from app.llm import LlmTarget
 from app.prompt import GAME_SYSTEM_PROMPT, REVIEW_MESSAGE, SYSTEM_PROMPT, repair_message
 
+# A starter (skills/play/learning-game, skills/looks) passes the gate as it is. Served as a finished game when the
+# model stopped right after writing it (an API that ran out of credits); its markers mean it is not one.
+UNFINISHED_STARTER = re.compile(r"look\.demo\(subject\)|['\"`]REPLACE:")
+STARTER_LEFT = (
+    "The module is still the starter: its REPLACE markers or look.demo(subject) are left. Build the game itself, "
+    "then run the check again."
+)
 HAND_MADE_PANEL = (
     "The module calls ui() with its own markup. Build every panel with kit.panel(ui, { title, items: [...] }) "
     "from the parts listed under \"Panels\" (text, note, stat, status, progress, buttons, choices, segmented, "
@@ -59,6 +66,8 @@ class LessonState(TypedDict, total=False):
     route: dict[str, Any] | None
     pending_assets: list[dict[str, str]] | None
     run_id: str
+    # The plan's reference pictures for the coder (game.py PLAN_PICTURES), put in the sandbox as /work/plan/<name>.
+    plan_pictures: list[dict[str, Any]] | None
     model: str
     provider: str
     started: float
@@ -267,6 +276,8 @@ async def gate_node(state: LessonState) -> dict[str, Any]:
     attempts = [*state["attempts"][:-1], attempt]
     if result.get("ok") and (result.get("stats") or {}).get("rawPanels", 0) > 0:
         result = {"ok": False, "stage": "dry-run", "error": HAND_MADE_PANEL}
+    if result.get("ok") and UNFINISHED_STARTER.search(state.get("code") or ""):
+        result = {"ok": False, "stage": "dry-run", "error": STARTER_LEFT}
     if not result.get("ok"):
         attempt["stage"] = result.get("stage") or "dry-run"
         attempt["error"] = result.get("error") or ""
@@ -393,6 +404,8 @@ async def run_lesson(
     mode: str = "classic",
     target: LlmTarget | None = None,
     thread_id: str | None = None,
+    run_id: str | None = None,
+    plan_pictures: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     chosen = target or llm.default_target()
     game = kind == "game"
@@ -411,7 +424,8 @@ async def run_lesson(
         "target": _public_target(chosen),
         # A new run on a thread that ran before (a course lesson written again) starts clean: the checkpoint
         # merges this input into the old state, so every per-run field is set here, not left from last time.
-        "run_id": _new_id(),
+        "run_id": run_id or _new_id(),
+        "plan_pictures": plan_pictures,
         "started": time.time(),
         "messages": [],
         "attempts": [],

@@ -1,0 +1,17 @@
+{
+ "id": "snd-e854f20fc6",
+ "kind": "sound",
+ "file": "snd-e854f20fc6.mp3",
+ "prompt": "a kite's fabric fluttering and snapping in a gust of wind",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.0046,
+ "length": 2,
+ "loop": false,
+ "seconds": 6.9,
+ "runId": null,
+ "status": "ready",
+ "created": 1794872001.186659,
+ "name": "cloth-flutter",
+ "library": true,
+ "bytes": 33061
+}

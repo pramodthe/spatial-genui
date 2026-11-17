@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: paper-plane
+expected_outcome: |
+  A learning game in the ink-toon look where the player folds one sheet into a dart by hand, fold by fold, each fold
+  with a one-line why, then throws it and sees how far it flew, with stars and Try again.

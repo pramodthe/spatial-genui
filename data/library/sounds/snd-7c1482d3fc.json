@@ -1,0 +1,17 @@
+{
+ "id": "snd-7c1482d3fc",
+ "kind": "sound",
+ "file": "snd-7c1482d3fc.mp3",
+ "prompt": "a small bird's wings flapping three times as it takes off",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.0023,
+ "length": 1,
+ "loop": false,
+ "seconds": 6.6,
+ "runId": null,
+ "status": "ready",
+ "created": 1794872003.42381,
+ "name": "wing-flap",
+ "library": true,
+ "bytes": 17179
+}

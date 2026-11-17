@@ -3,7 +3,7 @@
     {
       "pattern": "circuitCityLook\\(THREE, kit\\)",
       "when": "absent",
-      "message": "The circuit-city look module is not used: start from scripts/new-lesson.mjs.",
+      "message": "The circuit-city look module is not used: start from scripts/new-lesson.mjs (a game: /skills/play/learning-game/scripts/new-game.mjs circuit-city).",
       "whole": true
     }
   ],
@@ -11,22 +11,26 @@
     {
       "pattern": "look\\.track\\(|lookPath\\(",
       "when": "absent",
-      "message": "No track: the stops are joined by gold streets (look.track with look.route for the 45-degree bends), and the pulse travels along them (references/recipes.md, Tracks)."
+      "message": "No track: the stops are joined by gold streets (look.track with look.route for the 45-degree bends), and the pulse travels along them (references/recipes.md, Tracks).",
+      "lessonOnly": true
     },
     {
       "pattern": "look\\.pulse\\(",
       "when": "absent",
-      "message": "No pulse: a pulse of light carries the journey from stop to stop along the tracks (look.pulse, follow(path, u)) (references/teaching.md, Motion)."
+      "message": "No pulse: a pulse of light carries the journey from stop to stop along the tracks (look.pulse, follow(path, u)) (references/teaching.md, Motion).",
+      "lessonOnly": true
     },
     {
       "pattern": "(look\\.(chip|cpu|memoryBank|tower|towers|connector)\\([\\s\\S]*){3}",
       "when": "absent",
-      "message": "Fewer than 3 landmark builders called: a journey needs at least three stages, each its own landmark (chip, cpu, memoryBank, towers, connector). Ignore this if you build them in a loop."
+      "message": "Fewer than 3 landmark builders called: a journey needs at least three stages, each its own landmark (chip, cpu, memoryBank, towers, connector). Ignore this if you build them in a loop.",
+      "lessonOnly": true
     },
     {
       "pattern": "traits\\([^,()]+,\\s*\\{[^}]*onPress",
       "when": "absent",
-      "message": "No landmark is pressable: the learner presses a stop to send the pulse there (traits(landmark, { onPress })) (references/teaching.md, Hands)."
+      "message": "No landmark is pressable: the learner presses a stop to send the pulse there (traits(landmark, { onPress })) (references/teaching.md, Hands).",
+      "lessonOnly": true
     },
     {
       "pattern": "look\\.label\\(",

@@ -1,0 +1,17 @@
+{
+ "id": "snd-71ec0fe588",
+ "kind": "sound",
+ "file": "snd-71ec0fe588.mp3",
+ "prompt": "two footsteps on soft grass",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.0023,
+ "length": 1,
+ "loop": false,
+ "seconds": 6.6,
+ "runId": null,
+ "status": "ready",
+ "created": 1794872008.076608,
+ "name": "footstep-grass",
+ "library": true,
+ "bytes": 17179
+}

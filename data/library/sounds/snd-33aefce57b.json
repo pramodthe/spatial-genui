@@ -1,0 +1,17 @@
+{
+ "id": "snd-33aefce57b",
+ "kind": "sound",
+ "file": "snd-33aefce57b.mp3",
+ "prompt": "two small glass marbles clinking together once, bright",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.0023,
+ "length": 1,
+ "loop": false,
+ "seconds": 5.5,
+ "runId": null,
+ "status": "ready",
+ "created": 1794871989.782573,
+ "name": "glass-clink",
+ "library": true,
+ "bytes": 17179
+}

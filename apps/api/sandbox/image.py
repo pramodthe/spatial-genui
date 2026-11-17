@@ -16,10 +16,12 @@ GATE_ROOT = "/opt/gate"
 SKILLS_ROOT = "/skills"
 WORK_ROOT = "/work"
 LIBRARY_ROOT = "/data/library"
+# The headset app, run headless by Meta's IWSDK runtime so the coder can play-test its module (skills/play/playtest).
+XR_ROOT = "/opt/xr"
 GATE_ENTRY = "/opt/gate/gate.ts"
 
 # evals/: a skill's test cases (skill-creator); the agent under test must not read them.
-_SKIP = {".env", "node_modules", "runs", ".venv", ".cache", "__pycache__", "evals"}
+_SKIP = {".env", "node_modules", "runs", ".venv", ".cache", "__pycache__", "evals", "dist", ".iwsdk"}
 
 
 def _ignore(path: Path) -> bool:
@@ -36,6 +38,7 @@ def image_layout() -> list[tuple[Path, str]]:
         # The model library (82 MB): the dry run checks a module's assets.get(id) against its catalog, which
         # lists a model only when its GLB is there. /opt/gate/src/library.ts finds it at /data/library.
         (REPO_ROOT / "data" / "library", LIBRARY_ROOT),
+        (REPO_ROOT / "apps" / "xr", XR_ROOT),
     ]
 
 
@@ -46,6 +49,11 @@ def coder_image() -> modal.Image:
         # without it write_file fails and a coder that writes its module with it leaves no module at all.
         .apt_install("ca-certificates", "python3")
         .run_commands("npm install -g tsx@4")
+        # The headset app's packages and the headless Chromium IWSDK drives, installed from the lock file alone, so a
+        # change to the app's code re-copies its files instead of reinstalling 800 MB.
+        .add_local_file(str(REPO_ROOT / "apps" / "xr" / "package.json"), f"{XR_ROOT}/package.json", copy=True)
+        .add_local_file(str(REPO_ROOT / "apps" / "xr" / "package-lock.json"), f"{XR_ROOT}/package-lock.json", copy=True)
+        .run_commands(f"cd {XR_ROOT} && npm ci --no-audit --no-fund && npx playwright install --with-deps chromium")
     )
     for source, dest in image_layout():
         if source.is_dir():

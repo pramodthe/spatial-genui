@@ -3,7 +3,7 @@
     {
       "pattern": "paintedLook\\(THREE, kit\\)",
       "when": "absent",
-      "message": "The painted look module is not used: start from scripts/new-lesson.mjs.",
+      "message": "The painted look module is not used: start from scripts/new-lesson.mjs (a game: /skills/play/learning-game/scripts/new-game.mjs painted).",
       "whole": true
     },
     {
@@ -26,12 +26,14 @@
     {
       "pattern": "look\\.(lamp|shine)\\(|userData\\.window|userData\\.lamp",
       "when": "absent",
-      "message": "No lamp or glow marks the active stop: light the stop the learner is at with a lamp (lamp.userData.set) or look.shine(stop) (references/teaching.md)."
+      "message": "No lamp or glow marks the active stop: light the stop the learner is at with a lamp (lamp.userData.set) or look.shine(stop) (references/teaching.md).",
+      "lessonOnly": true
     },
     {
       "pattern": "\\.route\\b|lookPath\\(",
       "when": "absent",
-      "message": "Nothing travels from stop to stop: move the traveller (cart, sack, boat, wind, a person) along a route (path.userData.route.at(u, v)) so the cause visibly carries on (references/teaching.md)."
+      "message": "Nothing travels from stop to stop: move the traveller (cart, sack, boat, wind, a person) along a route (path.userData.route.at(u, v)) so the cause visibly carries on (references/teaching.md).",
+      "lessonOnly": true
     }
   ]
 }

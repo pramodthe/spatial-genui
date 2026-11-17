@@ -1,0 +1,17 @@
+{
+ "id": "snd-22a35d6762",
+ "kind": "sound",
+ "file": "snd-22a35d6762.mp3",
+ "prompt": "one soap bubble popping, tiny and wet",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.0023,
+ "length": 1,
+ "loop": false,
+ "seconds": 4.7,
+ "runId": null,
+ "status": "ready",
+ "created": 1794871994.2657979,
+ "name": "bubble-pop",
+ "library": true,
+ "bytes": 17179
+}

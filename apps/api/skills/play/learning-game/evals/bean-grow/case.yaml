@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: bean-grow
+expected_outcome: |
+  A learning game in the painted look where the player sets light, water and soil for a bean by hand, runs the days,
+  watches it grow or wilt, and learns what a plant needs, then grows the tallest bean in a set number of days.

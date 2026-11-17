@@ -1,0 +1,17 @@
+{
+ "id": "snd-23d5e2b90b",
+ "kind": "sound",
+ "file": "snd-23d5e2b90b.mp3",
+ "prompt": "a small wooden building block snapping firmly into a slot, one crisp click",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.0023,
+ "length": 1,
+ "loop": false,
+ "seconds": 5.3,
+ "runId": null,
+ "status": "ready",
+ "created": 1794871989.599402,
+ "name": "block-snap",
+ "library": true,
+ "bytes": 17179
+}

@@ -1,0 +1,17 @@
+{
+ "id": "snd-b6c3671c1f",
+ "kind": "sound",
+ "file": "snd-b6c3671c1f.mp3",
+ "prompt": "a rubber ball bouncing once on a wooden floor",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.0023,
+ "length": 1,
+ "loop": false,
+ "seconds": 4.7,
+ "runId": null,
+ "status": "ready",
+ "created": 1794871998.875052,
+ "name": "ball-bounce",
+ "library": true,
+ "bytes": 17179
+}

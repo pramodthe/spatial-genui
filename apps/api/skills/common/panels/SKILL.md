@@ -35,10 +35,20 @@ panel.set('state', 'Correct!', 'good');
 panel.show('reset', false);
 ```
 
+**A game's own look:** pass `skin` to give the panel the game's colours instead of the app's grey card:
+
+```js
+kit.panel(ui, { ..., skin: { paper: '#1d2238', ink: '#ffffff', accent: '#ffd23f', button: '#ffd23f', edge: '#ffd23f', round: 28 } });
+```
+
+`paper` is the background, `accent` the big poster title, eyebrow and numbers, `button` the main button pill, `edge`
+an optional border, `round` the corner radius in px; `poster: false` keeps a small title. The kit keeps it readable: an
+ink or accent without enough contrast on the paper is swapped for dark or light text. Every learning game has a skin.
+
 `set` changes a part by id. `show(id, false)` hides a part or a button. Tones: neutral, good, poor, bad.
 
 Font: plain ASCII plus ° § ä ö ü Ä Ö Ü ß. Write CO2, x, -, ->, .... No emoji.
 
 `rotationY` stays within -0.4..0.4. A lesson panel sits beside the model (x about 0.38 or -0.38), centre 0.2 to 0.25 above the desk, never in front of the model. About 8 parts. One panel; a second only when it has its own job.
 
-A game's panel is the scoreboard behind the playfield: position about `[0, 0.3, -0.22]`, rotationY 0.
+A game's panel is its scoreboard, beside the playfield like a lesson panel (a panel behind the playfield is out of a pointing hand's reach).

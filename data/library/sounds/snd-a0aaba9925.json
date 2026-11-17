@@ -1,0 +1,17 @@
+{
+ "id": "snd-a0aaba9925",
+ "kind": "sound",
+ "file": "snd-a0aaba9925.mp3",
+ "prompt": "one small songbird chirp, two quick notes, outdoors",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.0023,
+ "length": 1,
+ "loop": false,
+ "seconds": 7.2,
+ "runId": null,
+ "status": "ready",
+ "created": 1794872001.5169501,
+ "name": "bird-chirp",
+ "library": true,
+ "bytes": 17179
+}

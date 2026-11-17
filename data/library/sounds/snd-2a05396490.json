@@ -1,0 +1,17 @@
+{
+ "id": "snd-2a05396490",
+ "kind": "sound",
+ "file": "snd-2a05396490.mp3",
+ "prompt": "a spoon tapping a small metal pot once, short ring",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.0023,
+ "length": 1,
+ "loop": false,
+ "seconds": 4.9,
+ "runId": null,
+ "status": "ready",
+ "created": 1794871989.188258,
+ "name": "metal-clang",
+ "library": true,
+ "bytes": 17179
+}

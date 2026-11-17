@@ -1,4 +1,4 @@
-import { aimPoint, capture, dropLessonRealSize, inspectFrame, zoomGame, forgetLessonSpot, inspectMounted, debugHands, debugRay, debugRoot, lessonDeclaresRealSize, mountGenerated, setLessonRealSize, setLessonView, unmountGenerated, type MountReport } from './host.js';
+import { aimPoint, capture, dropLessonRealSize, inspectFrame, zoomGame, forgetLessonSpot, inspectMounted, debugHands, debugRay, debugRoot, lessonDeclaresRealSize, mountGenerated, setLessonRealSize, setLessonView, unmountGenerated, type MountReport, type PlayMode } from './host.js';
 import { inspectPill, pressPill, setPillHidden } from './hud.js';
 import { EXAMPLE_LESSONS, type SavedLesson } from './lessons.js';
 import { inspectPicker, pickerCourses, redockPicker, setPickerHidden } from './picker.js';
@@ -48,6 +48,8 @@ type GenUIState = {
   prompt: string | null;
   /** A game has no real-size view and is repaired with the game prompt. */
   kind: LessonKind;
+  /** Where it plays: on the desk (mixed reality, toy size) or as a world around the player. Unset: the module's own. */
+  mode: PlayMode | null;
   code: string | null;
   lastResponse: GenerateResponse | null;
   lastMount: MountReport | null;
@@ -64,6 +66,7 @@ type GenUIState = {
 const state: GenUIState = {
   prompt: null,
   kind: 'lesson',
+  mode: null,
   code: null,
   lastResponse: null,
   lastMount: null,
@@ -239,7 +242,11 @@ export async function generate(prompt: string, extra: { previousCode?: string; c
   state.busy = true;
   repairPending = false;
   if (!extra.previousCode) state.autoRepaired = false; // a new lesson gets its own automatic repair
-  if (!extra.previousCode) state.kind = 'lesson'; // the prompt box writes lessons; a repair keeps the kind
+  if (!extra.previousCode) {
+    // The prompt box writes lessons, on the desk unless they say otherwise; a repair keeps the kind and the mode.
+    state.kind = 'lesson';
+    state.mode = null;
+  }
   state.prompt = prompt;
   repairButton.hidden = true;
   stopWatchingAssets();
@@ -294,6 +301,7 @@ async function generateStream(prompt: string) {
   state.autoRepaired = false;
   state.prompt = prompt;
   state.kind = 'lesson';
+  state.mode = null;
   repairButton.hidden = true;
   stopWatchingAssets();
   setStatus('Planning…');
@@ -393,6 +401,7 @@ export async function watchLive(key: string, prompt: string, kind: LessonKind, o
   const watch = ++liveWatch;
   state.prompt = prompt;
   state.kind = kind;
+  state.mode = null;
   state.autoRepaired = false;
   repairPending = false;
   stopWatchingAssets();
@@ -466,6 +475,7 @@ export async function startLesson(prompt: string) {
     const saved = (await res.json()) as SavedLesson;
     state.prompt = prompt;
     state.kind = 'lesson';
+    state.mode = null;
     state.autoRepaired = false;
     repairPending = false;
     stopWatchingAssets();
@@ -481,8 +491,9 @@ export async function startLesson(prompt: string) {
 }
 
 /** Open a lesson or game that is already written (a saved course's lesson, a saved game): no model call. */
-export async function openWritten(code: string, prompt: string, kind: LessonKind = 'lesson') {
+export async function openWritten(code: string, prompt: string, kind: LessonKind = 'lesson', mode: PlayMode | null = null) {
   if (state.busy) return state;
+  state.mode = mode;
   liveWatch++; // opening something else stops watching one being written
   streaming = false; // otherwise the stopped watch would keep repairs off for this lesson
   state.prompt = prompt;
@@ -501,7 +512,7 @@ async function mount(code: string) {
   codeEl.textContent = code;
   state.mountedAt = performance.now();
   const sizeFor = ++sizeTicket;
-  const report = await mountGenerated(code, { kind: state.kind });
+  const report = await mountGenerated(code, { kind: state.kind, ...(state.mode ? { mode: state.mode } : {}) });
   // A later lesson replaced this one while it loaded: that one reports for itself.
   if (!report.ok && report.superseded) return report;
   state.lastMount = report;

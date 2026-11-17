@@ -3,7 +3,7 @@
     {
       "pattern": "^export\\s+default\\s+function[\\s\\S]*voxelLook\\(THREE,\\s*kit\\)",
       "when": "absent",
-      "message": "The voxel look module is not used: start from scripts/new-lesson.mjs and build with const look = voxelLook(THREE, kit).",
+      "message": "The voxel look module is not used: start from scripts/new-lesson.mjs (a game: /skills/play/learning-game/scripts/new-game.mjs voxel) and build with const look = voxelLook(THREE, kit).",
       "whole": true,
       "flags": "m"
     },
@@ -32,12 +32,14 @@
     {
       "pattern": "look\\.word\\(",
       "when": "absent",
-      "message": "No voxel word: spell each step's word in cubes on the plinth's front with look.word(text, set), one word per step."
+      "message": "No voxel word: spell each step's word in cubes on the plinth's front with look.word(text, set), one word per step.",
+      "lessonOnly": true
     },
     {
       "pattern": "(look\\.stages\\(|lookBounce\\()",
       "when": "absent",
-      "message": "The cubes do the animating: drop each stage in with look.stages (column by column, layer by layer, a bounce on arrival); nothing slides or fades (references/teaching.md, Motion)."
+      "message": "The cubes do the animating: drop each stage in with look.stages (column by column, layer by layer, a bounce on arrival); nothing slides or fades (references/teaching.md, Motion).",
+      "lessonOnly": true
     },
     {
       "pattern": "look\\.(counter|label|arrow|flow)\\(",

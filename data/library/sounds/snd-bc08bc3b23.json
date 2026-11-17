@@ -1,0 +1,17 @@
+{
+ "id": "snd-bc08bc3b23",
+ "kind": "sound",
+ "file": "snd-bc08bc3b23.mp3",
+ "prompt": "a cartoon spring boing, short and playful",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.0023,
+ "length": 1,
+ "loop": false,
+ "seconds": 5.0,
+ "runId": null,
+ "status": "ready",
+ "created": 1794871999.1161332,
+ "name": "spring-boing",
+ "library": true,
+ "bytes": 17179
+}

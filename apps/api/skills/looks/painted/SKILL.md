@@ -5,6 +5,12 @@ description: Build a mixed-reality lesson as a picture-book oil painting of a pl
 
 # Painted lessons
 
+> **In a learning game** (every lesson, level and game this app writes): start with the learning-game skill,
+> `node /skills/play/learning-game/scripts/new-game.mjs painted /work/module.js`, and check with its
+> `scripts/check.mjs` (it runs this look's rules too). Use this skill for the look: its builders, recipes, palette
+> and mistakes. Skip its own start and check scripts (`scripts/new-lesson.mjs`, `scripts/check.mjs`). Its stage
+> flags and step panel are for journeys and processes; a game uses them only when it is one.
+
 A painted lesson is a small landscape on the learner's desk, painted in oils: a meadow on a canvas ground with a
 ragged unpainted edge, and on it a few big simple things - a field, a stream, a cottage, a mill - each covered in
 brush dabs that lean warm in the light and cool in the shadow. It reads like one page of a picture book. The look

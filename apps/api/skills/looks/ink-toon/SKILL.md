@@ -5,6 +5,12 @@ description: Build a mixed-reality lesson as a hand-inked comic cel on the desk 
 
 # Ink and toon lessons
 
+> **In a learning game** (every lesson, level and game this app writes): start with the learning-game skill,
+> `node /skills/play/learning-game/scripts/new-game.mjs ink-toon /work/module.js`, and check with its
+> `scripts/check.mjs` (it runs this look's rules too). Use this skill for the look: its builders, recipes, palette
+> and mistakes. Skip its own start and check scripts (`scripts/new-lesson.mjs`, `scripts/check.mjs`). Its stage
+> flags and step panel are for journeys and processes; a game uses them only when it is one.
+
 An ink-toon lesson is a small comic panel standing on the learner's desk: a sheet of warm paper with a ruled ink border,
 and on it a few real objects drawn like an animation cel - flat colour in two tones, an ink line round every shape,
 halftone dots where light turns to shadow, hatching in the cast shadows. Each step is **one bold action on the same

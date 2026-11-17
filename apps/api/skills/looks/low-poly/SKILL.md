@@ -5,6 +5,12 @@ description: Build a mixed-reality lesson as a faceted low-poly miniature landsc
 
 # Low-poly lessons
 
+> **In a learning game** (every lesson, level and game this app writes): start with the learning-game skill,
+> `node /skills/play/learning-game/scripts/new-game.mjs low-poly /work/module.js`, and check with its
+> `scripts/check.mjs` (it runs this look's rules too). Use this skill for the look: its builders, recipes, palette
+> and mistakes. Skip its own start and check scripts (`scripts/new-lesson.mjs`, `scripts/check.mjs`). Its stage
+> flags and step panel are for journeys and processes; a game uses them only when it is one.
+
 A low-poly lesson is a small faceted world on the learner's desk: an island tile with a mountain, a river, a field, a
 few buildings and a road, every triangle one flat tone like cut paper, and a numbered paper flag at each stage of
 the process. The look exists to make a process that happens in a place visible all at once. A learner who sees the

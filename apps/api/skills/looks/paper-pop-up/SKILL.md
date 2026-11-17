@@ -5,6 +5,12 @@ description: Build a mixed-reality lesson as an open pop-up book on the learner'
 
 # Paper pop-up lessons
 
+> **In a learning game** (every lesson, level and game this app writes): start with the learning-game skill,
+> `node /skills/play/learning-game/scripts/new-game.mjs paper-pop-up /work/module.js`, and check with its
+> `scripts/check.mjs` (it runs this look's rules too). Use this skill for the look: its builders, recipes, palette
+> and mistakes. Skip its own start and check scripts (`scripts/new-lesson.mjs`, `scripts/check.mjs`). Its stage
+> flags and step panel are for journeys and processes; a game uses them only when it is one.
+
 A paper pop-up lesson is a pop-up book open on the learner's desk. Every scene is flat die-cut card printed in a few
 flat inks, with the pale core showing on every cut edge, standing on real fold mechanisms. When the learner presses the
 corner of the page, the page turns: the scene on the old spread is pressed flat under it and the next one is pulled up

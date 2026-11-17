@@ -1,0 +1,17 @@
+{
+ "id": "snd-e8265ae9e2",
+ "kind": "sound",
+ "file": "snd-e8265ae9e2.mp3",
+ "prompt": "a small stone set down on a wooden table, one soft heavy thud",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.0023,
+ "length": 1,
+ "loop": false,
+ "seconds": 7.7,
+ "runId": null,
+ "status": "ready",
+ "created": 1794871991.981348,
+ "name": "stone-thud",
+ "library": true,
+ "bytes": 17179
+}

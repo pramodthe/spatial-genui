@@ -1,0 +1,17 @@
+{
+ "id": "snd-fc895efa75",
+ "kind": "sound",
+ "file": "snd-fc895efa75.mp3",
+ "prompt": "steady gentle wind blowing over an open grassy hilltop, no music",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.023,
+ "length": 10,
+ "loop": true,
+ "seconds": 7.3,
+ "runId": null,
+ "status": "ready",
+ "created": 1794872011.09327,
+ "name": "wind-hill",
+ "library": true,
+ "bytes": 160957
+}

@@ -1,4 +1,5 @@
 import {
+  Box3,
   createSystem,
   Group,
   PanelDocument,
@@ -17,7 +18,7 @@ import { TutorUnavailable, VoiceTutor } from './voice-agent';
 import type { LessonKind, LessonStatus, LiveOutcome } from './overlay';
 import { EXAMPLE_GAMES, createGame, fetchGame, gameProgress, listGames, loadExampleGame, onSection, setSection, type GameSummary, type Section } from './games';
 import { courseProgress, createCourse, fetchCourse, fetchCourseLesson, listCourses, polishCourseLesson, type CourseSummary } from './courses';
-import { capture, floorHeight, lessonCardsCentre, lessonPosition, roomFrame, zoomGame } from './host';
+import { capture, floorHeight, lessonCardsCentre, lessonModelBox, lessonPosition, roomFrame, zoomGame } from './host';
 import { makeCardGrabbable, type CardGrab } from './grab';
 import { boxAround, worldYaw } from './handle';
 
@@ -58,6 +59,9 @@ const SETTLE_FRAMES = 20;
 // The picker's lowest edge stays this far above the floor (its half height is a guess until it has laid out).
 const PICKER_FLOOR_CLEARANCE_M = 0.05;
 const PICKER_FALLBACK_HALF_HEIGHT_M = 0.3;
+// A docked picker stays this far outside the lesson's model, and no further from the eyes than this.
+const PICKER_LESSON_GAP_M = 0.08;
+const PICKER_MAX_DISTANCE_M = 1.0;
 const SHELF_ROWS = 3;
 // The "See all" list: every saved course, newest first, this many to a page (Newer / Older turn the pages).
 const ALL_ROWS = 6;
@@ -178,6 +182,7 @@ class LessonPickerSystem extends createSystem({
   private readonly forward = new Vector3();
   private readonly lesson = new Vector3();
   private readonly cards = new Vector3();
+  private readonly lessonBox = new Box3();
 
   init(): void {
     picker = this;
@@ -804,6 +809,14 @@ class LessonPickerSystem extends createSystem({
     this.forward.applyAxisAngle(Object3DUp, yaw);
     // Worked out in the world, then put in the room's frame (anchored to the room, so it can differ).
     const at = this.head.clone().addScaledVector(this.forward, spot.distance);
+    // Never inside the lesson: a big lesson close to the learner (seated low, or enlarged) had the picker docked in
+    // its middle, where the model's own parts took every press meant for the cards. Step out along the same line.
+    if (this.docked && lessonModelBox(this.lessonBox)) {
+      this.lessonBox.expandByScalar(PICKER_LESSON_GAP_M);
+      for (let d = spot.distance; d < PICKER_MAX_DISTANCE_M && this.lessonBox.containsPoint(at.setY(this.lessonBox.min.y + 0.01)); d += 0.05) {
+        at.copy(this.head).addScaledVector(this.forward, d + 0.05);
+      }
+    }
     // Below the eyes, but never into the floor: a learner lying down or sitting on the floor has little room.
     const box = boxAround(this.holder);
     const below = box.isEmpty() ? PICKER_FALLBACK_HALF_HEIGHT_M : this.holder.getWorldPosition(new Vector3()).y - box.min.y;

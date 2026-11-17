@@ -1,0 +1,17 @@
+{
+ "id": "snd-16d0231974",
+ "kind": "sound",
+ "file": "snd-16d0231974.mp3",
+ "prompt": "a large stone falling into a pond, a deep splash and ripple",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.0046,
+ "length": 2,
+ "loop": false,
+ "seconds": 4.6,
+ "runId": null,
+ "status": "ready",
+ "created": 1794871994.1241322,
+ "name": "splash-big",
+ "library": true,
+ "bytes": 33061
+}

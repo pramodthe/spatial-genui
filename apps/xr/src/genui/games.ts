@@ -15,6 +15,8 @@ export type GameSummary = {
   createdAt: string;
   /** While it is being written: its live preview and one line on it. */
   live?: LiveSummary;
+  /** Its card picture exists (GET /api/games/<id>/picture): the game as it opens. */
+  picture?: boolean;
 };
 export type Game = GameSummary & { code?: string };
 
@@ -57,47 +59,4 @@ export async function fetchGame(id: string): Promise<Game> {
   const res = await fetch(`/api/games/${id}`);
   if (!res.ok) throw new Error(res.statusText || `HTTP ${res.status}`);
   return (await res.json()) as Game;
-}
-
-/** One line on a game's state, for its row on the shelf. */
-export function gameProgress(game: GameSummary): string {
-  if (game.status === 'writing') return game.live ? `${game.live.line}: pinch to watch` : 'Writing the game...';
-  if (game.status === 'failed') return 'Failed: tap to try again';
-  return 'Ready: tap to play';
-}
-
-/** The section the learner is in: Learn (courses) or Play (games). Shared by the start page and the picker. */
-export type Section = 'learn' | 'play';
-const SECTION_KEY = 'genui.section.v1';
-let section: Section = readSection();
-const sectionListeners = new Set<(section: Section) => void>();
-
-function readSection(): Section {
-  try {
-    return localStorage.getItem(SECTION_KEY) === 'play' ? 'play' : 'learn';
-  } catch {
-    return 'learn';
-  }
-}
-
-export function currentSection(): Section {
-  return section;
-}
-
-export function setSection(next: Section) {
-  if (next === section) return;
-  section = next;
-  try {
-    localStorage.setItem(SECTION_KEY, next);
-  } catch {
-    // Not remembered (private window): it still switches.
-  }
-  for (const listener of sectionListeners) listener(next);
-}
-
-/** Follow the section; the listener gets the current one at once. Returns an unsubscribe. */
-export function onSection(listener: (section: Section) => void): () => void {
-  sectionListeners.add(listener);
-  listener(section);
-  return () => sectionListeners.delete(listener);
 }

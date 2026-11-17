@@ -13,7 +13,7 @@ from app.core.clock import js_round, now_iso
 from app.core.db import load_games, save_game
 from app.core.guard import record_spend
 from app.pipeline.game import run_game
-from app.services import live
+from app.services import live, studio
 
 MAX_GAMES = 200
 _PANEL = re.compile(r"""kit\.panel\(\s*ui\s*,\s*\{[\s\S]{0,600}?\btitle:\s*(['"`])([^'"`\n]{2,40})\1""")
@@ -44,6 +44,8 @@ def summary(game: dict[str, Any]) -> dict[str, Any]:
     watcher = live.get(live.game_key(game["id"])) if game.get("status") == "writing" else None
     if watcher is not None:
         out["live"] = {"key": watcher.key, "line": watcher.line(), "seq": watcher.seq}
+    # Its card picture (GET /api/games/<id>/picture) exists: a headset panel cannot recover from a missing image.
+    out["picture"] = studio.picture(f"game-{game['id']}") is not None
     return out
 
 
@@ -126,6 +128,7 @@ async def write(game: dict[str, Any]) -> None:
         if not result.get("ok") or not result.get("code"):
             raise RuntimeError(result.get("error") or "The game could not be written.")
         game.update(status="ready", code=result["code"], model=result["model"], title=panel_title(result["code"]) or game["title"])
+        studio.keep_picture(f"game-{game['id']}", result.get("id"))
     except Exception as exc:
         game.update(status="failed", error=str(exc)[:300])
     game["seconds"] = js_round((time.time() * 1000 - started) / 1000)

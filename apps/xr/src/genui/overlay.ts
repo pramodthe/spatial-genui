@@ -80,11 +80,6 @@ export function onChromeHidden(listener: (hidden: boolean) => void) {
   chromeListeners.add(listener);
 }
 
-/** The current lesson's request (for "Make a new one"). */
-export function lessonPrompt(): string | null {
-  return state.prompt;
-}
-
 /** Follow the lesson's phase; the listener gets the current one at once. Returns an unsubscribe. */
 export function onLessonStatus(listener: (status: LessonStatus) => void): () => void {
   statusListeners.add(listener);
@@ -442,6 +437,11 @@ async function lookUpRealSize(request: string, ticket: number) {
 export async function repair() {
   if (!state.prompt || !state.code || state.runtimeErrors.length === 0) return state;
   return generate(state.prompt, { previousCode: state.code, clientError: state.runtimeErrors.join('\n') });
+}
+
+/** Close what is open: nothing mounted, and the dashboard (or the start page) is home again. */
+export function closeGame() {
+  clear();
 }
 
 function clear() {

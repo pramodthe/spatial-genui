@@ -229,25 +229,17 @@ export default async function run({ frame, page }) {
         await r.dispatch('set_transform', { device: 'hand-right', position: { x: 0.35, y: 0.6, z: 0.1 } });
         await sleep(300);
       }
-      // The picker (in the room frame beside the lesson): its course rows still open with a pointed pinch, and it is
-      // held by its frame too.
+      // The dashboard's bar (in the room frame beside the lesson): a hand ray reaches its Home button with nothing in
+      // the way (not pinched here: the lesson is still needed), and it is held by its frame too.
       genui.setOverlayHidden(false);
       await sleep(600);
-      const row = (await r.dispatch('list_targets')).targets.find((x) => x.name === 'course-0');
-      if (row) {
-        const shownBefore = genui.inspectPicker()?.shown ?? null;
-        const p = row.position;
-        await r.dispatch('set_transform', { device: 'hand-right', position: { x: p.x + 0.05, y: p.y - 0.05, z: p.z + 0.35 } });
-        await r.dispatch('look_at', { device: 'hand-right', target: p });
-        await sleep(250);
-        await r.dispatch('select', { device: 'hand-right', duration: 0.2 });
-        await sleep(800);
-        out.pickerCourseOpens = (genui.inspectPicker()?.shown ?? null) !== shownBefore;
+      const homeButton = (await r.dispatch('list_targets')).targets.find((x) => x.name === 'mini-home');
+      if (homeButton) {
+        const p = homeButton.position;
+        const hits = genui.debugRay([p.x + 0.05, p.y - 0.05, p.z + 0.35], [p.x, p.y, p.z]);
+        out.pickerHomeReachable = hits.length > 0 && JSON.stringify(hits[0].chain).includes('Lesson Picker');
         // What stood in the way, if anything.
-        if (!out.pickerCourseOpens) out.pickerRay = genui.debugRay([p.x + 0.05, p.y - 0.05, p.z + 0.35], [p.x, p.y, p.z]).slice(0, 3).map((h) => h.chain);
-        genui.courses.show(null);
-        await r.dispatch('set_transform', { device: 'hand-right', position: { x: 0.35, y: 0.6, z: 0.1 } });
-        await sleep(400);
+        if (!out.pickerHomeReachable) out.pickerRay = hits.slice(0, 3).map((h) => h.chain);
       }
       const picker = anchor.parent.children.find((o) => o.name === 'Lesson Picker');
       let pickerFrame = null;
@@ -359,7 +351,7 @@ export default async function run({ frame, page }) {
       cardLowestM: Math.abs(out.cardLowestM - 0.02) < 0.01, // pulled into the floor, it ends 2 cm above
       infoCardFrame: out.infoCardFrame === true,
       infoCardMovedM: out.infoCardMovedM >= 0.05,
-      pickerCourseOpens: out.pickerCourseOpens === true,
+      pickerHomeReachable: out.pickerHomeReachable === true,
       pickerFrame: out.pickerFrame === true,
       pickerMovedM: out.pickerMovedM >= 0.05,
       heldByTwo: out.heldByTwo === true,

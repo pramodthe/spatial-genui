@@ -32,7 +32,7 @@ import { createGameHands, updateGameHands, type GameHands } from './game-hands';
 import { createModuleSound } from './sound';
 import { makeCardGrabbable, pinchAtFingertips, setGrabFilter, type CardGrab } from './grab';
 import { createGlow, glowOnHover, tickGlows, type Glow } from './hover';
-import { initTitleCard, initViewPill, setPill, showTitle } from './hud';
+import { hideTitle, initTitleCard, initViewPill, setPill, showTitle } from './hud';
 import { assetHandle, assetIdsIn, creditsFor, preloadAssets } from './library';
 import type { TeachingRig } from './rig';
 
@@ -363,6 +363,7 @@ export function lessonCardsCentre(out: Vector3): Vector3 | null {
 
 export function unmountGenerated() {
   if (!current) return;
+  hideTitle();
   current.sound.dispose();
   current.bounds?.dispose();
   current.kit?.dispose();

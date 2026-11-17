@@ -14,6 +14,7 @@ import {
   type Entity,
   type World,
 } from '@iwsdk/core';
+import { COLORS } from './brand';
 
 /**
  * The view pill: a small button at the top right of the learner's view, not in the room, that switches a lesson
@@ -181,12 +182,13 @@ export function showTitle(text: string) {
   const w = canvas.width;
   const h = canvas.height;
   g.clearRect(0, 0, w, h);
-  g.fillStyle = 'rgba(20, 22, 30, 0.86)';
+  // The app's colours (brand.ts): a yellow card with an ink outline reads against a room and against a sky.
+  g.fillStyle = COLORS.sun;
   g.beginPath();
-  g.roundRect(4, 4, w - 8, h - 8, 56);
+  g.roundRect(10, 10, w - 20, h - 20, 56);
   g.fill();
-  g.strokeStyle = 'rgba(255, 255, 255, 0.28)';
-  g.lineWidth = 4;
+  g.strokeStyle = COLORS.ink;
+  g.lineWidth = 14;
   g.stroke();
   const words = text.trim().toUpperCase();
   let size = 132;
@@ -196,11 +198,16 @@ export function showTitle(text: string) {
     g.font = `800 ${size}px Inter, system-ui, sans-serif`;
     size -= 6;
   } while (g.measureText(words).width > w - 140 && size > 48);
-  g.fillStyle = '#ffffff';
+  g.fillStyle = COLORS.ink;
   g.fillText(words, w / 2, h / 2 + 6);
   texture.needsUpdate = true;
   title.age = 0;
   title.mesh.visible = true;
+}
+
+/** Take the title card away at once (its game was closed). */
+export function hideTitle() {
+  if (title) title.mesh.visible = false;
 }
 
 /** For tests: whether the title card shows and what it says is drawn, not read back. */

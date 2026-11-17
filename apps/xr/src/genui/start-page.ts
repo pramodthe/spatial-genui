@@ -1,148 +1,143 @@
 import { VisibilityState, type World } from '@iwsdk/core';
-import { courseProgress, createCourse, fetchCourseLesson, listCourses, type CourseSummary } from './courses';
-import { EXAMPLE_GAMES, createGame, currentSection, fetchGame, gameProgress, listGames, loadExampleGame, onSection, setSection, type GameSummary, type Section } from './games';
-import { inspectMounted } from './host';
+import { APP_NAME, CARD_COLORS, COLORS, MASCOT_NAME } from './brand';
+import { myCards, readyCards, type Card } from './cards';
+import { fetchCourseLesson, listCourses, type CourseSummary } from './courses';
+import { EXAMPLE_GAMES, createGame, fetchGame, listGames, loadExampleGame, type GameSummary } from './games';
 import { EXAMPLE_LESSONS } from './lessons';
+import { createMuseCanvas } from './muse-canvas';
 import { onChromeHidden, onLessonStatus, openWritten, startLesson, type LessonStatus } from './overlay';
 import { askForMicrophone, microphoneState, type MicrophoneState } from './voice';
 
 /**
- * The 2D start page: what the headset browser (and a desktop) shows outside XR. Styled after the Meta
- * Horizon OS UI Set like the in-headset picker: enter mixed reality, allow the microphone (Quest Browser
- * cannot ask for it inside XR), and switch between two sections: Learn (ask for a course, see the saved
- * courses) and Play (ask for a game, see the saved games). A lesson or game previews on this screen. The developer prompt box sits folded at the bottom. Hidden while an XR session runs.
+ * The 2D start page: what the headset browser (and a desktop) shows outside XR, made for players about 9 to 12.
+ * One shelf of cards, since everything here is a game you learn from: the ready-made ones first, then the player's
+ * own games (a card appears the moment one is asked for and shows it being made until it is ready), each with a
+ * picture of the game itself. Above them Muse, the mascot (in 3D, muse-canvas.ts), asks what you wonder about. The microphone is asked for here because the
+ * headset cannot ask inside XR. A game previews on this screen with a bar on top. The developer prompt box sits
+ * folded at the bottom. Hidden while an XR session runs.
  */
 
+// Lilita One for headlines and card names (chunky, game-like); Atkinson Hyperlegible Next for reading, made for legibility.
+const FONTS = 'https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400;700&family=Lilita+One&display=swap';
+
 const STYLE = `
-#start-page { position: fixed; inset: 0; z-index: 10000; overflow: auto; background: linear-gradient(180deg, #1d1d1d 0%, #101010 100%);
-  color: rgba(255, 255, 255, 0.9); font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+#start-page, #start-bar {
+  --sky: ${COLORS.sky}; --ink: ${COLORS.ink}; --paper: ${COLORS.paper}; --sun: ${COLORS.sun}; --green: ${COLORS.green}; --pink: ${COLORS.pink};
+  --display: 'Lilita One', 'Arial Rounded MT Bold', system-ui, sans-serif;
+  --text: 'Atkinson Hyperlegible Next', 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+#start-page { position: fixed; inset: 0; z-index: 10000; overflow: auto; color: var(--ink);
+  background: var(--sky) radial-gradient(rgba(255, 255, 255, 0.6) 3px, transparent 3.5px) 0 0 / 44px 44px local;
+  font-family: var(--text); font-size: 18px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
 #start-page *, #start-bar * { box-sizing: border-box; }
-.sp-wrap { max-width: 1000px; margin: 0 auto; padding: 32px 20px 48px; display: flex; flex-direction: column; gap: 20px; }
-.sp-panel { background: linear-gradient(180deg, #414141 0%, #272727 100%); border-radius: 24px; padding: 28px;
-  box-shadow: inset 1px 1px 1px rgba(255, 255, 255, 0.1), inset -1px -1px 1px rgba(0, 0, 0, 0.1), 0 24px 60px rgba(0, 0, 0, 0.35); }
-.sp-eyebrow { font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: 0.4px; color: rgba(255, 255, 255, 0.7); }
-.sp-h1 { margin: 6px 0 8px; font-size: 34px; line-height: 40px; font-weight: 700; letter-spacing: -0.5px; }
-.sp-lead { margin: 0; max-width: 600px; font-size: 16px; line-height: 24px; color: rgba(255, 255, 255, 0.7); }
-.sp-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 22px; }
-.sp-btn { appearance: none; border: 0; border-radius: 1000px; min-height: 48px; padding: 12px 20px; display: inline-flex; align-items: center; gap: 8px;
-  font: 600 14px/20px inherit; font-family: inherit; cursor: pointer; transition: background-color 0.12s; }
-.sp-btn svg { width: 20px; height: 20px; flex-shrink: 0; }
-.sp-btn:disabled { opacity: 0.4; cursor: default; }
-.sp-primary { background: rgba(255, 255, 255, 0.9); color: #272727; }
-.sp-primary:not(:disabled):hover { background: #d9d9d9; }
-.sp-primary:not(:disabled):active { background: #c0c0c0; }
-.sp-secondary { background: rgba(255, 255, 255, 0.1); color: rgba(255, 255, 255, 0.9); }
-.sp-secondary:not(:disabled):hover { background: rgba(255, 255, 255, 0.16); }
-.sp-secondary:not(:disabled):active { background: rgba(255, 255, 255, 0.22); }
-.sp-tertiary { background: transparent; color: rgba(255, 255, 255, 0.9); min-height: 40px; padding: 8px 14px; }
-.sp-tertiary:hover { background: rgba(255, 255, 255, 0.1); }
-.sp-chip { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 1000px; background: rgba(0, 0, 0, 0.2);
-  font-size: 12px; line-height: 16px; font-weight: 500; color: rgba(255, 255, 255, 0.7); }
-.sp-dot { width: 8px; height: 8px; border-radius: 4px; background: #8a8a8a; flex-shrink: 0; }
-.sp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
-@media (max-width: 780px) { .sp-grid { grid-template-columns: 1fr; } .sp-h1 { font-size: 28px; line-height: 34px; } }
-.sp-col { display: flex; flex-direction: column; gap: 20px; }
-.sp-title { margin: 0 0 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  font-size: 20px; line-height: 24px; font-weight: 700; letter-spacing: -0.5px; }
-.sp-note { font-size: 12px; line-height: 16px; font-weight: 500; color: rgba(255, 255, 255, 0.7); letter-spacing: 0; }
-.sp-ask { display: flex; gap: 8px; }
-.sp-input { flex: 1; min-width: 0; min-height: 48px; padding: 0 16px; border: 0; border-radius: 12px; outline: none; background: rgba(0, 0, 0, 0.25);
-  color: rgba(255, 255, 255, 0.9); font: 500 14px/20px inherit; font-family: inherit; box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.2); }
-.sp-input::placeholder { color: rgba(255, 255, 255, 0.45); }
-.sp-input:focus { background: rgba(0, 0, 0, 0.35); box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5); }
-.sp-message { min-height: 16px; margin-top: 10px; font-size: 12px; line-height: 16px; font-weight: 500; color: rgba(255, 255, 255, 0.7); }
-.sp-list { display: flex; flex-direction: column; gap: 2px; padding: 4px; border-radius: 16px; background: rgba(0, 0, 0, 0.14); }
-.sp-cell { appearance: none; width: 100%; border: 0; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px;
-  background: transparent; color: inherit; text-align: left; font: inherit; cursor: pointer; }
-.sp-cell:hover { background: rgba(255, 255, 255, 0.08); }
-.sp-cell:disabled { cursor: default; }
-.sp-cell:disabled:hover { background: transparent; }
-.sp-cell svg { width: 20px; height: 20px; flex-shrink: 0; color: rgba(255, 255, 255, 0.7); }
-.sp-cell-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.sp-text1 { font-size: 14px; line-height: 20px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sp-text2 { font-size: 12px; line-height: 16px; font-weight: 500; color: rgba(255, 255, 255, 0.7); }
-.sp-track { height: 4px; margin-top: 6px; border-radius: 2px; overflow: hidden; background: rgba(255, 255, 255, 0.15); }
-.sp-fill { height: 100%; background: rgba(255, 255, 255, 0.9); }
-.sp-badge { width: 28px; height: 28px; border-radius: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
-.sp-lessons { display: flex; flex-direction: column; gap: 2px; padding: 2px 0 8px 32px; }
-.sp-empty { padding: 14px 12px; font-size: 14px; line-height: 20px; color: rgba(255, 255, 255, 0.7); }
-.sp-tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-.sp-tile { appearance: none; border: 0; padding: 16px; border-radius: 16px; display: flex; flex-direction: column; gap: 6px; text-align: left;
-  background: rgba(255, 255, 255, 0.08); color: inherit; font: inherit; cursor: pointer; }
-.sp-tile:hover { background: rgba(255, 255, 255, 0.16); }
-.sp-tile svg { width: 24px; height: 24px; color: rgba(255, 255, 255, 0.9); }
-.sp-tile-title { font-size: 16px; line-height: 20px; font-weight: 700; }
-.sp-tile-sub { font-size: 12px; line-height: 16px; font-weight: 500; color: rgba(255, 255, 255, 0.7); }
-.sp-tabs { display: inline-flex; gap: 4px; padding: 4px; border-radius: 1000px; background: rgba(0, 0, 0, 0.25); margin-bottom: 18px; }
-.sp-tab { appearance: none; border: 0; border-radius: 1000px; min-height: 40px; padding: 8px 18px; display: inline-flex; align-items: center; gap: 8px;
-  background: transparent; color: rgba(255, 255, 255, 0.7); font: 600 14px/20px inherit; font-family: inherit; cursor: pointer; }
-.sp-tab svg { width: 18px; height: 18px; }
-.sp-tab:hover { background: rgba(255, 255, 255, 0.1); }
-.sp-tab[aria-selected="true"] { background: rgba(255, 255, 255, 0.9); color: #272727; }
-.sp-dev summary { cursor: pointer; font-size: 12px; line-height: 16px; font-weight: 500; color: rgba(255, 255, 255, 0.55); }
+#start-page :focus-visible, #start-bar :focus-visible { outline: 4px solid var(--ink); outline-offset: 4px; }
+.sp-wrap { max-width: 1160px; margin: 0 auto; padding: 22px 24px 56px; }
+.sp-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.sp-logo { display: block; height: 78px; width: auto; }
+.sp-top-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+
+/* Buttons: toys you press. A hard shadow under each, which they sink into. */
+.sp-btn { appearance: none; border: 4px solid var(--ink); border-radius: 18px; min-height: 54px; padding: 10px 22px;
+  display: inline-flex; align-items: center; gap: 10px; background: var(--paper); color: var(--ink);
+  font-family: var(--display); font-size: 22px; line-height: 1; letter-spacing: 0.2px; cursor: pointer;
+  box-shadow: 0 6px 0 var(--ink); transition: transform 0.08s, box-shadow 0.08s; }
+.sp-btn svg { width: 24px; height: 24px; flex-shrink: 0; }
+.sp-btn:not(:disabled):active { transform: translateY(6px); box-shadow: 0 0 0 var(--ink); }
+.sp-btn:disabled { cursor: default; background: #e9e7f5; color: rgba(18, 6, 59, 0.6); }
+.sp-primary { background: var(--sun); }
+.sp-big { min-height: 66px; padding: 14px 30px; font-size: 27px; border-radius: 22px; }
+
+/* Muse asks; the player answers in the speech bubble. */
+.sp-hero { display: flex; align-items: flex-end; gap: 28px; padding: 26px 0 0; }
+.sp-muse { flex: 0 0 190px; margin-bottom: -4px; }
+.muse-3d { display: block; width: 100%; aspect-ratio: 1; padding: 0; border: 0; background: none; cursor: pointer; }
+.muse-3d canvas { display: block; width: 100%; height: 100%; }
+.sp-say { flex: 1; min-width: 0; }
+.sp-h1 { margin: 0 0 20px; font-family: var(--display); font-weight: 400; font-size: clamp(38px, 5.4vw, 70px); line-height: 1.02; letter-spacing: 0.3px; color: var(--ink); text-wrap: balance; }
+.sp-ask { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 28px 14px; max-width: 840px; }
+.sp-bubble { position: relative; flex: 1 1 360px; display: flex; border: 4px solid var(--ink); border-radius: 28px; background: var(--paper); box-shadow: 0 6px 0 var(--ink); }
+.sp-bubble::before { content: ''; position: absolute; left: -15px; bottom: 16px; width: 26px; height: 26px; background: var(--paper);
+  border-left: 4px solid var(--ink); border-bottom: 4px solid var(--ink); transform: skewY(-24deg) rotate(45deg); }
+.sp-input { position: relative; z-index: 1; flex: 1; min-width: 0; min-height: 64px; padding: 0 24px; border: 0; border-radius: 28px; outline: none;
+  background: transparent; color: var(--ink); font-family: var(--text); font-size: 21px; font-weight: 700; }
+.sp-input::placeholder { color: rgba(18, 6, 59, 0.5); font-weight: 400; }
+.sp-bubble:focus-within { box-shadow: 0 6px 0 var(--ink), 0 0 0 4px var(--paper), 0 0 0 8px var(--ink); }
+.sp-message { min-height: 26px; margin: 16px 0 0; font-size: 18px; }
+@media (max-width: 720px) { .sp-hero { flex-direction: column; align-items: flex-start; gap: 6px; } .sp-muse { flex-basis: auto; width: 120px; }
+  .sp-bubble::before { display: none; } }
+
+/* Each shelf's name on a dark tag, the same as in the headset, where it floats over the room. */
+.sp-h2 { display: inline-block; margin: 44px 0 22px; padding: 8px 22px 10px; border-radius: 999px; background: var(--ink);
+  font-family: var(--display); font-weight: 400; font-size: 30px; line-height: 1.1; color: var(--sun); }
+/* Cards: every game, the player's own and the ready-made ones. A picture of the game, a thick outline, a slight tilt. */
+.sp-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 30px 22px; }
+@media (max-width: 920px) { .sp-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.sp-card { --tilt: -1.6deg; --card: var(--green); appearance: none; border: 4px solid var(--ink); padding: 8px 8px 14px; border-radius: 26px; background: var(--paper); color: var(--ink);
+  display: flex; flex-direction: column; gap: 4px; text-align: left; font: inherit; cursor: pointer;
+  transform: rotate(var(--tilt)); box-shadow: 0 9px 0 var(--ink); transition: transform 0.15s, box-shadow 0.15s; }
+.sp-card:nth-child(4n + 2) { --tilt: 1.4deg; }
+.sp-card:nth-child(4n + 3) { --tilt: -0.8deg; }
+.sp-card:nth-child(4n + 4) { --tilt: 1.9deg; }
+.sp-card:not(:disabled):hover, .sp-card:focus-visible { transform: rotate(0deg) translateY(-7px); box-shadow: 0 16px 0 var(--ink); }
+.sp-card:not(:disabled):active { transform: rotate(0deg) translateY(5px); box-shadow: 0 2px 0 var(--ink); }
+.sp-card:disabled { cursor: default; }
+.sp-pic { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; aspect-ratio: 4 / 3; overflow: hidden;
+  border: 3px solid var(--ink); border-radius: 16px; background: var(--card); }
+.sp-pic img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* No picture yet: the game's first letter (or a level's number), like a toy block. */
+.sp-mark { font-family: var(--display); font-size: 92px; line-height: 1; color: var(--paper); -webkit-text-stroke: 4px var(--ink); paint-order: stroke fill; }
+/* Being made: stripes that keep moving until the game is ready. */
+.sp-card[data-state="making"] .sp-pic { background: var(--paper); }
+/* The stripes are a wider layer that slides by exactly one stripe pair (44px across a 45 degree slope), so they loop with no seam. */
+.sp-card[data-state="making"] .sp-pic::before { content: ''; position: absolute; inset: 0 0 0 -64px; background: repeating-linear-gradient(-45deg, var(--card) 0 22px, var(--paper) 22px 44px); animation: sp-making 1.6s linear infinite; }
+.sp-card[data-state="failed"] .sp-pic { background: #e9e7f5; }
+@keyframes sp-making { from { transform: translateX(0); } to { transform: translateX(62.2254px); } }
+.sp-chip { position: absolute; left: 10px; top: 10px; padding: 4px 12px; border: 3px solid var(--ink); border-radius: 999px; background: var(--sun);
+  font-family: var(--display); font-size: 17px; line-height: 1.2; color: var(--ink); }
+.sp-card-title { margin: 10px 6px 0; font-family: var(--display); font-size: 25px; line-height: 1.05; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.sp-card-sub { margin: 0 6px; font-size: 16px; line-height: 1.3; }
+@keyframes sp-slap { from { opacity: 0; transform: rotate(calc(var(--tilt) + 9deg)) scale(1.18); } to { opacity: 1; transform: rotate(var(--tilt)) scale(1); } }
+.sp-cards.sp-arrive .sp-card { animation: sp-slap 0.32s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+.sp-cards.sp-arrive .sp-card:nth-child(2) { animation-delay: 0.06s; }
+.sp-cards.sp-arrive .sp-card:nth-child(3) { animation-delay: 0.12s; }
+.sp-cards.sp-arrive .sp-card:nth-child(4) { animation-delay: 0.18s; }
+@media (prefers-reduced-motion: reduce) { .sp-cards.sp-arrive .sp-card, .sp-card[data-state="making"] .sp-pic::before { animation: none; } .sp-card, .sp-btn { transition: none; } }
+.sp-empty { padding: 20px 22px; border: 4px dashed rgba(18, 6, 59, 0.5); border-radius: 22px; background: rgba(255, 255, 255, 0.55); font-size: 18px; max-width: 760px; }
+
+.sp-dev { margin-top: 56px; color: rgba(18, 6, 59, 0.75); }
+.sp-dev summary { cursor: pointer; font-size: 14px; }
 .sp-dev[open] summary { margin-bottom: 12px; }
-#start-bar { position: fixed; top: 16px; left: 16px; z-index: 10000; display: none; align-items: center; gap: 8px; padding: 6px; max-width: calc(100vw - 32px);
-  border-radius: 1000px; background: linear-gradient(180deg, #414141 0%, #272727 100%); color: rgba(255, 255, 255, 0.9);
-  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35); }
-#start-bar .sp-bar-text { padding: 0 8px; font-size: 14px; line-height: 20px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* While a game previews on this screen: a bar at the top. */
+#start-bar { position: fixed; top: 14px; left: 14px; z-index: 10000; display: none; align-items: center; gap: 10px; padding: 8px 8px 12px; max-width: calc(100vw - 28px);
+  border: 4px solid var(--ink); border-radius: 24px; background: var(--paper); color: var(--ink); font-family: var(--text); box-shadow: 0 6px 0 var(--ink); }
+#start-bar .sp-btn { min-height: 46px; font-size: 19px; }
+#start-bar .sp-bar-text { padding: 0 6px; font-size: 17px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 `;
 
 // Icon shapes (24 x 24, stroked) after Lucide (ISC licence), the icon set the headset UI uses.
 const ICONS = {
   goggles: '<path d="M2 10a3 3 0 0 1 3-3h14a3 3 0 0 1 3 3v4a3 3 0 0 1-3 3h-3l-2-3h-4l-2 3H5a3 3 0 0 1-3-3z"/>',
   mic: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v4"/>',
-  chevron: '<path d="m9 18 6-6-6-6"/>',
-  down: '<path d="m6 9 6 6 6-6"/>',
   back: '<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
-  heart: '<path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7Z"/>',
-  microscope: '<path d="M6 18h8"/><path d="M3 22h18"/><path d="M14 22a7 7 0 1 0 0-14h-1"/><path d="M9 14h2"/><path d="M9 12a2 2 0 0 1-2-2V6h6v4a2 2 0 0 1-2 2Z"/><path d="M12 6V3a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3"/>',
-  cog: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"/>',
-  flower: '<circle cx="12" cy="12" r="3"/><path d="M12 9a3 3 0 1 1 3-3M15 12a3 3 0 1 1 3 3M12 15a3 3 0 1 1-3 3M9 12a3 3 0 1 1-3-3"/>',
-  book: '<path d="M2 4h6a4 4 0 0 1 4 4v12a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v12a3 3 0 0 1 3-3h7z"/>',
-  gamepad: '<path d="M6 11h4M8 9v4M15 12h.01M18 10h.01"/><rect x="2" y="6" width="20" height="12" rx="2"/>',
-  trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
-  puzzle: '<path d="M19.4 7.3a2.4 2.4 0 0 0-1.7-.7h-1.2a.5.5 0 0 1-.5-.5V5a2.5 2.5 0 0 0-5 0v1.1a.5.5 0 0 1-.5.5H6.4A2.4 2.4 0 0 0 4 9v2.1a.5.5 0 0 0 .5.5H5a2.5 2.5 0 0 1 0 5h-.5a.5.5 0 0 0-.5.5V19a2.4 2.4 0 0 0 2.4 2.4h11.2A2.4 2.4 0 0 0 20 19V9a2.4 2.4 0 0 0-.6-1.7Z"/>',
-  graduation: '<path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>',
 } as const;
-const TILE_ICONS = [ICONS.heart, ICONS.microscope, ICONS.cog, ICONS.flower];
-const GAME_ICONS = [ICONS.gamepad, ICONS.trophy, ICONS.puzzle, ICONS.gamepad];
-// The hero's words for each section.
-const HERO: Record<Section, { eyebrow: string; title: string; lead: string }> = {
-  learn: {
-    eyebrow: 'SPATIAL GENERATIVE UI',
-    title: 'Lessons on your desk',
-    lead: 'Ask for any subject. An AI agent builds a hands-on course in 3D that you pick up, turn and take apart in your own room.',
-  },
-  play: {
-    eyebrow: 'SPATIAL GENERATIVE UI',
-    title: 'Games on your desk',
-    lead: 'Ask for any game. An AI agent builds it in 3D on your desk, and you play it with your hands.',
-  },
-};
 
 const icon = (paths: string) =>
-  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
 
-// The same state colours as the picker's lesson badges.
-const BADGES = {
-  pending: ['rgba(255, 255, 255, 0.15)', 'rgba(255, 255, 255, 0.9)'],
-  generating: ['#fc9435', '#272727'],
-  ready: ['rgba(255, 255, 255, 0.9)', '#272727'],
-  failed: ['#f7818c', '#272727'],
-} as const;
-const LESSON_STATES = { pending: 'Not written yet: tap to write it', generating: 'Writing...', ready: 'Ready: tap to preview here', failed: 'Failed: tap to try again' } as const;
+const WAIT = 'Muse turns it into a game in about 15 minutes. Play one of these while you wait.';
 const MIC_TEXT: Record<MicrophoneState, string> = {
-  granted: 'Microphone allowed',
-  prompt: 'Allow microphone',
-  denied: 'Microphone blocked: allow it in this site\'s settings',
-  unknown: 'Allow microphone',
+  granted: 'Microphone on',
+  prompt: 'Turn on my microphone',
+  denied: "Microphone blocked: turn it on in this site's settings",
+  unknown: 'Turn on my microphone',
 };
 const PHASE_TEXT: Record<LessonStatus['phase'], string> = {
   idle: 'Nothing open',
-  building: 'Writing...',
+  building: 'Making it...',
   fixing: 'Fixing a problem...',
   ready: 'Ready',
-  failed: 'That did not work',
+  failed: "That didn't work",
   broken: 'Something broke',
 };
 
@@ -153,7 +148,37 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text?
   return node;
 }
 
+/** A card: a picture of the game (or, with none yet, its mark on a colour), its name and one line on it. */
+function card(item: Card, index: number, open: (item: Card) => void): HTMLButtonElement {
+  const node = el('button', 'sp-card');
+  node.dataset.state = item.state;
+  node.style.setProperty('--card', CARD_COLORS[index % CARD_COLORS.length]);
+  const pic = el('span', 'sp-pic');
+  const mark = () => pic.replaceChildren(el('span', 'sp-mark', item.mark));
+  if (item.state === 'making') pic.appendChild(el('span', 'sp-chip', 'Being made'));
+  else if (item.picture) {
+    const img = el('img');
+    img.alt = '';
+    img.loading = 'lazy';
+    img.addEventListener('error', mark, { once: true });
+    img.src = item.picture;
+    pic.appendChild(img);
+  } else mark();
+  node.append(pic, el('span', 'sp-card-title', item.title), el('span', 'sp-card-sub', item.sub));
+  node.disabled = item.state === 'making';
+  node.addEventListener('click', () => open(item));
+  return node;
+}
+
 export function createStartPage(world: World, developerTools: HTMLElement) {
+  document.title = APP_NAME;
+  for (const [rel, href] of [['preconnect', 'https://fonts.gstatic.com'], ['stylesheet', FONTS]]) {
+    const link = el('link');
+    link.rel = rel;
+    link.href = href;
+    if (rel === 'preconnect') link.crossOrigin = '';
+    document.head.appendChild(link);
+  }
   const style = el('style');
   style.textContent = STYLE;
   document.head.appendChild(style);
@@ -162,72 +187,43 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
   page.id = 'start-page';
   page.innerHTML = `
     <div class="sp-wrap">
-      <section class="sp-panel">
-        <div class="sp-tabs" role="tablist">
-          <button class="sp-tab" role="tab" data-section="learn">${icon(ICONS.graduation)}<span>Learn</span></button>
-          <button class="sp-tab" role="tab" data-section="play">${icon(ICONS.gamepad)}<span>Play</span></button>
+      <div class="sp-top">
+        <img class="sp-logo" src="${import.meta.env.BASE_URL}logo.png" alt="${APP_NAME}" />
+        <div class="sp-top-actions">
+          <button class="sp-btn" data-id="mic">${icon(ICONS.mic)}<span data-id="mic-text">Turn on my microphone</span></button>
+          <button class="sp-btn sp-primary" data-id="enter">${icon(ICONS.goggles)}<span>Play in my room</span></button>
         </div>
-        <div class="sp-eyebrow" data-id="hero-eyebrow"></div>
-        <h1 class="sp-h1" data-id="hero-title"></h1>
-        <p class="sp-lead" data-id="hero-lead"></p>
-        <div class="sp-actions">
-          <button class="sp-btn sp-primary" data-id="enter">${icon(ICONS.goggles)}<span>Enter mixed reality</span></button>
-          <button class="sp-btn sp-secondary" data-id="mic">${icon(ICONS.mic)}<span data-id="mic-text">Allow microphone</span></button>
+      </div>
+      <section class="sp-hero">
+        <div class="sp-muse" data-id="muse"></div>
+        <div class="sp-say">
+          <h1 class="sp-h1">What do you wonder about?</h1>
+          <form class="sp-ask" data-id="ask-form">
+            <div class="sp-bubble"><input class="sp-input" data-id="ask-input" maxlength="200" aria-label="What do you wonder about?" placeholder="Why do boats float?" /></div>
+            <button class="sp-btn sp-primary sp-big" type="submit">Make a game</button>
+          </form>
+          <p class="sp-message" data-id="ask-message">${WAIT}</p>
         </div>
-        <div class="sp-message" data-id="hero-message"></div>
       </section>
-      <div class="sp-grid" data-id="learn">
-        <div class="sp-col">
-          <section class="sp-panel">
-            <h2 class="sp-title">Ask for a course</h2>
-            <form class="sp-ask" data-id="ask">
-              <input class="sp-input" data-id="ask-input" maxlength="200" placeholder="e.g. How a jet engine works" />
-              <button class="sp-btn sp-primary" type="submit">Plan it</button>
-            </form>
-            <div class="sp-message" data-id="ask-message">In the headset you can also ask by voice.</div>
-          </section>
-          <section class="sp-panel">
-            <h2 class="sp-title">Start a lesson <span class="sp-note">Opens at once</span></h2>
-            <div class="sp-tiles" data-id="tiles"></div>
-          </section>
-        </div>
-        <section class="sp-panel">
-          <h2 class="sp-title">My courses <span class="sp-note">Saved for you</span></h2>
-          <div class="sp-list" data-id="courses"><div class="sp-empty">Loading...</div></div>
-        </section>
-      </div>
-      <div class="sp-grid" data-id="play" style="display: none">
-        <div class="sp-col">
-          <section class="sp-panel">
-            <h2 class="sp-title">Ask for a game</h2>
-            <form class="sp-ask" data-id="game-ask">
-              <input class="sp-input" data-id="game-input" maxlength="200" placeholder="e.g. Mini golf with three holes" />
-              <button class="sp-btn sp-primary" type="submit">Make it</button>
-            </form>
-            <div class="sp-message" data-id="game-message">A game takes about two minutes to write.</div>
-          </section>
-          <section class="sp-panel">
-            <h2 class="sp-title">Start a game <span class="sp-note">Opens at once</span></h2>
-            <div class="sp-tiles" data-id="game-tiles"></div>
-          </section>
-        </div>
-        <section class="sp-panel">
-          <h2 class="sp-title">My games <span class="sp-note">Saved for you</span></h2>
-          <div class="sp-list" data-id="games"><div class="sp-empty">Loading...</div></div>
-        </section>
-      </div>
+      <p class="sp-message" data-id="hero-message"></p>
+      <h2 class="sp-h2">Ready to play</h2>
+      <div class="sp-cards sp-arrive" data-id="ready"></div>
+      <h2 class="sp-h2">Your games</h2>
+      <div data-id="mine"></div>
       <details class="sp-dev"><summary>Developer tools</summary></details>
     </div>`;
   document.body.appendChild(page);
   const find = <T extends HTMLElement = HTMLElement>(id: string) => page.querySelector<T>(`[data-id="${id}"]`)!;
   page.querySelector('.sp-dev')!.appendChild(developerTools);
+  const muse = createMuseCanvas();
+  find('muse').appendChild(muse.element);
 
-  // While a lesson is previewed on this screen, the page folds into a bar at the top.
+  // While a game is previewed on this screen, the page folds into a bar at the top.
   const bar = el('div');
   bar.id = 'start-bar';
-  bar.innerHTML = `<button class="sp-btn sp-secondary" data-id="back">${icon(ICONS.back)}<span>Start page</span></button>
+  bar.innerHTML = `<button class="sp-btn" data-id="back">${icon(ICONS.back)}<span>Back</span></button>
     <span class="sp-bar-text" data-id="bar-text"></span>
-    <button class="sp-btn sp-primary" data-id="bar-enter">${icon(ICONS.goggles)}<span>Enter mixed reality</span></button>`;
+    <button class="sp-btn sp-primary" data-id="bar-enter">${icon(ICONS.goggles)}<span>Play it in my room</span></button>`;
   document.body.appendChild(bar);
 
   let previewing = false;
@@ -235,7 +231,8 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
   let hiddenByHost = false;
   let courses: CourseSummary[] = [];
   let games: GameSummary[] = [];
-  const expanded = new Set<string>();
+  // What was being made at the last look, so Muse can cheer when one of them is ready.
+  let making = new Set<string>();
   let poll = 0;
   // Declared before anything can call refresh(): the visibility subscription below runs at once.
   let refreshing = false;
@@ -248,7 +245,7 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
   world.visibilityState.subscribe((state) => {
     immersive = state !== VisibilityState.NonImmersive;
     show();
-    // Back from XR: lessons may have been written meanwhile.
+    // Back from XR: games may have been made meanwhile.
     if (!immersive) void refresh();
   });
   onChromeHidden((hidden) => {
@@ -265,36 +262,14 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
     bar.querySelector<HTMLElement>('[data-id="bar-text"]')!.textContent = PHASE_TEXT[status.phase];
   });
 
-  // Learn or Play: the hero, the grid under it, and (shared through games.ts) the headset picker.
-  for (const tab of page.querySelectorAll<HTMLButtonElement>('[data-section]')) {
-    tab.addEventListener('click', () => setSection(tab.dataset.section as Section));
-  }
-  onSection((section) => {
-    for (const tab of page.querySelectorAll<HTMLElement>('[data-section]')) tab.setAttribute('aria-selected', String(tab.dataset.section === section));
-    find('hero-eyebrow').textContent = HERO[section].eyebrow;
-    find('hero-title').textContent = HERO[section].title;
-    find('hero-lead').textContent = HERO[section].lead;
-    find('learn').style.display = section === 'learn' ? '' : 'none';
-    find('play').style.display = section === 'play' ? '' : 'none';
-  });
-
   // Mixed reality.
-  const microscope = EXAMPLE_LESSONS.find((lesson) => lesson.saved === 'microscope');
   const enter = async () => {
     try {
-      // The desk opens on a finished lesson (in Play, a finished game). One already on the page stays;
-      // emulator scripts that enter XR themselves never take this path, so they mount their own lesson.
-      if (!inspectMounted()) {
-        if (currentSection() === 'play') {
-          const game = await loadExampleGame(EXAMPLE_GAMES[0].saved).catch(() => null);
-          if (game) await openWritten(game.code, game.request, 'game');
-        } else if (microscope) {
-          await startLesson(microscope.prompt);
-        }
-      }
+      // The room opens on the game previewed here, if there is one; otherwise on the dashboard (picker.ts), where
+      // the player picks one.
       await world.launchXR();
     } catch (err) {
-      find('hero-message').textContent = `Could not start mixed reality: ${(err as Error).message}`;
+      find('hero-message').textContent = `Mixed reality didn't start: ${(err as Error).message}`;
     }
   };
   const xrPossible = world.xrEnabled && 'xr' in navigator;
@@ -303,7 +278,7 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
     button.disabled = !xrPossible;
     button.addEventListener('click', () => void enter());
   }
-  if (!xrPossible) find('hero-message').textContent = 'Mixed reality needs a headset browser, such as the Meta Quest browser.';
+  if (!xrPossible) find('hero-message').textContent = 'Playing in your room needs a headset, in its browser. Here you can look at the games.';
 
   // The microphone, asked for here because the headset cannot ask inside XR.
   const micButton = find<HTMLButtonElement>('mic');
@@ -314,71 +289,47 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
   void microphoneState().then(showMic);
   micButton.addEventListener('click', async () => showMic(await askForMicrophone()));
 
-  // Ask for a course by typing.
-  find<HTMLFormElement>('ask').addEventListener('submit', async (event) => {
+  // Ask for a game by typing (in the headset, by voice too). Its card appears at once, being made.
+  find<HTMLFormElement>('ask-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     const input = find<HTMLInputElement>('ask-input');
-    const subject = input.value.trim();
-    if (!subject) return;
-    find('ask-message').textContent = `Planning a course on "${subject}"...`;
+    const idea = input.value.trim();
+    if (!idea) return;
+    find('ask-message').textContent = `Asking ${MASCOT_NAME} for "${idea}"...`;
     try {
-      const course = await createCourse(subject);
+      await createGame(idea);
       input.value = '';
-      expanded.add(course.id);
-      find('ask-message').textContent = 'Planned. Its lessons are being written; they appear under My courses.';
+      find('ask-message').textContent = `${MASCOT_NAME} is making your game. Its card is under Your games, below; it takes about 15 minutes.`;
       await refresh();
     } catch (err) {
-      find('ask-message').textContent = `That did not work: ${(err as Error).message}`;
+      find('ask-message').textContent = `That didn't work: ${(err as Error).message}`;
     }
   });
 
-  // Ask for a game by typing.
-  find<HTMLFormElement>('game-ask').addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const input = find<HTMLInputElement>('game-input');
-    const request = input.value.trim();
-    if (!request) return;
-    find('game-message').textContent = `Writing "${request}"...`;
-    try {
-      await createGame(request);
-      input.value = '';
-      find('game-message').textContent = 'It is being written; it appears under My games in about two minutes.';
-      await refresh();
-    } catch (err) {
-      find('game-message').textContent = `That did not work: ${(err as Error).message}`;
-    }
-  });
-
-  // Example games: ready-made, so they open at once.
-  EXAMPLE_GAMES.forEach((example, i) => {
-    const tile = el('button', 'sp-tile');
-    tile.innerHTML = icon(GAME_ICONS[i] ?? ICONS.gamepad);
-    tile.append(el('span', 'sp-tile-title', example.title), el('span', 'sp-tile-sub', example.sub));
-    tile.addEventListener('click', async () => {
-      try {
-        const game = await loadExampleGame(example.saved);
-        preview(true);
-        await openWritten(game.code, game.request, 'game');
-      } catch (err) {
-        find('game-message').textContent = `That game did not load: ${(err as Error).message}`;
-      }
-    });
-    find('game-tiles').appendChild(tile);
-  });
-
-  // Example lessons.
-  EXAMPLE_LESSONS.forEach((lesson, i) => {
-    const tile = el('button', 'sp-tile');
-    tile.innerHTML = icon(TILE_ICONS[i] ?? ICONS.book);
-    tile.append(el('span', 'sp-tile-title', lesson.title), el('span', 'sp-tile-sub', lesson.sub));
-    tile.addEventListener('click', () => {
+  /** Open what a card names: a ready game or level previews here; one not made yet (or failed) starts being made. */
+  const open = (item: Card) => {
+    const source = item.source;
+    if (source.kind === 'game') void openGame(source.id);
+    else if (source.kind === 'level') void openLesson(source.courseId, source.index);
+    else if (source.kind === 'example-lesson') {
       preview(true);
-      void startLesson(lesson.prompt);
-    });
-    find('tiles').appendChild(tile);
-  });
+      void startLesson(EXAMPLE_LESSONS[source.index].prompt);
+    } else if (source.kind === 'example-game') {
+      void (async () => {
+        try {
+          const game = await loadExampleGame(EXAMPLE_GAMES[source.index].saved);
+          preview(true);
+          await openWritten(game.code, game.request, 'game');
+        } catch (err) {
+          find('ask-message').textContent = `That game didn't load: ${(err as Error).message}`;
+        }
+      })();
+    }
+  };
+  // The ready-made games and lessons. They open at once.
+  find('ready').append(...readyCards(import.meta.env.BASE_URL).map((item, index) => card(item, index, open)));
 
-  // Saved courses: kept fresh while the page or its bar is on screen (in XR the picker polls instead).
+  // The player's games: kept fresh while the page or its bar is on screen (in XR the dashboard polls instead).
   async function refresh() {
     if (refreshing) return;
     refreshing = true;
@@ -386,11 +337,7 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
     let wait = 20000;
     try {
       [courses, games] = await Promise.all([listCourses(), listGames()]);
-      renderCourses();
-      renderGames();
-      const active = courses.some((c) => c.status === 'planning' || c.lessons.some((l) => l.status === 'generating'))
-        || games.some((g) => g.status === 'writing');
-      if (active) wait = 4000;
+      if (renderMine()) wait = 4000;
     } catch {
       wait = 8000; // the server may be restarting
     } finally {
@@ -399,68 +346,25 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
     }
   }
 
-  function renderCourses() {
-    const list = find('courses');
-    list.replaceChildren();
-    if (courses.length === 0) {
-      list.appendChild(el('div', 'sp-empty', 'No courses yet. Ask for one above.'));
-      return;
+  /** Draws the player's cards; true while one is being made. Muse thinks while one is, and cheers when it is ready. */
+  function renderMine(): boolean {
+    const cards = myCards(games, courses, 'Tap');
+    const box = find('mine');
+    if (cards.length === 0) box.replaceChildren(el('div', 'sp-empty', 'The games you ask for show up here. Ask for one at the top.'));
+    else {
+      const grid = el('div', 'sp-cards');
+      grid.append(...cards.map((item, index) => card(item, index, open)));
+      box.replaceChildren(grid);
     }
-    for (const course of courses) {
-      const row = el('button', 'sp-cell');
-      row.innerHTML = icon(ICONS.book);
-      const text = el('div', 'sp-cell-text');
-      const ready = course.lessons.filter((l) => l.status === 'ready').length;
-      const track = el('div', 'sp-track');
-      const fill = el('div', 'sp-fill');
-      fill.style.width = `${course.lessons.length ? Math.round((100 * ready) / course.lessons.length) : 0}%`;
-      track.appendChild(fill);
-      text.append(el('span', 'sp-text1', course.title), el('span', 'sp-text2', courseProgress(course)), track);
-      row.appendChild(text);
-      row.insertAdjacentHTML('beforeend', icon(expanded.has(course.id) ? ICONS.down : ICONS.chevron));
-      row.addEventListener('click', () => {
-        if (expanded.has(course.id)) expanded.delete(course.id);
-        else expanded.add(course.id);
-        renderCourses();
-      });
-      list.appendChild(row);
-      if (!expanded.has(course.id)) continue;
-      const lessons = el('div', 'sp-lessons');
-      course.lessons.forEach((lesson, index) => {
-        const cell = el('button', 'sp-cell');
-        const badge = el('span', 'sp-badge', String(index + 1));
-        [badge.style.background, badge.style.color] = BADGES[lesson.status];
-        const words = el('div', 'sp-cell-text');
-        words.append(el('span', 'sp-text1', lesson.title), el('span', 'sp-text2', LESSON_STATES[lesson.status]));
-        cell.append(badge, words);
-        cell.disabled = lesson.status === 'generating';
-        cell.addEventListener('click', () => void openLesson(course.id, index));
-        lessons.appendChild(cell);
-      });
-      list.appendChild(lessons);
-    }
+    const now = new Set(cards.filter((c) => c.state === 'making').map((c) => c.key));
+    const finished = cards.some((c) => c.state === 'ready' && making.has(c.key));
+    making = now;
+    muse.setMood(finished ? 'cheer' : now.size > 0 ? 'thinking' : 'idle');
+    if (finished && now.size > 0) window.setTimeout(() => muse.setMood('thinking'), 1800);
+    return now.size > 0;
   }
 
-  function renderGames() {
-    const list = find('games');
-    list.replaceChildren();
-    if (games.length === 0) {
-      list.appendChild(el('div', 'sp-empty', 'No games yet. Ask for one, or start one of the examples.'));
-      return;
-    }
-    for (const game of games) {
-      const row = el('button', 'sp-cell');
-      row.innerHTML = icon(ICONS.gamepad);
-      const text = el('div', 'sp-cell-text');
-      text.append(el('span', 'sp-text1', game.title), el('span', 'sp-text2', game.status === 'ready' ? 'Ready: tap to preview here' : gameProgress(game)));
-      row.appendChild(text);
-      row.disabled = game.status === 'writing';
-      row.addEventListener('click', () => void openGame(game.id));
-      list.appendChild(row);
-    }
-  }
-
-  /** A ready game opens here; a failed one is written again. */
+  /** A ready game opens here; a failed one is made again. */
   async function openGame(id: string) {
     try {
       const game = await fetchGame(id);
@@ -469,11 +373,12 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
         await openWritten(game.code, game.request, 'game');
       }
     } catch {
-      // The list shows what the server says next.
+      // The cards show what the server says next.
     }
     await refresh();
   }
 
+  /** A ready level opens here; one not made yet (or failed) starts being made. */
   async function openLesson(courseId: string, index: number) {
     try {
       const lesson = await fetchCourseLesson(courseId, index);
@@ -482,7 +387,7 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
         await openWritten(lesson.code, lesson.prompt);
       }
     } catch {
-      // The list shows what the server says next.
+      // The cards show what the server says next.
     }
     await refresh();
   }

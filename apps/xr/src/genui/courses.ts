@@ -5,7 +5,7 @@
 
 /** A lesson or game being written right now: its live preview (GET /api/live/<key>) and one line on it. */
 export type LiveSummary = { key: string; line: string; seq: number };
-export type CourseLessonSummary = { title: string; objective: string; status: 'pending' | 'generating' | 'ready' | 'failed'; error?: string; seconds?: number; live?: LiveSummary };
+export type CourseLessonSummary = { title: string; objective: string; status: 'pending' | 'generating' | 'ready' | 'failed'; error?: string; seconds?: number; live?: LiveSummary; picture?: boolean };
 export type CourseSummary = {
   id: string;
   title: string;
@@ -41,16 +41,6 @@ export async function fetchCourseLesson(courseId: string, index: number): Promis
   const res = await fetch(`/api/courses/${courseId}/lessons/${index}`);
   if (!res.ok) throw new Error(res.statusText || `HTTP ${res.status}`);
   return (await res.json()) as CourseLesson;
-}
-
-/** One line on what a course is doing, for its row on the shelf. */
-export function courseProgress(course: CourseSummary): string {
-  if (course.status === 'planning') return 'Planning...';
-  if (course.status === 'failed') return 'Could not be planned';
-  const ready = course.lessons.filter((l) => l.status === 'ready').length;
-  const writing = course.lessons.findIndex((l) => l.status === 'generating');
-  if (writing >= 0) return `Writing lesson ${writing + 1} of ${course.lessons.length}...`;
-  return `${ready} of ${course.lessons.length} lessons ready`;
 }
 
 /**

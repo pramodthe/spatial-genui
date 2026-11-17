@@ -48,9 +48,23 @@
       "baseURL": "https://api.fireworks.ai/inference/v1",
       "apiKeyEnv": "FIREWORKS_API_KEY",
       "model": "accounts/fireworks/models/deepseek-v4p1-flash-1017",
-      "priceIn": 0.15,
-      "priceOut": 0.6,
-      "enabled": false
+      "priceIn": 0.3,
+      "priceCached": 0.006,
+      "priceOut": 1.2,
+      "enabled": false,
+      "note": "Fireworks serverless (Standard) price, fireworks.ai/pricing (Nov 2026); accounts/fireworks/routers/deepseek-flash-latest points here. Takes tools and images."
+    },
+    {
+      "id": "deepseek-v4.1-flash-ultrafast",
+      "family": "DeepSeek",
+      "baseURL": "https://api.fireworks.ai/inference/v1",
+      "apiKeyEnv": "FIREWORKS_API_KEY",
+      "model": "accounts/fireworks/routers/deepseek-v4p1-flash-1017-ultrafast",
+      "priceIn": 2.4,
+      "priceCached": 0.048,
+      "priceOut": 9.6,
+      "enabled": false,
+      "note": "Fireworks' Ultra-fast serverless mode for DeepSeek V4.1 Flash 1017 (900-1,200 tok/s): preview pricing from the Fireworks console (Nov 2026), 8 times the standard mode."
     },
     {
       "id": "muse-ember-1.0-max",

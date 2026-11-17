@@ -2,6 +2,8 @@ import vm from 'node:vm';
 import * as THREE from 'three';
 import { parse as parseUIKitML, resolveKitComponentSets } from '@drawcall/uikitml';
 import { createKit } from './kit/kit.js';
+import { World as EcsWorld, createComponent, createSystem, Types as EcsTypes } from 'elics';
+import { measureLayout, type Layout } from './layout.js';
 
 export type SceneStats = {
   meshes: number;
@@ -19,6 +21,8 @@ export type SceneStats = {
   /** Objects whose position, turn, size, visibility or vertices changed in any of the ten update() frames (about one second). */
   moving: number;
   size: [number, number, number];
+  /** Layout checks from where the player stands (layout.ts). */
+  layout: Layout;
 };
 
 export type DryRunResult =
@@ -37,6 +41,8 @@ const TIMEOUT_MS = 2000;
 const MIN_GRAB_GAP_M = 0.04;
 // The effects the headset's sound can play (apps/xr/src/genui/sound.ts, SoundName).
 const SOUND_NAMES = ['pop', 'click', 'good', 'bad', 'whoosh', 'tick', 'win', 'coin', 'bounce', 'splash'];
+const CLIP_ID = /^(snd|mus)-[0-9a-f]{10}$/;
+const ECS = Object.freeze({ World: EcsWorld, createComponent, createSystem, Types: EcsTypes });
 const MAX_PANEL_YAW = 0.4; // ~23°: at 40° judges already saw text as steeply angled
 // Smallest text height in the headset; ~1.2 cm reads comfortably at seated distance (~0.55 m).
 const MIN_TEXT_CM = 1.1;
@@ -101,16 +107,29 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
         }
         sounds++;
       },
+      clip(id: unknown) {
+        if (!CLIP_ID.test(String(id))) throw new Error(`sound.clip('${String(id)}'): use an id make_sound or make_music returned ('snd-' or 'mus-' and 10 letters or digits).`);
+        sounds++;
+        return { stop() {} };
+      },
+      load(id: unknown) {
+        if (!CLIP_ID.test(String(id))) throw new Error(`sound.load('${String(id)}'): use an id make_sound or make_music returned.`);
+      },
     },
     hands: {
       left: { tracked: false, tip: new THREE.Vector3(), palm: new THREE.Vector3(), pinching: false, pinched: false },
       right: { tracked: true, tip: new THREE.Vector3(0, 0.1, 0.15), palm: new THREE.Vector3(0, 0.08, 0.2), pinching: false, pinched: false },
     },
+    // EliCS, as the headset gives it (apps/xr/src/genui/host.ts): the module's own ECS world runs here too.
+    ecs: ECS,
   };
   /** Move the simulated right hand for frame i of the dry run (called from inside the sandbox before update). */
   const moveHand = (i: number) => {
     const hand = api.hands.right;
-    hand.tip.set(-0.15 + i * 0.03, 0.08 + 0.02 * Math.sin(i), 0.12);
+    // A world (build() returned mode: 'world') is around the player at the origin: the hand is in front of them, at
+    // about 1.1 m in a world shown 12 times bigger, so a tool that follows it is measured where the headset shows it.
+    if ((context as any).__result?.mode === 'world') hand.tip.set(0.02 + 0.004 * Math.sin(i), 0.09, -0.03 - 0.002 * i);
+    else hand.tip.set(-0.15 + i * 0.03, 0.08 + 0.02 * Math.sin(i), 0.12);
     hand.palm.copy(hand.tip).add(new THREE.Vector3(0, -0.02, 0.05));
     const pinching = i >= 3 && i <= 5;
     hand.pinched = pinching && !hand.pinching;
@@ -256,6 +275,8 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
   }
 
   if (errors.length > 0) return { ok: false, error: errors.join('\n') };
+  const targets = traitTargets.filter((t): t is { object: THREE.Object3D; grab: boolean; press: boolean } => t.object instanceof THREE.Object3D);
+  const layout = measureLayout(root, targets, panels.map((p) => p.holder), result?.mode === 'world', api.hands.right.tip.clone(), moved);
   return {
     ok: true,
     warnings,
@@ -271,6 +292,7 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
       pressables: traitTargets.filter((t) => t.press).length,
       moving: moved.size,
       size: [round(size.x), round(size.y), round(size.z)],
+      layout,
     },
   };
 }

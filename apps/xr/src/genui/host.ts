@@ -1,4 +1,5 @@
 import * as IWSDK from '@iwsdk/core';
+import { World as EcsWorld, ComponentRegistry, createComponent, createSystem as createEcsSystem, Types as EcsTypes } from 'elics';
 import {
   Box3,
   createSystem,
@@ -31,7 +32,7 @@ import { createGameHands, updateGameHands, type GameHands } from './game-hands';
 import { createModuleSound } from './sound';
 import { makeCardGrabbable, pinchAtFingertips, setGrabFilter, type CardGrab } from './grab';
 import { createGlow, glowOnHover, tickGlows, type Glow } from './hover';
-import { initViewPill, setPill } from './hud';
+import { initTitleCard, initViewPill, setPill, showTitle } from './hud';
 import { assetHandle, assetIdsIn, creditsFor, preloadAssets } from './library';
 import type { TeachingRig } from './rig';
 
@@ -62,6 +63,8 @@ type PanelRecord = {
 };
 
 type Mounted = {
+  /** World mode's sky and ground (enterWorld), removed with the game. */
+  worldScene?: { dispose(): void } | null;
   entities: Entity[];
   objectEntities: Map<Object3D, Entity>;
   pressHandlers: Map<Entity, () => void>;
@@ -248,6 +251,8 @@ const MIN_FRONT_GAP_M = 0.3;
 const MAX_SET_BACK_M = 0.45;
 // Lessons keep opening at the saved spot while the learner stays this near it.
 const KEEP_SPOT_WITHIN_M = 1.5;
+// ...and while it is within this angle of where they face.
+const KEEP_SPOT_AHEAD_COS = Math.cos((60 * Math.PI) / 180);
 // A floating lesson's lowest part stays this far above the floor.
 const FLOOR_CLEARANCE_M = 0.05;
 // An unlabelled horizontal surface at least this far below the eyes counts as floor.
@@ -293,6 +298,7 @@ export function initGenUIHost(w: World, handlers: { onRuntimeError: (message: st
   // Nothing the learner drags goes below the floor.
   setFloorHeight(() => floorHeight(w.camera.getWorldPosition(new Vector3())));
   initViewPill(w, () => current && setLessonView(current.view === 'real' ? 'fit' : 'real'));
+  initTitleCard(w);
   w.registerSystem(GenUISystem);
 }
 
@@ -363,14 +369,57 @@ export function unmountGenerated() {
   current.handle?.dispose();
   for (const card of current.cards) card.dispose();
   for (const glow of current.glows.values()) glow.dispose();
-  for (const panel of current.panels.values()) URL.revokeObjectURL(panel.url);
+  for (const panel of current.panels.values()) {
+    URL.revokeObjectURL(panel.url);
+    disposePanelElements(panel.document);
+  }
+  const released = current.entities.map((entity) => ({ index: entity.index, components: entity.getComponents() }));
   // Children before parents so each entity releases its own resources.
   for (const entity of [...current.entities].reverse()) entity.dispose();
+  forgetComponentData(released);
+  forgetLessonComponents();
+  current.worldScene?.dispose();
   current = null;
   updatePill();
 }
 
+/**
+ * A uikit element's dispose() stops only that element, and IWSDK disposes only a panel's root. Every other element
+ * kept its layout node, whose text-measuring callback Yoga holds in a global table, and through it (its parents, and
+ * the click handlers the host gave them) the whole lesson or game: the main reason each game opened stayed in memory.
+ * Disposes every element of the panel, children first; IWSDK then disposes the root with the entity.
+ */
+function disposePanelElements(document: UIKitDocument | null) {
+  const root = document?.rootElement;
+  if (!root) return;
+  const elements: { dispose(): void }[] = [];
+  root.traverse((object) => {
+    if (object !== root && 'abortController' in object && typeof (object as { dispose?: unknown }).dispose === 'function') {
+      elements.push(object as unknown as { dispose(): void });
+    }
+  });
+  for (const element of elements.reverse()) element.dispose();
+}
+
+/**
+ * The ECS keeps each component's fields in arrays indexed by entity and does not clear a destroyed entity's slots. A
+ * slot holding an object (a panel's document, an Object3D) kept the whole previous lesson or game alive, its panels,
+ * meshes and geometry, until another entity happened to reuse the slot: about 13 MB a game on Quest 3, until the
+ * headset ran out of memory. Called after the entities are destroyed, since their cleanup still reads these slots.
+ */
+function forgetComponentData(released: { index: number; components: ReturnType<Entity['getComponents']> }[]) {
+  for (const { index, components } of released) {
+    for (const component of components) {
+      for (const values of Object.values(component.data as Record<string, unknown>)) {
+        if (Array.isArray(values) && index < values.length) values[index] = null;
+      }
+    }
+  }
+}
+
 export type MountedInspection = {
+  /** Shown as a world around the player (enterWorld), not on the desk. */
+  world: boolean;
   grabbables: { name: string; mode: 'touch' | 'ray'; center: [number, number, number]; held: boolean }[];
   pressables: { name: string; center: [number, number, number] }[];
   panels: number;
@@ -527,6 +576,7 @@ export function inspectMounted(): MountedInspection | null {
   const center = (object: Object3D) =>
     new Box3().setFromObject(object).getCenter(new Vector3()).toArray() as [number, number, number];
   return {
+    world: Boolean(mounted.worldScene),
     grabbables: [...mounted.grabModes].map(([object, mode]) => ({
       name: object.name,
       mode,
@@ -586,7 +636,41 @@ function isPressableNow(element: Object3D): boolean {
  * never enlarged to fit, so it keeps its size as parts arrive, and the parts that were not in the last snapshot
  * grow in.
  */
-export async function mountGenerated(code: string, options: { kind?: 'lesson' | 'game'; preview?: boolean } = {}): Promise<MountReport> {
+const ECS = Object.freeze({
+  World: EcsWorld,
+  createComponent: ((...args: Parameters<typeof createComponent>) => {
+    const component = createComponent(...args);
+    lessonComponents.push(component);
+    return component;
+  }) as typeof createComponent,
+  createSystem: createEcsSystem,
+  Types: EcsTypes,
+});
+
+/** The ECS components the mounted lesson or game made (the ECS kit makes a fresh set each time it opens). */
+let lessonComponents: ReturnType<typeof createComponent>[] = [];
+
+/**
+ * EliCS records every component in a global registry and never lets go, and a game's components hold its 3D
+ * objects in their data (the ECS kit's Thing.object): every game opened stayed in memory, its objects, panels and
+ * geometry, about 13 MB a game on Quest 3 until the headset ran out of memory. The registry has no way to remove
+ * one component, so its map is reached directly.
+ */
+function forgetLessonComponents() {
+  const registry = (ComponentRegistry as unknown as { components?: Map<string, unknown> }).components;
+  for (const component of lessonComponents) {
+    if (registry?.get(component.id) === component) registry.delete(component.id);
+    for (const values of Object.values(component.data as Record<string, unknown>)) {
+      if (Array.isArray(values)) values.fill(null);
+    }
+  }
+  lessonComponents = [];
+}
+
+/** Where a game plays: on the desk (mixed reality, toy size, the default) or as a world around the player. */
+export type PlayMode = 'desk' | 'world';
+
+export async function mountGenerated(code: string, options: { kind?: 'lesson' | 'game'; preview?: boolean; mode?: PlayMode } = {}): Promise<MountReport> {
   // Play: a game has a scoreboard instead of a lesson panel, and no box around it.
   const game = options.kind === 'game';
   if (!world) return { ok: false, error: 'GenUI host is not initialised.' };
@@ -665,7 +749,9 @@ export async function mountGenerated(code: string, options: { kind?: 'lesson' | 
     },
     ui(markup: string, options: PanelOptions = {}) {
       const text = toPanelText(String(markup));
-      const record = createPanelRecord(game ? asArcadePanel(text) : asHorizonPanel(text), options);
+      // A panel with the game's own skin (kit.panel skin, class kp-skin) keeps its look; others get the app's.
+      const skinned = /class="panel kp-skin"/.test(text);
+      const record = createPanelRecord(skinned ? text : game ? asArcadePanel(text) : asHorizonPanel(text), options);
       panels.push(record);
       return {
         object3D: record.holder,
@@ -697,9 +783,12 @@ export async function mountGenerated(code: string, options: { kind?: 'lesson' | 
     },
     hands: mounted.hands,
     sound: mounted.sound,
+    // EliCS, the ECS IWSDK is built on, for the module's own world of entities, components and systems
+    // (skills/common/ecs). The module runs that world from its update(); the host's world stays the host's.
+    ecs: ECS,
   };
 
-  let result: { root?: unknown; update?: unknown; real?: { size?: unknown } };
+  let result: { root?: unknown; update?: unknown; real?: { size?: unknown }; mode?: unknown; sky?: unknown; ground?: unknown; title?: unknown };
   try {
     result = (build as (a: typeof api) => typeof result)(api) ?? {};
   } catch (err) {
@@ -716,6 +805,10 @@ export async function mountGenerated(code: string, options: { kind?: 'lesson' | 
 
   const warnings: string[] = [];
   mounted.root = root;
+  // Where it plays: the opener's choice, else the module's own ({ mode: 'world' } from build()). A game designed as
+  // a world is built at walking scale around its origin (where the player stands): it is not fitted to the desk.
+  const designedAsWorld = result.mode === 'world';
+  const inWorld = !options.preview && (options.mode ?? (designedAsWorld ? 'world' : 'desk')) === 'world';
   // Measure the lesson as it first appears. A part that update() sizes or places (a light beam drawn by
   // stretching a unit cylinder) would otherwise count at its unplaced size and shrink the whole lesson.
   if (typeof result.update === 'function') {
@@ -740,7 +833,7 @@ export async function mountGenerated(code: string, options: { kind?: 'lesson' | 
   // Hidden pieces don't count toward the size: a pool of enemies waiting off the board, or effects kept hidden at
   // their build size until they play (a lesson's splash rings, 2 m across until scaled to a few centimetres,
   // shrank its whole scene to a fifth). The frame measures what is visible too.
-  fitToBox(mounted, root, panels, { ...(game ? { boxM: GAME_FIT_BOX_M } : {}), skipHidden: true, shrinkOnly: options.preview });
+  if (!(inWorld && designedAsWorld)) fitToBox(mounted, root, panels, { ...(game ? { boxM: GAME_FIT_BOX_M } : {}), skipHidden: true, shrinkOnly: options.preview });
   fitCards(mounted);
   syncLayers(mounted);
   const declared = Number(result.real?.size);
@@ -876,12 +969,191 @@ export async function mountGenerated(code: string, options: { kind?: 'lesson' | 
   }
 
   mounted.update = typeof result.update === 'function' ? (result.update as Mounted['update']) : undefined;
+  // The land and paths a world marks walkable (world-kit.js: userData.walkable): the player walks over them.
+  const walkable: Entity[] = [];
+  if (inWorld) root.traverse((object) => { if (object.userData?.walkable && (object as Mesh).isMesh) walkable.push(entityFor(object)); });
+  if (inWorld) enterWorld(mounted, anchor, panels, { scale: !designedAsWorld, sky: String(result.sky ?? ''), ground: String(result.ground ?? ''), walkable });
   if (options.preview) growNewParts(mounted, root);
   else previewParts = new Set();
   current = mounted;
   if (world) syncRaycastVisibility(world.scene);
   updatePill();
+  // A game opens with its name, shown by the app and gone after a few seconds (the game builds no title of its own).
+  if (game && !options.preview) {
+    const name = typeof result.title === 'string' ? result.title : gameTitle(code);
+    if (name) showTitle(name);
+  }
   return { ok: true, warnings, credits: library ? creditsFor(library, assetIds) : [] };
+}
+
+/** A learning game's name, from its IDENTITY part (the learning-game skill), for the opening title card. */
+function gameTitle(code: string): string | null {
+  const identity = code.match(/const\s+IDENTITY\s*=\s*\{([\s\S]{0,800}?)\n\s*\};/)?.[1] ?? '';
+  return identity.match(/\btitle:\s*(['"`])((?:(?!\1).){1,60})\1/)?.[2]?.trim() || null;
+}
+
+/** World mode: a desk game opened as a world is scaled so its play area spans this many metres. */
+const WORLD_SPAN_M = 7;
+/**
+ * World mode: a game designed as a world is built in desk units, like every game, around the player's spot, and
+ * shown this many times bigger: a 15 cm tree stands 1.8 m tall, a ledge 5 cm up is at the player's waist.
+ */
+export const WORLD_SCALE = 12;
+/** World mode: the game's panel stands this far ahead of the player, a little to the left and below the eyes. */
+const WORLD_PANEL_AHEAD_M = 0.9;
+const WORLD_PANEL_LEFT_M = 0.45;
+const WORLD_PANEL_BELOW_EYE_M = 0.25;
+
+/**
+ * World mode: the game as a place around the player instead of a toy on the desk, under its own sky, on a ground
+ * the player can walk on (IWSDK locomotion: slide, teleport, turn). A game designed as a world (build() returns
+ * { mode: 'world' }) is shown WORLD_SCALE times bigger with its origin where the player stands, -Z ahead. A desk
+ * game opened as a world is scaled up so its play area spans WORLD_SPAN_M and stands on the floor ahead. Either way the
+ * panel stands beside the player at reading size, and the desk's grips and move handle do not apply. Closing the
+ * game pauses walking and puts the player back where they were, so the room lines up with the passthrough again.
+ */
+function enterWorld(mounted: Mounted, anchor: Group, panels: PanelRecord[], o: { scale: boolean; sky?: string; ground?: string; walkable?: Entity[] }): void {
+  if (!world || !mounted.root) return;
+  mounted.handle?.dispose();
+  mounted.handle = null;
+  mounted.bounds?.dispose();
+  mounted.bounds = null;
+  const head = world.camera.getWorldPosition(new Vector3());
+  const forward = new Vector3(0, 0, -1).applyQuaternion(world.camera.getWorldQuaternion(new Quaternion())).setY(0);
+  if (forward.lengthSq() < 1e-6) forward.set(0, 0, -1);
+  forward.normalize();
+  const floor = floorHeight(head);
+  const setWorldPose = (position: Vector3, yaw: Quaternion | null) => {
+    anchor.position.copy(anchor.parent ? anchor.parent.worldToLocal(position.clone()) : position);
+    if (yaw) {
+      const parentTurn = anchor.parent ? anchor.parent.getWorldQuaternion(new Quaternion()) : new Quaternion();
+      anchor.quaternion.copy(parentTurn.invert().multiply(yaw));
+    }
+    anchor.updateMatrixWorld(true);
+  };
+  if (o.scale) {
+    anchor.updateMatrixWorld(true);
+    const box = new Box3().setFromObject(mounted.root);
+    const span = Math.max(box.max.x - box.min.x, box.max.z - box.min.z, 0.05);
+    anchor.scale.multiplyScalar(WORLD_SPAN_M / span);
+    anchor.updateMatrixWorld(true);
+    box.setFromObject(mounted.root);
+    const centre = box.getCenter(new Vector3());
+    const target = head.clone().addScaledVector(forward, WORLD_SPAN_M / 2 + 1.2);
+    setWorldPose(anchor.getWorldPosition(new Vector3()).add(new Vector3(target.x - centre.x, floor - box.min.y, target.z - centre.z)), null);
+  } else {
+    // Designed as a world: its origin is the player's spot on the floor, its -Z the way they face.
+    anchor.scale.setScalar(WORLD_SCALE);
+    mounted.root.scale.setScalar(1);
+    mounted.fitScale = 1;
+    const yaw = new Quaternion().setFromUnitVectors(new Vector3(0, 0, -1), forward);
+    setWorldPose(new Vector3(head.x, floor, head.z), yaw);
+  }
+  // The panel beside the player at reading size, facing them, whatever the game's scale.
+  const right = new Vector3().crossVectors(forward, new Vector3(0, 1, 0)).normalize();
+  panels.forEach((panel, i) => {
+    const holder = panel.holder;
+    const at = head.clone().addScaledVector(forward, WORLD_PANEL_AHEAD_M).addScaledVector(right, -WORLD_PANEL_LEFT_M - i * 0.5);
+    at.y = head.y - WORLD_PANEL_BELOW_EYE_M;
+    holder.parent?.updateMatrixWorld(true);
+    holder.position.copy(holder.parent ? holder.parent.worldToLocal(at.clone()) : at);
+    const facing = new Quaternion().setFromUnitVectors(new Vector3(0, 0, 1), new Vector3(head.x - at.x, 0, head.z - at.z).normalize());
+    const parentTurn = holder.parent ? holder.parent.getWorldQuaternion(new Quaternion()) : new Quaternion();
+    holder.quaternion.copy(parentTurn.invert().multiply(facing));
+    // Its authored size in metres, whatever the game's scale.
+    holder.scale.setScalar(1 / ((holder.parent ? holder.parent.getWorldScale(new Vector3()).x : 1) || 1));
+  });
+  anchor.updateMatrixWorld(true);
+  for (const entity of o.walkable ?? []) entity.addComponent(IWSDK.LocomotionEnvironment, { type: 'static' });
+  mounted.worldScene = createWorldScene(floor, o.sky, o.ground);
+}
+
+/** World mode's skies (zenith, horizon) and grounds, by the names a game returns from build() (references/world.md). */
+const WORLD_SKIES: Record<string, { top: string; horizon: string; stars?: boolean }> = {
+  day: { top: '#4f93e8', horizon: '#e3f1ff' },
+  dawn: { top: '#6c9bd6', horizon: '#ffd7b0' },
+  dusk: { top: '#2c2f6e', horizon: '#ffae78' },
+  night: { top: '#040817', horizon: '#1b2750', stars: true },
+  overcast: { top: '#8a97a4', horizon: '#dde2e7' },
+};
+const WORLD_GROUNDS: Record<string, string> = { grass: '#8dbb72', sand: '#e2cd96', snow: '#f1f4f7', rock: '#878176' };
+
+/**
+ * The world's sky (horizon to zenith) and a ground to walk on: they hide the room. While it is open, IWSDK's
+ * locomotion moves the player over the ground; dispose() pauses it and puts the player back.
+ */
+function createWorldScene(floor: number, skyName = 'day', groundName = 'grass'): { dispose(): void } {
+  const w = world!;
+  const skyLook = WORLD_SKIES[skyName] ?? WORLD_SKIES.day!;
+  const sky = new IWSDK.Mesh(
+    new IWSDK.SphereGeometry(90, 32, 16),
+    new IWSDK.ShaderMaterial({
+      side: IWSDK.BackSide,
+      depthWrite: false,
+      uniforms: { top: { value: new IWSDK.Color(skyLook.top) }, horizon: { value: new IWSDK.Color(skyLook.horizon) } },
+      vertexShader: 'varying vec3 vDir; void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'uniform vec3 top; uniform vec3 horizon; varying vec3 vDir; void main() { gl_FragColor = vec4(mix(horizon, top, clamp(vDir.y * 1.8, 0.0, 1.0)), 1.0); }',
+    }),
+  );
+  sky.name = 'GenUI World Sky';
+  sky.position.y = floor;
+  sky.raycast = () => {}; // the hands point at the game, never at the sky
+  w.scene.add(sky);
+  // A night sky gets stars: points on the upper half of a sphere inside the sky.
+  let stars: InstanceType<typeof IWSDK.Points> | null = null;
+  if (skyLook.stars) {
+    const at: number[] = [];
+    for (let i = 0; i < 700; i++) {
+      const y = 0.08 + Math.random() * 0.92;
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.sqrt(1 - y * y);
+      at.push(Math.cos(a) * r * 85, y * 85, Math.sin(a) * r * 85);
+    }
+    const geometry = new IWSDK.BufferGeometry();
+    geometry.setAttribute('position', new IWSDK.Float32BufferAttribute(at, 3));
+    stars = new IWSDK.Points(geometry, new IWSDK.PointsMaterial({ color: '#ffffff', size: 0.35, sizeAttenuation: true, depthWrite: false, fog: false }));
+    stars.position.y = floor;
+    stars.raycast = () => {};
+    w.scene.add(stars);
+  }
+  const ground = new IWSDK.Mesh(new IWSDK.CircleGeometry(80, 64), new IWSDK.MeshStandardMaterial({ color: WORLD_GROUNDS[groundName] ?? WORLD_GROUNDS.grass, roughness: 1 }));
+  ground.name = 'GenUI World Ground';
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = floor - 0.003;
+  const groundEntity = w.createTransformEntity(ground);
+  groundEntity.addComponent(IWSDK.LocomotionEnvironment, { type: 'static' });
+  // Fog in the horizon's colour fades the far land and mountains into the sky: the world has no hard edge.
+  const fogBefore = w.scene.fog;
+  w.scene.fog = new IWSDK.Fog(skyLook.horizon, 30, 88);
+  const player = { position: w.player.position.clone(), quaternion: w.player.quaternion.clone() };
+  let walking = w.getSystem(IWSDK.LocomotionSystem);
+  if (!walking) {
+    w.registerSystem(IWSDK.LocomotionSystem, { priority: -5 });
+    walking = w.getSystem(IWSDK.LocomotionSystem);
+  }
+  walking?.play();
+  // Walking starts where the player stands now, on this world's floor: the locomotor keeps its own position
+  // between worlds, so without this a second world would put the player back where they left the first one.
+  walking?.setPlayerPosition(new Vector3(player.position.x, floor, player.position.z));
+  return {
+    dispose() {
+      w.scene.fog = fogBefore;
+      walking?.stop();
+      w.player.position.copy(player.position);
+      w.player.quaternion.copy(player.quaternion);
+      groundEntity.destroy();
+      sky.removeFromParent();
+      if (stars) {
+        stars.removeFromParent();
+        stars.geometry.dispose();
+        (stars.material as { dispose(): void }).dispose();
+      }
+      for (const mesh of [sky, ground]) {
+        mesh.geometry.dispose();
+        (mesh.material as { dispose(): void }).dispose();
+      }
+    },
+  };
 }
 
 class GenUISystem extends createSystem({
@@ -945,7 +1217,7 @@ class GenUISystem extends createSystem({
       if (mounted.declutterIn-- <= 0) {
         mounted.declutterIn = null;
         if (mounted.rigs.length > 0) layoutLessonPanels(mounted);
-        else {
+        else if (!mounted.worldScene) {
           fitCards(mounted);
           keepPanelsInView(mounted);
         }
@@ -1047,6 +1319,17 @@ function track(mounted: Mounted, entity: Entity, object: Object3D): Entity {
 }
 
 /**
+ * A saved spot is kept only while it is roughly ahead of the learner. A learner who had sat on the bed, then turned to
+ * the desk, got every lesson beside them over the bed, its frame reaching back to their hand.
+ */
+function spotAhead(position: Vector3, frame: Object3D): boolean {
+  const world = frame.localToWorld(position.clone());
+  const toSpot = new Vector3(world.x - tmpHead.x, 0, world.z - tmpHead.z);
+  if (toSpot.lengthSq() < 1e-6) return true;
+  return toSpot.normalize().dot(tmpForward) >= KEEP_SPOT_AHEAD_COS;
+}
+
+/**
  * Put the lesson at the session's spot. The first lesson finds it: the learner's desk (a detected
  * horizontal surface below the eyes, in front and within reach; SPEC.md Phase 4) or, without one, floating
  * at seated desk height in front. Later lessons open there too, and a lesson the learner drags moves it.
@@ -1059,11 +1342,11 @@ function placeInSeatedReach(anchor: Group, front: number, bottom: number): strin
   const camera = world!.camera;
   camera.getWorldPosition(tmpHead);
   const head = frame.worldToLocal(tmpHead.clone());
-  if (!lessonSpot || lessonSpot.position.distanceTo(head) > KEEP_SPOT_WITHIN_M) {
-    camera.getWorldDirection(tmpForward);
-    tmpForward.y = 0;
-    if (tmpForward.lengthSq() < 1e-6) tmpForward.set(0, 0, -1);
-    tmpForward.normalize();
+  camera.getWorldDirection(tmpForward);
+  tmpForward.y = 0;
+  if (tmpForward.lengthSq() < 1e-6) tmpForward.set(0, 0, -1);
+  tmpForward.normalize();
+  if (!lessonSpot || lessonSpot.position.distanceTo(head) > KEEP_SPOT_WITHIN_M || !spotAhead(lessonSpot.position, frame)) {
     const desk = findDesk(tmpHead, tmpForward);
     const spot = desk ? desk.point.clone() : tmpHead.clone().addScaledVector(tmpForward, REACH_DISTANCE_M).setY(tmpHead.y - BELOW_EYES_M);
     setLessonSpot({ position: frame.worldToLocal(spot), surface: desk?.label ?? null });

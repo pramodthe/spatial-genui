@@ -1,8 +1,9 @@
 /**
- * The `sound` a generated module gets in build(): short synthesized sounds, no audio files, no network. Games use it
- * to answer the hands (a pop, a click, a win) and to teach with sound itself (a string's pitch, an engine whose hum
- * rises with its speed, a rhythm). Loud or endless sound is not possible: one master level, a limiter, a cap on how
- * many sounds play at once and how many start each second, and every hum stops when the lesson closes.
+ * The `sound` a generated module gets in build(): short synthesized sounds, and the game's own generated clips from
+ * the asset library (a bat's chirp, a music loop: /api/media/<id>). Games use it to answer the hands (a pop, a
+ * click, a win) and to teach with sound itself (a string's pitch, an engine whose hum rises with its speed, a
+ * rhythm). Loud or endless sound is not possible: one master level, a limiter, a cap on how many sounds play at once
+ * and how many start each second, and every hum and loop stops when the lesson closes.
  */
 
 export type SoundName = 'pop' | 'click' | 'good' | 'bad' | 'whoosh' | 'tick' | 'win' | 'coin' | 'bounce' | 'splash';
@@ -17,7 +18,14 @@ export type ModuleSound = {
   /** A continuous sound kept by id (an engine, the wind, a string held): call it every frame to change it, or with
    *  null to stop it. At most 4 at once. */
   hum(id: string, o: { frequency: number; volume?: number; type?: Wave } | null): void;
+  /** A generated clip by its asset id ('snd-…' or 'mus-…'): volume 0..1, loop to repeat (music) until stop(). The
+   *  first play fetches it, so load(id) it in build() to have it ready. */
+  clip(id: string, o?: { volume?: number; loop?: boolean }): { stop(): void };
+  /** Fetch a clip ahead of its first play. */
+  load(id: string): void;
 };
+
+const CLIP_ID = /^(snd|mus)-[0-9a-f]{10}$/;
 
 const MASTER = 0.35;
 const MAX_VOICES = 12;
@@ -63,6 +71,26 @@ export function createModuleSound(): ModuleSound & { dispose(): void } {
   let windowStart = 0;
   let starts = 0;
   const hums = new Map<string, { osc: OscillatorNode; gain: GainNode }>();
+  const clips = new Map<string, Promise<AudioBuffer | null>>();
+  const loops = new Set<AudioBufferSourceNode>();
+  let closed = false;
+
+  function fetchClip(id: string): Promise<AudioBuffer | null> {
+    if (!CLIP_ID.test(String(id))) return Promise.resolve(null);
+    let pending = clips.get(id);
+    if (!pending) {
+      pending = (async () => {
+        const a = audio();
+        if (!a) return null;
+        const reply = await fetch(`/api/media/${id}`);
+        // Music still being made (425) or missing: forget it, so a later play asks again.
+        if (!reply.ok) { clips.delete(id); return null; }
+        return await a.ctx.decodeAudioData(await reply.arrayBuffer());
+      })().catch(() => { clips.delete(id); return null; });
+      clips.set(id, pending);
+    }
+    return pending;
+  }
 
   function allowed(ctx: AudioContext): boolean {
     if (ctx.currentTime - windowStart >= 1) { windowStart = ctx.currentTime; starts = 0; }
@@ -129,6 +157,11 @@ export function createModuleSound(): ModuleSound & { dispose(): void } {
         case 'win': [523, 659, 784, 1047].forEach((f, i) => voice(f * p, 0.22, 'triangle', v, undefined, i * 0.11)); break;
         case 'whoosh': noise(0.35, v * 0.5, 300 * p, 2400 * p); break;
         case 'splash': noise(0.45, v * 0.6, 1800 * p, 250 * p); break;
+        default: {
+          const unexpected: never = name;
+          void unexpected;
+          break;
+        }
       }
     },
     tone(frequency: number, o: { seconds?: number; type?: Wave; volume?: number; glide?: number } = {}) {
@@ -164,7 +197,40 @@ export function createModuleSound(): ModuleSound & { dispose(): void } {
       h.osc.frequency.setTargetAtTime(clamp(o.frequency, 20, 4000, 110), ctx.currentTime, 0.03);
       h.gain.gain.setTargetAtTime(clamp(o.volume, 0, 1, 0.3) * 0.5, ctx.currentTime, 0.05);
     },
+    clip(id: string, o: { volume?: number; loop?: boolean } = {}) {
+      let source: AudioBufferSourceNode | null = null;
+      let stopped = false;
+      void fetchClip(id).then((buffer) => {
+        const a = audio();
+        if (!buffer || !a || stopped || closed || (!o.loop && !allowed(a.ctx))) return;
+        const gain = a.ctx.createGain();
+        gain.gain.value = clamp(o.volume, 0, 1, 0.7);
+        source = a.ctx.createBufferSource();
+        source.buffer = buffer;
+        source.loop = o.loop === true;
+        source.connect(gain).connect(a.out);
+        voices++;
+        const playing = source;
+        playing.onended = () => { voices--; loops.delete(playing); playing.disconnect(); gain.disconnect(); };
+        if (playing.loop) loops.add(playing);
+        playing.start();
+      });
+      return {
+        stop() {
+          stopped = true;
+          try { source?.stop(); } catch { /* already stopped */ }
+        },
+      };
+    },
+    load(id: string) {
+      void fetchClip(id);
+    },
     dispose() {
+      closed = true;
+      for (const source of loops) {
+        try { source.stop(); } catch { /* already stopped */ }
+      }
+      loops.clear();
       const a = context;
       for (const h of hums.values()) {
         try {

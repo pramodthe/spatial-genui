@@ -1103,6 +1103,73 @@ export function createKit(THREE, options = {}) {
   }
 
   /**
+   * A sign in the game's colours: a rounded card with big bold text, facing +z, for a game's title over the scene,
+   * a result where it happened ("4.2 m!", "CAUGHT!") or a results card. One mesh, self-lit (the headset has no
+   * lamps). Options: width (metres, default 0.18), height (default fits the text), paper, ink (kept readable on the
+   * paper), edge (a border colour), sub (a smaller second line). sign.userData.setText(text, sub) changes it.
+   */
+  function sign(text, o = {}) {
+    const width = Math.min(0.6, Math.max(0.04, Number(o.width) || 0.18));
+    const lines = o.sub ? 2 : 1;
+    const height = Number(o.height) || Math.min(width * 0.6, width / Math.max(3, ems(text) * 0.62) * (lines === 2 ? 1.7 : 1.15));
+    const paper = `#${colorBytes(o.paper ?? '#ffd23f').map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+    const light = colorBytes(paper).reduce((a, v, i) => a + v * [0.299, 0.587, 0.114][i], 0) > 150;
+    const ink = o.ink ? `#${colorBytes(o.ink).map((v) => v.toString(16).padStart(2, '0')).join('')}` : light ? '#151826' : '#ffffff';
+    const material = own(new THREE.MeshBasicMaterial({ color: dry || typeof document === 'undefined' ? paper : '#ffffff', transparent: true, side: THREE.DoubleSide }));
+    const mesh = new THREE.Mesh(own(new THREE.PlaneGeometry(width, height)), material);
+    mesh.name = `sign: ${text}`;
+    mesh.userData.setText = () => {};
+    if (dry || typeof document === 'undefined') return mesh;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(Math.min(1024, Math.max(256, width * PX_PER_M)));
+    canvas.height = Math.max(64, Math.round((canvas.width * height) / width));
+    const context = canvas.getContext('2d');
+    if (!context) return mesh;
+    const tex = own(new THREE.CanvasTexture(canvas));
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 4;
+    material.map = tex;
+    const W = canvas.width;
+    const H = canvas.height;
+    const R = Math.min(H / 2, W * 0.08);
+    const font = (size, weight) => `${weight} ${size}px system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif`;
+    function fit(t, size, weight, room) {
+      let s = size;
+      context.font = font(s, weight);
+      while (s > 10 && context.measureText(t).width > room) context.font = font((s -= 2), weight);
+      return s;
+    }
+    mesh.userData.setText = (t, sub) => {
+      context.clearRect(0, 0, W, H);
+      context.beginPath();
+      context.roundRect(0, 0, W, H, R);
+      context.fillStyle = paper;
+      context.fill();
+      if (o.edge) {
+        const e = Math.max(4, H * 0.06);
+        context.beginPath();
+        context.roundRect(e / 2, e / 2, W - e, H - e, Math.max(0, R - e / 2));
+        context.lineWidth = e;
+        context.strokeStyle = o.edge;
+        context.stroke();
+      }
+      context.fillStyle = ink;
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      const room = W - R * 1.4;
+      const big = fit(String(t), Math.round(H * (sub ? 0.46 : 0.62)), 800, room);
+      context.fillText(String(t), W / 2, sub ? H * 0.4 : H / 2);
+      if (sub) {
+        fit(String(sub), Math.round(H * 0.22), 600, room);
+        context.fillText(String(sub), W / 2, H * 0.4 + big * 0.5 + H * 0.17);
+      }
+      tex.needsUpdate = true;
+    };
+    mesh.userData.setText(text, o.sub);
+    return mesh;
+  }
+
+  /**
    * A name tag: a word or short phrase on dark glass, facing +z, readable from both sides.
    * Returns a group (add it to root; pass it to traits to make it grabbable). Options: width, height, color.
    * A light color shows as a dot before the text, a dark one tints the glass; the text is always white.
@@ -1284,8 +1351,69 @@ export function createKit(THREE, options = {}) {
    * index (or null) for choices and segmented; true/false for a toggle; a number for a slider.
    * panel.show(id, visible) hides or shows a part or a button.
    */
+  /**
+   * A game's own panel look: { paper, ink, accent, button, edge, round, poster }. Colours are "#rrggbb". The kit
+   * keeps it readable: an ink or accent without enough contrast on the paper is replaced by dark or light text.
+   * Returns the rules to merge into the panel's classes (a second rule for a class would replace the first, layout
+   * and all) and the rules for the skinned buttons.
+   */
+  function panelSkin(o) {
+    const hex = (c) => `#${colorBytes(c).map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+    const lum = (c) => {
+      const [r, g, b] = colorBytes(c).map((v) => {
+        const x = v / 255;
+        return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const contrast = (a, b) => {
+      const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+    const rgba = (c, a) => `rgba(${colorBytes(c).join(', ')}, ${a})`;
+    const paper = hex(o.paper ?? '#1d2238');
+    const auto = lum(paper) > 0.35 ? '#151826' : '#ffffff';
+    const readable = (c, min) => (c && contrast(hex(c), paper) >= min ? hex(c) : auto);
+    const ink = readable(o.ink, 4.5);
+    const accent = readable(o.accent, 3);
+    const button = hex(o.button ?? o.accent ?? ink);
+    const onButton = lum(button) > 0.35 ? '#151826' : '#ffffff';
+    const round = Math.min(48, Math.max(8, Math.round(Number(o.round) || 28)));
+    const poster = o.poster !== false;
+    const soft = rgba(ink, 0.12);
+    const merge = {
+      '.panel': `background-color: ${paper}; border-radius: ${round}px;${o.edge ? ` border-width: 4px; border-color: ${hex(o.edge)};` : ''}`,
+      '.kp-eyebrow': `color: ${accent}; font-weight: 700; letter-spacing: 1.2px;`,
+      '.kp-title': `color: ${accent};${poster ? ' font-size: 32px; line-height: 1.1; font-weight: 800; letter-spacing: 0px;' : ''}`,
+      '.kp-subtitle': `color: ${rgba(ink, 0.75)};`,
+      '.kp-text': `color: ${ink};`,
+      '.kp-note': `color: ${rgba(ink, 0.75)};`,
+      '.kp-stat-value': `color: ${accent}; font-size: 44px; line-height: 1.05; font-weight: 800; letter-spacing: 0px;`,
+      '.kp-seg': `background-color: ${soft};`,
+      '.kp-seg-text': `color: ${ink};`,
+      '.kp-list': `background-color: ${soft};`,
+      '.kp-badge': `background-color: ${button};`,
+      '.kp-badge-text': `color: ${onButton};`,
+      '.kp-track': `background-color: ${soft};`,
+      '.kp-fill': `background-color: ${button};`,
+      '.kp-status': `background-color: ${soft};`,
+      '.kp-line': `background-color: ${soft};`,
+    };
+    const extra = `
+      .kp-sbtn { flex-direction: row; align-items: center; justify-content: center; height: 52px; padding-left: 22px; padding-right: 22px; border-radius: 1000px; cursor: pointer; background-color: ${button}; }
+      .kp-sbtn:hover { background-color: ${rgba(button, 0.85)}; }
+      .kp-sbtn:active { background-color: ${rgba(button, 0.7)}; }
+      .kp-sbtn-2 { flex-direction: row; align-items: center; justify-content: center; height: 52px; padding-left: 22px; padding-right: 22px; border-radius: 1000px; cursor: pointer; background-color: ${soft}; }
+      .kp-sbtn-2:hover { background-color: ${rgba(ink, 0.2)}; }
+      .kp-sbtn-text { color: ${onButton}; font-size: 16px; line-height: 1.2; font-weight: 800; }
+      .kp-sbtn-text-2 { color: ${ink}; font-size: 16px; line-height: 1.2; font-weight: 800; }
+    `;
+    return { merge, extra, ink, button, onButton, soft };
+  }
+
   function panel(ui, o = {}) {
     if (typeof ui !== 'function') throw new Error('kit.panel(ui, options): pass the ui function from build() first.');
+    const skin = o.skin ? panelSkin(o.skin) : null;
     // Never narrower than 0.36 m: three buttons side by side need it.
     const widthM = Math.min(0.6, Math.max(0.36, Number(o.width) || 0.36));
     const px = Math.round(widthM * PANEL_PX_PER_M);
@@ -1308,7 +1436,10 @@ export function createKit(THREE, options = {}) {
       throw new Error(`kit.panel: ${message}`);
     };
     const button = (b, id, variant, size, extra = '') =>
-      `<Button id="${id}" variant="${variant}" size="${size}"${extra}><ButtonLabel id="${id}-label">${esc(b)}</ButtonLabel></Button>`;
+      skin
+        // A skinned panel's buttons are the game's own pills (a Horizon button keeps the Horizon colours).
+        ? `<div id="${id}" class="${variant === 'primary' ? 'kp-sbtn' : 'kp-sbtn-2'}"${extra}><span id="${id}-label" class="${variant === 'primary' ? 'kp-sbtn-text' : 'kp-sbtn-text-2'}">${esc(b)}</span></div>`
+        : `<Button id="${id}" variant="${variant}" size="${size}"${extra}><ButtonLabel id="${id}-label">${esc(b)}</ButtonLabel></Button>`;
 
     // The eyebrow and subtitle are always in the markup (hidden while empty), so panel.set can fill them later.
     const optional = (text) => (esc(text) ? '' : ' style="display: none"');
@@ -1421,7 +1552,17 @@ export function createKit(THREE, options = {}) {
       return fail(`unknown item ${JSON.stringify(Object.keys(item))}. Use text, note, stat, status, progress, divider, buttons, choices, segmented, list, toggle or slider.`);
     });
 
-    const markup = `<style>${panelCss(px)}</style>\n<div class="panel"><div class="kp-head">${head}</div>${body.join('')}</div>`;
+    let css = panelCss(px);
+    if (skin) {
+      for (const [selector, rules] of Object.entries(skin.merge)) {
+        const at = css.indexOf(`${selector} {`);
+        const close = at < 0 ? -1 : css.indexOf('}', at);
+        if (close >= 0) css = `${css.slice(0, close)} ${rules} ${css.slice(close)}`;
+      }
+      css += skin.extra;
+    }
+    // kp-skin tells the host the panel has its own look (no Horizon background, no arcade scoreboard over it).
+    const markup = `<style>${css}</style>\n<div class="panel${skin ? ' kp-skin' : ''}"><div class="kp-head">${head}</div>${body.join('')}</div>`;
     panelMarkups.add(markup);
     const handle = ui(markup, { width: widthM, position: o.position, rotationY: o.rotationY });
 
@@ -1430,8 +1571,14 @@ export function createKit(THREE, options = {}) {
       part.selected = Number.isInteger(index) && index >= 0 && index < part.ids.length ? index : null;
       part.ids.forEach((id, i) => {
         const on = i === part.selected;
-        if (part.kind === 'choices') handle.set(id, { variant: on ? 'primary' : 'secondary' });
-        else {
+        if (part.kind === 'choices' && skin) {
+          handle.set(id, { backgroundColor: on ? skin.button : skin.soft });
+          handle.set(`${id}-label`, { color: on ? skin.onButton : skin.ink });
+        } else if (part.kind === 'choices') handle.set(id, { variant: on ? 'primary' : 'secondary' });
+        else if (skin) {
+          handle.set(id, { backgroundColor: on ? skin.button : 'rgba(255, 255, 255, 0)' });
+          handle.set(`${id}-label`, { color: on ? skin.onButton : skin.ink });
+        } else {
           handle.set(id, { backgroundColor: on ? INK : 'rgba(255, 255, 255, 0)' });
           handle.set(`${id}-label`, { color: on ? '#272727' : INK });
         }
@@ -1540,7 +1687,7 @@ export function createKit(THREE, options = {}) {
   }
 
   return {
-    material, texture, theme, panel, madePanel,
+    material, texture, theme, panel, madePanel, sign,
     roundedBox, extrude, lathe, tube, gear, instances, along, merge,
     glow, particles, ring, shadow, stand, arrow,
     card,

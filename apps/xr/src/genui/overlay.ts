@@ -1,4 +1,4 @@
-import { aimPoint, capture, dropLessonRealSize, inspectFrame, zoomGame, forgetLessonSpot, inspectMounted, debugHands, debugRay, debugRoot, lessonDeclaresRealSize, mountGenerated, setLessonRealSize, setLessonView, unmountGenerated, type MountReport } from './host.js';
+import { aimPoint, capture, dropLessonRealSize, inspectFrame, zoomGame, forgetLessonSpot, inspectMounted, debugHands, debugRay, debugRoot, lessonDeclaresRealSize, mountGenerated, setLessonRealSize, setLessonView, unmountGenerated, type MountReport, type PlayMode } from './host.js';
 import { inspectPill, pressPill, setPillHidden } from './hud.js';
 import { EXAMPLE_LESSONS, type SavedLesson } from './lessons.js';
 import { inspectPicker, pickerCourses, redockPicker, setPickerHidden } from './picker.js';
@@ -48,6 +48,8 @@ type GenUIState = {
   prompt: string | null;
   /** A game has no real-size view and is repaired with the game prompt. */
   kind: LessonKind;
+  /** Where it plays: on the desk (mixed reality, toy size) or as a world around the player. Unset: the module's own. */
+  mode: PlayMode | null;
   code: string | null;
   lastResponse: GenerateResponse | null;
   lastMount: MountReport | null;
@@ -64,6 +66,7 @@ type GenUIState = {
 const state: GenUIState = {
   prompt: null,
   kind: 'lesson',
+  mode: null,
   code: null,
   lastResponse: null,
   lastMount: null,
@@ -481,8 +484,9 @@ export async function startLesson(prompt: string) {
 }
 
 /** Open a lesson or game that is already written (a saved course's lesson, a saved game): no model call. */
-export async function openWritten(code: string, prompt: string, kind: LessonKind = 'lesson') {
+export async function openWritten(code: string, prompt: string, kind: LessonKind = 'lesson', mode: PlayMode | null = null) {
   if (state.busy) return state;
+  state.mode = mode;
   liveWatch++; // opening something else stops watching one being written
   streaming = false; // otherwise the stopped watch would keep repairs off for this lesson
   state.prompt = prompt;
@@ -501,7 +505,7 @@ async function mount(code: string) {
   codeEl.textContent = code;
   state.mountedAt = performance.now();
   const sizeFor = ++sizeTicket;
-  const report = await mountGenerated(code, { kind: state.kind });
+  const report = await mountGenerated(code, { kind: state.kind, ...(state.mode ? { mode: state.mode } : {}) });
   // A later lesson replaced this one while it loaded: that one reports for itself.
   if (!report.ok && report.superseded) return report;
   state.lastMount = report;

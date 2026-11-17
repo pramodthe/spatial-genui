@@ -1,0 +1,17 @@
+{
+ "id": "snd-4bf24d5e9f",
+ "kind": "sound",
+ "file": "snd-4bf24d5e9f.mp3",
+ "prompt": "a pebble dropping into a bowl of water, one small splash",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.0023,
+ "length": 1,
+ "loop": false,
+ "seconds": 5.0,
+ "runId": null,
+ "status": "ready",
+ "created": 1794871994.200503,
+ "name": "splash-small",
+ "library": true,
+ "bytes": 17179
+}

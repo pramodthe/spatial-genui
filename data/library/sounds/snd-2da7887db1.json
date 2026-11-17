@@ -1,0 +1,17 @@
+{
+ "id": "snd-2da7887db1",
+ "kind": "sound",
+ "file": "snd-2da7887db1.mp3",
+ "prompt": "a bright coin pickup chime, two rising notes, video game",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.0023,
+ "length": 1,
+ "loop": false,
+ "seconds": 4.9,
+ "runId": null,
+ "status": "ready",
+ "created": 1794872003.756943,
+ "name": "coin",
+ "library": true,
+ "bytes": 17179
+}

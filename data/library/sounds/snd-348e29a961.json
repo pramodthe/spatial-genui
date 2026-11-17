@@ -1,0 +1,17 @@
+{
+ "id": "snd-348e29a961",
+ "kind": "sound",
+ "file": "snd-348e29a961.mp3",
+ "prompt": "a single short high bat squeak, slowed down so it is audible, dry",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.0023,
+ "length": 1,
+ "loop": false,
+ "seconds": 7.3,
+ "runId": null,
+ "status": "ready",
+ "created": 1794872003.6124969,
+ "name": "bat-chirp",
+ "library": true,
+ "bytes": 17179
+}

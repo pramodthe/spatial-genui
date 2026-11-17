@@ -1,0 +1,17 @@
+{
+ "id": "snd-b9fd9aad68",
+ "kind": "sound",
+ "file": "snd-b9fd9aad68.mp3",
+ "prompt": "a small happy group of kids cheering briefly",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.0046,
+ "length": 2,
+ "loop": false,
+ "seconds": 7.2,
+ "runId": null,
+ "status": "ready",
+ "created": 1794872010.806918,
+ "name": "cheer-small",
+ "library": true,
+ "bytes": 33061
+}

@@ -1,0 +1,17 @@
+{
+ "id": "snd-4e9f1aaae2",
+ "kind": "sound",
+ "file": "snd-4e9f1aaae2.mp3",
+ "prompt": "one dry knock of a knuckle on a wooden block, close, no room",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.0023,
+ "length": 1,
+ "loop": false,
+ "seconds": 4.9,
+ "runId": null,
+ "status": "ready",
+ "created": 1794871989.091606,
+ "name": "wood-knock",
+ "library": true,
+ "bytes": 17179
+}

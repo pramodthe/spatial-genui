@@ -1,0 +1,17 @@
+{
+ "id": "snd-662d8efa2e",
+ "kind": "sound",
+ "file": "snd-662d8efa2e.mp3",
+ "prompt": "a calm forest with distant birdsong and leaves rustling, no music",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.023,
+ "length": 10,
+ "loop": true,
+ "seconds": 7.3,
+ "runId": null,
+ "status": "ready",
+ "created": 1794872011.088434,
+ "name": "forest-birds",
+ "library": true,
+ "bytes": 160957
+}

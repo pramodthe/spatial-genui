@@ -23,6 +23,23 @@ That is the loop every game here follows:
 Players are anyone from about 9 years old to adults. Write so a 10-year-old follows it and an adult does not feel
 talked down to: short, concrete, plain words, real numbers with units.
 
+## Clarity first: the 5-second test
+
+A player who puts the headset on must know within five seconds what the game is and what to do, without reading.
+Generated games failed exactly here: a bat game with four controls on two hands and a three-chirp bonus, a fruit game
+with six steps from catching to a Serve button. Nobody could tell how to play them. So:
+
+- **One sentence of about 15 words says the whole game**: "Swipe the fruit to cut it into the pieces the order asks
+  for." "Fold the sheet, then throw the plane as far as you can." It is the panel's first line.
+- **One main action, with one hand**: cut, throw, fold, pour, push, stack, steer. The other hand is free. Two
+  controls at most; no modes, allowances, bonus rules or combos.
+- **A familiar, real action.** People already know how to cut, throw, pour and steer; nobody knows how to "aim a
+  listening cone". When the idea is invisible (sound, heat, a force), show it as something you see as well.
+- **The scene shows the first move.** Before the player tries, the hero does the move by itself once (the flap folds
+  half way and back, a ghost swipe crosses the fruit) and the next thing to touch bounces; Show me plays it again.
+- **Depth comes from the idea, not from rules.** The challenge gets harder by asking for more of the same action
+  (a harder fraction, a longer throw), never by adding controls.
+
 ## Steps
 
 1. **Start the module.** Pick the look: the one the request or the course names, or the one that fits the subject
@@ -32,11 +49,19 @@ talked down to: short, concrete, plain words, real numbers with units.
    node /skills/play/learning-game/scripts/new-game.mjs <look> /work/module.js
    ```
 
-   It writes a module that passes the app's gate as it is: the look kit, the look's builders, the play kit (stars,
-   bursts, pops) and a starter game with a goal, a move to learn, a challenge with a clock, stars, best and Try again,
-   all wired to the hands. Starting from it means your effort goes into the game, not into plumbing.
+   When the plan or request says **mode: world** (a place the player walks in, not a toy on the desk), add
+   `--world` and read `references/world.md`.
 
-2. **Plan before any geometry.** Write /work/plan.md, using `references/design.md`:
+   It writes a game that passes the app's gate as it is: a starter game with a goal, a move to learn, a challenge
+   with a clock, stars, best and Try again, all wired to the hands. Starting from it means your effort goes into the
+   game, not into plumbing. Three files:
+   - **/work/game.js** - the game's own code (the parts block and `build()`). The only file you edit.
+   - **/work/kits.js** - the look kit, the look's builders, the play kit (stars, bursts, pops), the ECS kit and, for a
+     world, the land kit. Every function in it is in scope in game.js. Do not read or edit it: the APIs are in the
+     look's skill, `assets/play-kit.js` notes and `/skills/common/ecs`.
+   - **/work/module.js** - built from the two by the check and the play-test; what the headset gets. Never edit it.
+
+2. **Plan before any geometry.** Write /work/plan.md (the format is in `references/parts.md`), using `references/design.md`:
    - the one idea, as a sentence a player could repeat ("a wing that pushes air down gets pushed up");
    - the goal, in the player's words ("make a plane that flies far");
    - the hero: the one thing the hands work on (the sheet, the boat, the bridge), big and in front;
@@ -51,7 +76,8 @@ talked down to: short, concrete, plain words, real numbers with units.
    game is one. For `plain`, use the kit's materials (`/skills/common/kit`). Replace `look.demo(subject)` with the
    game's pieces and return their hand targets.
 
-4. **Wire the moves, the challenge and the feel.** Fill TITLE, GOAL, MOVES (each with `say`, `why`, `target`, and a
+4. **Wire the moves, the challenge and the feel.** The name, pitch and colours are `IDENTITY` and the sounds are
+   `SOUNDS`, the game's parts in `/work/parts` (`references/parts.md`); edit those files, not the parts block. Fill MOVES (each with `say`, `why`, `target`, and a
    `done()` that turns true when the player has really done it) and CHALLENGE, and write the update logic that makes
    the scene answer: the flap swings over and stays creased, the boat leans into the wind, the bridge sags and holds.
    Read `references/feel.md`: every hand action answered in the same frame, something always moving, a reward that
@@ -68,6 +94,10 @@ talked down to: short, concrete, plain words, real numbers with units.
    It runs the app's gate and dry run, the shared hand rules, the look's rules and the play rules. Fix every `FIX`
    line, read every `NOTE`, and run it again until it prints `game ok`. Then read `references/mistakes.md` once and
    make sure none of those happened.
+
+6. **Play-test it, then finish.** Follow the playtest skill (`/skills/play/playtest/SKILL.md`): open the game in the
+   real headset app, look at the screenshot, apply the 5-second test, try the main action with an emulated hand, and
+   fix what you see. Finish only when a first-time player would know what to do.
 
 ## Kinds of game
 
@@ -96,11 +126,17 @@ when the real look of the thing matters (a microscope, a guitar).
 
 ## Files
 
-- `scripts/new-game.mjs` - step 1. `--force` replaces an existing /work/module.js.
+- `scripts/new-game.mjs` - step 1: writes game.js, kits.js and module.js. `--force` replaces them; `--world` starts a
+  world around the player instead of a toy on the desk (references/world.md).
+- `scripts/build-module.mjs` - builds /work/module.js from kits.js and game.js (the check and the play-test run it).
+- `scripts/assemble.mjs` - joins the game's parts (`/work/parts`) into game.js's parts block; the check runs it first.
 - `scripts/check.mjs` - step 5. Runs `/skills/looks/shared/scripts/check.mjs` (gate, hands, look rules) and the play rules.
-- `assets/play-starter.js` - the starter game (pasted in by step 1).
-- `assets/play-kit.js` - stars, bursts and pops, self-lit so they suit every look (pasted in by step 1).
+- `assets/play-starter.js` - the starter game (game.js, written by step 1).
+- `assets/play-kit.js` - stars, bursts and pops, self-lit so they suit every look (in kits.js, by step 1).
 - `assets/plain.js` - the plain look: a desk mat and kit materials.
 - `references/design.md` - step 2: the loop, the six kinds with code sketches, the challenge and its stars.
 - `references/feel.md` - step 4: making every action answered, the scene alive and the reward land.
 - `references/mistakes.md` - step 5: failures seen in generated games and lessons.
+- `references/parts.md` - the plan's format and the parts' format (identity.js, sounds.js).
+- `references/world.md` - when the plan says mode: world: a place around the player, built in desk units and shown
+  12 times bigger (`new-game.mjs --world`).

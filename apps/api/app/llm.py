@@ -295,11 +295,15 @@ def gpt_chat():
     base_url = config.base_url if target is None else target.base_url
     api_key = (config.api_key if target is None else target.api_key) or "missing"
     refuse_anthropic(model, base_url)
+    # The Responses API is OpenAI's own; an OpenAI-compatible service speaks Chat Completions.
+    on_openai_host = urlparse(base_url).netloc == "api.openai.com"
+    effort = os.environ.get("LLM_REASONING_EFFORT")
     return ChatOpenAI(
         model=model,
         api_key=api_key,
         base_url=base_url,
-        use_responses_api=True,
+        use_responses_api=on_openai_host,
+        extra_body=None if on_openai_host or not effort else {"reasoning_effort": effort},
         max_tokens=config.max_completion_tokens,
         max_retries=MAX_RETRIES,
         timeout=REQUEST_TIMEOUT_S,
@@ -319,7 +323,9 @@ def muse_chat(model: str = "muse-spark-1.3-contributor", *, reasoning_effort: st
         max_retries=MAX_RETRIES,
         timeout=REQUEST_TIMEOUT_S,
         extra_body=extra,
-        profile={"max_input_tokens": MUSE_MAX_INPUT_TOKENS},
+        # structured_output: Muse takes a JSON-schema response format but only tool_choice "auto"; with this LangChain
+        # asks for structured results (the rubric grader's verdict) that way instead of forcing a tool call (a 400).
+        profile={"max_input_tokens": MUSE_MAX_INPUT_TOKENS, "structured_output": True},
     )
 
 

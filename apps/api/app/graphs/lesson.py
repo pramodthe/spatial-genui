@@ -66,6 +66,8 @@ class LessonState(TypedDict, total=False):
     route: dict[str, Any] | None
     pending_assets: list[dict[str, str]] | None
     run_id: str
+    # The plan's reference pictures for the coder (game.py PLAN_PICTURES), put in the sandbox as /work/plan/<name>.
+    plan_pictures: list[dict[str, Any]] | None
     model: str
     provider: str
     started: float
@@ -402,6 +404,8 @@ async def run_lesson(
     mode: str = "classic",
     target: LlmTarget | None = None,
     thread_id: str | None = None,
+    run_id: str | None = None,
+    plan_pictures: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     chosen = target or llm.default_target()
     game = kind == "game"
@@ -420,7 +424,8 @@ async def run_lesson(
         "target": _public_target(chosen),
         # A new run on a thread that ran before (a course lesson written again) starts clean: the checkpoint
         # merges this input into the old state, so every per-run field is set here, not left from last time.
-        "run_id": _new_id(),
+        "run_id": run_id or _new_id(),
+        "plan_pictures": plan_pictures,
         "started": time.time(),
         "messages": [],
         "attempts": [],

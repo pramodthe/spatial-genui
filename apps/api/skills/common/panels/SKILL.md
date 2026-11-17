@@ -35,6 +35,16 @@ panel.set('state', 'Correct!', 'good');
 panel.show('reset', false);
 ```
 
+**A game's own look:** pass `skin` to give the panel the game's colours instead of the app's grey card:
+
+```js
+kit.panel(ui, { ..., skin: { paper: '#1d2238', ink: '#ffffff', accent: '#ffd23f', button: '#ffd23f', edge: '#ffd23f', round: 28 } });
+```
+
+`paper` is the background, `accent` the big poster title, eyebrow and numbers, `button` the main button pill, `edge`
+an optional border, `round` the corner radius in px; `poster: false` keeps a small title. The kit keeps it readable: an
+ink or accent without enough contrast on the paper is swapped for dark or light text. Every learning game has a skin.
+
 `set` changes a part by id. `show(id, false)` hides a part or a button. Tones: neutral, good, poor, bad.
 
 Font: plain ASCII plus ° § ä ö ü Ä Ö Ü ß. Write CO2, x, -, ->, .... No emoji.

@@ -1,11 +1,16 @@
-// Starter learning game (scripts/new-game.mjs puts the look kit, the look, the play kit and this file together and
-// fills in __LOOK__). It runs as it is, with the look's demo pieces. Replace the demo, TITLE, GOAL, MOVES and
-// CHALLENGE; keep the shape: learn by doing (one hand action per move, each with its why), then the same idea as a
-// challenge with a measured result, stars and Try again. Nothing scores before Start; nothing is allocated in update().
+// Starter learning game (scripts/new-game.mjs puts the look kit, the look, the play kit, the parts and this file
+// together and fills in __LOOK__). It runs as it is, with the look's demo pieces. Replace the demo, MOVES and
+// CHALLENGE; the game's name, pitch and colours come from IDENTITY and its sounds from SOUNDS (the parts above,
+// /work/parts; references/parts.md). Keep the shape: learn by doing (one hand action per move, each with its why),
+// then the same idea as a challenge with a measured result, stars and Try again. Nothing scores before Start;
+// nothing is allocated in update().
 export default function build({ THREE, kit, traits, ui, isGrabbed, hands, sound }) {
   const root = new THREE.Group();
-  // Sound answers the hands (/skills/common/sound); silent where the host has none.
-  const sfx = sound ?? { play() {}, tone() {}, note() {}, hum() {} };
+  // Desk or world (new-game.mjs --world; references/world.md). A world is built in the same desk units around the
+  // player's spot (the origin, facing -Z) and shown 12 times bigger: the place starts a little ahead of them.
+  const WORLD = __WORLD__;
+  // Sound answers the hands: sfx.fire(event) plays what SOUNDS lists for it (parts/sounds.js); silent without a host sound.
+  const sfx = playSounds(sound, SOUNDS);
   const look = __LOOK__(THREE, kit);
 
   // The ground of the look on the desk. Never grabbable.
@@ -18,10 +23,11 @@ export default function build({ THREE, kit, traits, ui, isGrabbed, hands, sound 
   subject.userData.subject = true;
   subject.position.y = set.userData.top;
   root.add(subject);
+  if (WORLD) {
+    set.position.z -= 0.25;
+    subject.position.z -= 0.25;
+  }
 
-  // REPLACE: a title (2 to 4 words) and the goal in one sentence the player could repeat.
-  const TITLE = 'Piece by piece';
-  const GOAL = 'Learn each piece, then touch them all against the clock.';
 
   // REPLACE: build the game's pieces in the look (the thing the player handles is big and in front), and list the
   // hand targets: { object, grab: true } for pieces the player moves, { object, press: true } for things they press.
@@ -50,9 +56,9 @@ export default function build({ THREE, kit, traits, ui, isGrabbed, hands, sound 
   const size = box.getSize(new THREE.Vector3());
   const big = Math.max(size.x, size.y, size.z);
   const panel = kit.panel(ui, {
-    width: 0.3, position: [Math.max(1.06 * big, box.max.x + 0.05), 0.6 * big, 0], rotationY: -0.3, eyebrow: 'PLAY AND LEARN', title: TITLE,
+    width: 0.3, position: [Math.max(1.06 * big, box.max.x + 0.05), 0.6 * big, 0], rotationY: -0.3, eyebrow: IDENTITY.eyebrow, title: IDENTITY.title, skin: IDENTITY.skin,
     items: [
-      { text: GOAL, id: 'goal' },
+      { text: IDENTITY.pitch, id: 'goal' },
       { status: MOVES[0].say, tone: 'neutral', id: 'state' },
       { text: 'Do it with your hands: the why shows up here.', id: 'why' },
       { progress: 0, label: `0 of ${MOVES.length}`, id: 'moves' },
@@ -75,9 +81,25 @@ export default function build({ THREE, kit, traits, ui, isGrabbed, hands, sound 
   root.add(stars);
   const burst = playBurst(THREE, root);
   const pops = playPop();
+  // Game feel in the world, not only on the panel: an arrow over the next thing to touch, a Start button on the
+  // playfield (in front, where the hand already is), a ring where the result happened.
+  // A world shows everything 12 times bigger: the pointer and the Start button stay hand-sized there.
+  const pointer = playPointer(THREE, WORLD ? { size: 0.4 } : {});
+  root.add(pointer);
+  const ring = playRing(THREE, root);
+  // The game's name: the app shows IDENTITY.title as a title card when the game opens, then it fades; the game builds
+  // no title sign. A result sign pops up where a result happened.
+  const resultSign = kit.sign('3 OF 3 STARS', { width: 0.16, ...IDENTITY.resultSign, sub: CHALLENGE.label });
+  resultSign.visible = false;
+  root.add(resultSign);
+  const startButton = playStartButton(THREE, WORLD ? { size: 0.025 } : {});
+  startButton.position.set(box.min.x + 0.06, set.userData.top, box.max.z - 0.05);
+  startButton.visible = false;
+  root.add(startButton);
+  traits(startButton, { onPress() { if (phase === 'ready' || phase === 'done') { startButton.userData.press(); start(); } } });
   const at = new THREE.Vector3();
   function cheer(object) {
-    sfx.play('good');
+    sfx.fire('cheer');
     pops.pop(object);
     object.getWorldPosition(at);
     root.worldToLocal(at);
@@ -96,11 +118,12 @@ export default function build({ THREE, kit, traits, ui, isGrabbed, hands, sound 
   });
   function touch(i) {
     touched.add(i);
-    sfx.play('click');
+    sfx.fire('touch');
     pops.pop(targets[i].object, 0.1);
     if (phase === 'play' && touched.size === targets.length) finish();
   }
 
+  pointer.userData.at(targets[MOVES[0].target ?? 0].object);
   function nextMove() {
     cheer(targets[MOVES[move].target ?? 0].object);
     panel.set('why', MOVES[move].why);
@@ -108,19 +131,26 @@ export default function build({ THREE, kit, traits, ui, isGrabbed, hands, sound 
     panel.set('moves', move / MOVES.length);
     if (move < MOVES.length) {
       panel.set('state', MOVES[move].say, 'neutral');
+      pointer.userData.at(targets[MOVES[move].target ?? 0].object);
       return;
     }
     phase = 'ready';
+    startButton.visible = true;
+    pointer.userData.at(startButton);
     panel.set('state', `${CHALLENGE.say} Press Start.`, 'good');
     panel.show('start', true);
   }
   function start() {
-    sfx.play('whoosh');
+    sfx.fire('start');
+    sfx.fire('music'); // the game's music loop, when it has one (SOUNDS.music)
     phase = 'play';
     clock = 0;
     shown = 0;
     touched.clear();
     stars.userData.hide();
+    resultSign.visible = false;
+    startButton.visible = false;
+    pointer.userData.at(null);
     panel.set('state', CHALLENGE.say, 'neutral');
     panel.set('result', '0.0');
     panel.show('start', false);
@@ -132,7 +162,19 @@ export default function build({ THREE, kit, traits, ui, isGrabbed, hands, sound 
     best = best === null ? result : CHALLENGE.lowerIsBetter ? Math.min(best, result) : Math.max(best, result);
     const k = playStarsFor(result, CHALLENGE.stars, CHALLENGE.lowerIsBetter);
     stars.userData.show(k);
-    sfx.play(k > 0 ? 'win' : 'bad', { volume: k > 0 ? 0.8 : 0.3 });
+    sfx.stop('music');
+    sfx.fire(k > 0 ? 'win' : 'miss');
+    // REPLACE: the ring and the confetti go where the result happened (the landing point, the last catch).
+    const cx = (box.min.x + box.max.x) / 2;
+    const cz = (box.min.z + box.max.z) / 2;
+    ring.at(cx, set.userData.top, cz);
+    resultSign.userData.setText(`${k} OF 3 STARS`, `${result.toFixed(1)} ${CHALLENGE.label}`);
+    resultSign.position.set(cx, set.userData.top + 0.09, cz + 0.02);
+    resultSign.visible = true;
+    pops.pop(resultSign, 0.3);
+    if (k === 3) burst.fire(cx, set.userData.top + 0.05, cz, true);
+    startButton.visible = true;
+    pointer.userData.at(startButton);
     panel.set('result', result.toFixed(1));
     panel.set('best', best.toFixed(1));
     panel.set('state', k === 3 ? 'Three stars!' : `${k} of 3 stars. Try again to beat ${best.toFixed(1)}.`, k >= 2 ? 'good' : 'neutral');
@@ -143,8 +185,26 @@ export default function build({ THREE, kit, traits, ui, isGrabbed, hands, sound 
     if (t) cheer(t.object);
   }
 
+  // A world: the land around the game (world-kit.js), added after the game is measured, so the mountains do not move
+  // its signs and buttons. Flat where the player starts and where the game stands, a path between, trees and rocks
+  // round about, mountains at the edge. REPLACE the land to suit the place (references/world.md).
+  if (WORLD) {
+    const start = { x: 0, z: 0, r: 0.1 };
+    const plaza = { x: 0, z: -0.25, r: 0.22 };
+    const land = worldTerrain(THREE, { seed: 3, flat: [start, plaza], hills: [{ x: -0.7, z: -0.8, r: 0.35, h: 0.16 }, { x: 0.8, z: -0.45, r: 0.3, h: 0.1 }] });
+    root.add(
+      land,
+      worldPath(THREE, land, [[0, 0.04], [0, -0.04]]),
+      worldScatter(THREE, land, 'pine', { count: 36, from: 0.45, to: 1.1, avoid: [start, plaza], seed: 5 }),
+      worldScatter(THREE, land, 'rock', { count: 14, from: 0.3, to: 1.0, avoid: [start, plaza], seed: 9 }),
+      worldEdge(THREE, { kind: 'mountains' }),
+    );
+  }
+
   return {
     root,
+    // A world's sky (day, dawn, dusk, night, overcast) and ground (grass, sand, snow, rock): references/world.md.
+    ...(WORLD ? { mode: 'world', sky: 'day', ground: 'grass' } : {}),
     update(time, delta) {
       const dt = Math.min(delta, 0.05);
       if (look.update) look.update(time);
@@ -168,6 +228,9 @@ export default function build({ THREE, kit, traits, ui, isGrabbed, hands, sound 
       pops.update(dt);
       burst.update(dt);
       stars.userData.update(dt);
+      ring.update(dt);
+      startButton.userData.update(dt);
+      pointer.userData.update(time);
     },
   };
 }

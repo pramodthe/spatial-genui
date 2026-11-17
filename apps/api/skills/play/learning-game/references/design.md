@@ -9,6 +9,8 @@
 
 ## 1. The idea, the goal and the hero
 
+(First pass the 5-second test in SKILL.md: one sentence, one main action, one hand, a familiar action.)
+
 Start from the idea, not the objects. Write it as one sentence a player could say back after playing: "the more a
 lever's weight is from the pivot, the more it turns", "plants need light, water and air to make food", "a sail pushes
 the boat when the wind is behind or beside it". If you cannot write that sentence, the game will be a model to look

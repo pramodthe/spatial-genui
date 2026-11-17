@@ -1,0 +1,212 @@
+[
+ {
+  "name": "wood-knock",
+  "id": "snd-4e9f1aaae2",
+  "kind": "effect",
+  "seconds": 1,
+  "what": "a knock on wood: a block set down, a door tap"
+ },
+ {
+  "name": "block-snap",
+  "id": "snd-23d5e2b90b",
+  "kind": "effect",
+  "seconds": 1,
+  "what": "a wooden piece clicking into place"
+ },
+ {
+  "name": "stone-thud",
+  "id": "snd-e8265ae9e2",
+  "kind": "effect",
+  "seconds": 1,
+  "what": "a stone or heavy block set down"
+ },
+ {
+  "name": "glass-clink",
+  "id": "snd-33aefce57b",
+  "kind": "effect",
+  "seconds": 1,
+  "what": "glass touching glass"
+ },
+ {
+  "name": "metal-clang",
+  "id": "snd-2a05396490",
+  "kind": "effect",
+  "seconds": 1,
+  "what": "a small metal hit"
+ },
+ {
+  "name": "paper-rustle",
+  "id": "snd-8b70a4ffa5",
+  "kind": "effect",
+  "seconds": 1,
+  "what": "paper being folded or turned"
+ },
+ {
+  "name": "paper-throw",
+  "id": "snd-92d728b1f0",
+  "kind": "effect",
+  "seconds": 1,
+  "what": "a paper plane or light thing thrown"
+ },
+ {
+  "name": "splash-small",
+  "id": "snd-4bf24d5e9f",
+  "kind": "effect",
+  "seconds": 1,
+  "what": "something small drops into water"
+ },
+ {
+  "name": "splash-big",
+  "id": "snd-16d0231974",
+  "kind": "effect",
+  "seconds": 2,
+  "what": "something big lands in water"
+ },
+ {
+  "name": "bubble-pop",
+  "id": "snd-22a35d6762",
+  "kind": "effect",
+  "seconds": 1,
+  "what": "a bubble popping"
+ },
+ {
+  "name": "whoosh",
+  "id": "snd-ae44cff8e4",
+  "kind": "effect",
+  "seconds": 1,
+  "what": "something fast passing"
+ },
+ {
+  "name": "rope-creak",
+  "id": "snd-f0771a564e",
+  "kind": "effect",
+  "seconds": 1,
+  "what": "a rope or wood under strain"
+ },
+ {
+  "name": "spring-boing",
+  "id": "snd-bc08bc3b23",
+  "kind": "effect",
+  "seconds": 1,
+  "what": "a spring or bounce"
+ },
+ {
+  "name": "ball-bounce",
+  "id": "snd-b6c3671c1f",
+  "kind": "effect",
+  "seconds": 1,
+  "what": "a ball bouncing once"
+ },
+ {
+  "name": "cloth-flutter",
+  "id": "snd-e854f20fc6",
+  "kind": "effect",
+  "seconds": 2,
+  "what": "a kite, flag or sail in wind"
+ },
+ {
+  "name": "bird-chirp",
+  "id": "snd-a0aaba9925",
+  "kind": "effect",
+  "seconds": 1,
+  "what": "a small bird"
+ },
+ {
+  "name": "bat-chirp",
+  "id": "snd-348e29a961",
+  "kind": "effect",
+  "seconds": 1,
+  "what": "a bat's echolocation call, slowed to be heard"
+ },
+ {
+  "name": "wing-flap",
+  "id": "snd-7c1482d3fc",
+  "kind": "effect",
+  "seconds": 1,
+  "what": "wings beating"
+ },
+ {
+  "name": "coin",
+  "id": "snd-2da7887db1",
+  "kind": "effect",
+  "seconds": 1,
+  "what": "a reward: a coin or gem collected"
+ },
+ {
+  "name": "chime-good",
+  "id": "snd-5745be6b26",
+  "kind": "effect",
+  "seconds": 1,
+  "what": "a right answer"
+ },
+ {
+  "name": "knock-soft-miss",
+  "id": "snd-2c9f851c14",
+  "kind": "effect",
+  "seconds": 1,
+  "what": "a gentle wrong answer"
+ },
+ {
+  "name": "footstep-grass",
+  "id": "snd-71ec0fe588",
+  "kind": "effect",
+  "seconds": 1,
+  "what": "a step on grass"
+ },
+ {
+  "name": "cork-pop",
+  "id": "snd-13d39e142f",
+  "kind": "effect",
+  "seconds": 1,
+  "what": "a cork or a launch"
+ },
+ {
+  "name": "cheer-small",
+  "id": "snd-b9fd9aad68",
+  "kind": "effect",
+  "seconds": 2,
+  "what": "a small crowd cheering"
+ },
+ {
+  "name": "wind-hill",
+  "id": "snd-fc895efa75",
+  "kind": "ambience",
+  "seconds": 10,
+  "what": "steady wind on an open hill"
+ },
+ {
+  "name": "forest-birds",
+  "id": "snd-662d8efa2e",
+  "kind": "ambience",
+  "seconds": 10,
+  "what": "a forest with birds"
+ },
+ {
+  "name": "river-flow",
+  "id": "snd-bf5d153ae5",
+  "kind": "ambience",
+  "seconds": 10,
+  "what": "a flowing river or stream"
+ },
+ {
+  "name": "cave-drips",
+  "id": "snd-fad617568f",
+  "kind": "ambience",
+  "seconds": 10,
+  "what": "a cave with water drips"
+ },
+ {
+  "name": "night-crickets",
+  "id": "snd-443878dc53",
+  "kind": "ambience",
+  "seconds": 10,
+  "what": "a night outdoors"
+ },
+ {
+  "name": "ocean-waves",
+  "id": "snd-748a96c201",
+  "kind": "ambience",
+  "seconds": 10,
+  "what": "waves on a beach"
+ }
+]

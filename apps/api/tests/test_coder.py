@@ -39,6 +39,7 @@ class _Backend:
     def __init__(self, *, sandbox: object) -> None:
         self.sandbox = sandbox
         self.files: dict[str, bytes] = {}
+        self.commands: list[str] = []
 
     def upload_files(self, files: list[tuple[str, bytes]]) -> list[object]:
         self.files.update(dict(files))
@@ -53,6 +54,10 @@ class _Backend:
 
     async def adownload_files(self, paths: list[str]) -> list[_File]:
         return self.download_files(paths)
+
+    async def aexecute(self, command: str) -> object:
+        self.commands.append(command)
+        return None
 
 
 class _Sandbox:
@@ -139,6 +144,11 @@ async def test_repair_uploads_the_module_and_does_not_repin(monkeypatch: pytest.
     assert "pinned_skills" not in seen["payload"]
     assert seen["payload"]["skills_metadata"] is None
     assert "host gate rejected" in seen["payload"]["messages"][0]["content"]
+    # A repair has its own budget: the first attempt's spend on the thread would stop it after one reply.
+    assert seen["payload"]["cost_usd"] == 0.0
+    # The saved module goes back to kits.js and game.js for the repair, and is built again before it is read.
+    assert any("build-module.mjs --split /work/module.js" in c for c in seen["backend"].commands)
+    assert seen["backend"].commands[-1].endswith("build-module.mjs /work/module.js")
     assert result["code"] == code
     coder.set_checkpointer(None)
 
@@ -191,7 +201,8 @@ def test_sandbox_create_blocks_the_network(monkeypatch: pytest.MonkeyPatch) -> N
     assert kwargs["block_network"] is True
     assert kwargs["image"] == "image"
     assert kwargs["workdir"] == "/work"
-    assert kwargs["timeout"] == coder.WALL_S
+    # The sandbox outlives the agent's deadline, so a tool still running at the deadline cannot take the module with it.
+    assert kwargs["timeout"] == coder.WALL_S + coder.SANDBOX_GRACE_S
     assert kwargs["name"] == "genui-run-1"
     assert captured["app"] == (coder.APP_NAME, True)
 

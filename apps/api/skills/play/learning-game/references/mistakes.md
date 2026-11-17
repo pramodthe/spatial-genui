@@ -39,5 +39,9 @@ Each of these happened in a real generated scene. Read them once before you fini
 11. **A panel no hand can reach.** A boat game put its scoreboard behind the playfield, as old game rules said, and
     the pointing ray hit the sea before it reached Start. The panel stands beside the game, in reach.
 
-12. **The starter left in.** `look.demo(subject)`, REPLACE markers or the starter's "Touch every piece" challenge
+12. **Too many controls.** A bat game asked for a turned left hand to aim, a finger tap on a pad to chirp, then a
+    pinch-drag-release of a marker to catch, with a three-chirp bonus; a fruit game had catch, turn, swipe, pinch,
+    drop and Serve. Players could not tell what the game was. One main action with one hand, said in one sentence.
+
+13. **The starter left in.** `look.demo(subject)`, REPLACE markers or the starter's "Touch every piece" challenge
     left in the game. The check stops on all three.

@@ -27,6 +27,7 @@ from app.prompt import EXAMPLE_MODULE
 from app.real_size import known_real_size, real_size_of
 from app.voice import transcribe, voice_agent_token
 from app import background
+from app import media, studio
 
 MAX_BODY = 200_000
 MAX_AUDIO = 2_000_000
@@ -333,6 +334,55 @@ async def get_course(course_id: str) -> JSONResponse:
     if course is None:
         return JSONResponse({"error": "Unknown course"}, status_code=404)
     return JSONResponse(courses.summary(course))
+
+
+STUDIO_PAGE = Path(__file__).with_name("studio.html")
+
+
+@app.get("/studio")
+@app.get("/studio/{run_id}")
+async def studio_page(run_id: str = "") -> FileResponse:
+    """The Studio: how the design step, the coder and the grader made a game (app/studio.py). The page reads /api/studio."""
+    return FileResponse(STUDIO_PAGE, media_type="text/html; charset=utf-8", headers={"cache-control": "no-cache"})
+
+
+@app.get("/api/studio")
+async def studio_runs() -> JSONResponse:
+    return JSONResponse({"runs": studio.list_runs()})
+
+
+@app.get("/api/studio/{run_id}")
+async def studio_run(run_id: str) -> JSONResponse:
+    run = studio.read_run(run_id)
+    if run is None:
+        return JSONResponse({"error": "Unknown run"}, status_code=404)
+    return JSONResponse(run, headers={"cache-control": "no-cache"})
+
+
+@app.get("/api/studio/{run_id}/file/{name:path}")
+async def studio_file(run_id: str, name: str) -> Response:
+    folder = studio.run_dir(run_id)
+    path = (folder / "files" / name).resolve() if folder else None
+    if path is None or not path.is_relative_to((folder / "files").resolve()) or not path.is_file():
+        return JSONResponse({"error": "Unknown file"}, status_code=404)
+    return FileResponse(path, media_type=CONTENT_TYPES.get(path.suffix, "text/plain; charset=utf-8"))
+
+
+@app.get("/api/media")
+async def media_library(run: str | None = None) -> JSONResponse:
+    """The asset library: every generated picture and sound (app/media.py), newest first; ?run= for one run's."""
+    return JSONResponse({"media": media.library(run_id=run)}, headers={"cache-control": "no-cache"})
+
+
+@app.get("/api/media/{media_id}")
+async def media_file(media_id: str) -> Response:
+    found = media.file_of(media_id)
+    if found is None:
+        record = media.read(media_id)
+        status = 404 if record is None or record.get("status") == "failed" else 425  # 425: still being made
+        return JSONResponse({"error": "Not ready" if status == 425 else "Unknown media"}, status_code=status)
+    path, kind = found
+    return FileResponse(path, media_type=kind, headers={"cache-control": "public, max-age=31536000, immutable"})
 
 
 @app.get("/api/live/{key}")

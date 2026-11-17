@@ -5,8 +5,9 @@ description: The module's sound - synthesized effects (pop, click, good, bad, co
 
 # Sound
 
-`build` also receives `sound`. It makes short synthesized sounds in the headset (no audio files, no network). The
-dry run is silent but checks every call, and the check counts them.
+`build` also receives `sound`. It makes short synthesized sounds in the headset, and plays the game's own generated
+clips (a bat's real chirp, a music loop) when the host has made some with `make_sound` / `make_music`. The dry run is
+silent but checks every call, and the check counts them.
 
 ```js
 sound.play('pop');                                  // an effect: pop, click, tick, good, bad, coin, bounce, win, whoosh, splash
@@ -15,7 +16,15 @@ sound.tone(440, { seconds: 0.4, type: 'triangle', volume: 0.6, glide: 660 }); //
 sound.note('C4', { seconds: 0.5 });                 // a note by name: 'C4', 'F#3', 'Bb5'
 sound.hum('engine', { frequency: 80 + speed * 40, volume: 0.3, type: 'sawtooth' }); // call every frame to change it
 sound.hum('engine', null);                          // stop it
+sound.load('snd-1a2b3c4d5e');                       // fetch a generated clip ahead of its first play (in build)
+const loop = sound.clip('mus-1a2b3c4d5e', { volume: 0.25, loop: true }); // a generated clip; loop.stop() ends it
 ```
+
+Generated clips are for what the subject really sounds like (an echo, a splash, a bird); the synth effects stay
+the answers to the hands. **The sound library** (`references/library.md`) has 30 ready clips by id: wood, stone,
+water, paper, wind, birds, a bat's call, rewards, and ambience loops (a windy hill, a forest, a river, a cave, a night,
+the sea). Use them first: they cost nothing and wait for nothing; make a sound only for what they lack. In a learning game the clips go in SOUNDS as `{ clip: id, volume }` and playSounds loads
+them for you (the learning-game skill's references/parts.md).
 
 Volume is capped by the host, at most 12 sounds play at once and 30 start each second, at most 4 hums run, and
 every hum stops when the lesson closes. Calling `play` every frame plays nothing useful: play on events.

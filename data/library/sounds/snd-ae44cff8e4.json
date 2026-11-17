@@ -1,0 +1,17 @@
+{
+ "id": "snd-ae44cff8e4",
+ "kind": "sound",
+ "file": "snd-ae44cff8e4.mp3",
+ "prompt": "a quick airy whoosh of a ball flying past",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.0023,
+ "length": 1,
+ "loop": false,
+ "seconds": 7.1,
+ "runId": null,
+ "status": "ready",
+ "created": 1794871996.8375769,
+ "name": "whoosh",
+ "library": true,
+ "bytes": 17179
+}

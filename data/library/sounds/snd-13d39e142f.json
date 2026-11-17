@@ -1,0 +1,17 @@
+{
+ "id": "snd-13d39e142f",
+ "kind": "sound",
+ "file": "snd-13d39e142f.mp3",
+ "prompt": "a cork popping out of a bottle, one pop",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.0023,
+ "length": 1,
+ "loop": false,
+ "seconds": 4.8,
+ "runId": null,
+ "status": "ready",
+ "created": 1794872008.192429,
+ "name": "cork-pop",
+ "library": true,
+ "bytes": 17179
+}

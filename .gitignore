@@ -5,8 +5,11 @@ dist/
 apps/gate/.cache/
 .DS_Store
 
-# Personal Claude Code settings
-.claude/settings.local.json
+# AI coding tools' local folders (agents, Cursor, Claude Code): personal and large, never pushed
+.agents/
+.cursor/
+.claude/
+skills-lock.json
 
 # Benchmark: keep results (jsonl, summaries) but not screenshots or scratch runs
 bench/results/*/shots/

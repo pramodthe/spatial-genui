@@ -1,0 +1,17 @@
+{
+ "id": "snd-92d728b1f0",
+ "kind": "sound",
+ "file": "snd-92d728b1f0.mp3",
+ "prompt": "a paper airplane thrown, a quick airy swish",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.0023,
+ "length": 1,
+ "loop": false,
+ "seconds": 5.2,
+ "runId": null,
+ "status": "ready",
+ "created": 1794871994.305681,
+ "name": "paper-throw",
+ "library": true,
+ "bytes": 17179
+}

@@ -1,0 +1,17 @@
+{
+ "id": "snd-5745be6b26",
+ "kind": "sound",
+ "file": "snd-5745be6b26.mp3",
+ "prompt": "a warm bright bell chime for a correct answer, short",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.0023,
+ "length": 1,
+ "loop": false,
+ "seconds": 4.7,
+ "runId": null,
+ "status": "ready",
+ "created": 1794872003.7686248,
+ "name": "chime-good",
+ "library": true,
+ "bytes": 17179
+}

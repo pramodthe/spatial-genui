@@ -39,6 +39,31 @@ idea is about sound itself, the sound is the lesson: the player hears it change 
 - The player can tell from the scene, without the panel, what to touch first: it is in front, it bounces, it has a
   handle.
 
+## In the world, not only on the panel
+
+The play kit (`assets/play-kit.js`, already in the module) makes a game feel like a game; the starter wires all of it.
+Keep it, and move it where your game needs it:
+
+- **`playPointer`**: a bouncing arrow over the next thing to touch. It moves to each move's piece, then to Start.
+  It is the five-second test in the world: the player sees where to begin.
+- **`playStartButton`**: a chunky button with a play triangle on the playfield, pressed with a finger. Put it in
+  front, clear of the pieces; it shows when the challenge is ready and again for Try again.
+- **`playRing`**: a ring that spreads on the ground where the result happened. Call `ring.at(x, y, z)` at the
+  landing point, the catch, the finish line, not at the middle of the table.
+- **`playStars`**: 3D stars that pop in over the game at the end, gold for earned, grey for not yet.
+- **`playBurst`**: sparkles when a move is done; `fire(x, y, z, true)` is confetti for three stars.
+
+Every piece counts toward the scene's 150 draw calls even while hidden; the kit is about a dozen meshes in all.
+
+## Its own look
+
+Each game looks like itself, not like every other game in the app:
+- **A skin** on the panel (`kit.panel(..., { skin })`, `/skills/common/panels`): colours picked for this game's look and
+  subject, a poster title. Not the starter's navy and yellow unless they suit it.
+- **A title sign** over the back of the scene (`kit.sign`), in the same colours: the game's name, like a logo.
+- **A result sign** that pops up where the result happened ("4.2 m!", "CAUGHT!", "3 OF 3 STARS") with the number under it.
+- Keep it to these three: one panel, two signs. Everything else is the scene itself.
+
 ## The reward lands
 
 - When the challenge ends, show the result where it happened (the landing point, the finish line), then the stars

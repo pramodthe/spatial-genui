@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Studio</title>
+<style>
+  :root { --bg: #0f1117; --card: #181b24; --line: #262a36; --ink: #eef0f6; --ink2: #9aa2b8; --accent: #7cf7d4; --good: #3ddc84; --bad: #ff7a6b; --warn: #ffc857; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+  header { display: flex; gap: 16px; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 2; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 18px; letter-spacing: 0.4px; }
+  header select { background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; max-width: 520px; font: inherit; }
+  .status { padding: 3px 10px; border-radius: 999px; font-size: 13px; font-weight: 700; background: var(--line); }
+  .status.writing { background: #2b2f10; color: var(--warn); }
+  .status.ready { background: #0f2b1c; color: var(--good); }
+  .status.failed { background: #2e1512; color: var(--bad); }
+  main { display: grid; grid-template-columns: minmax(280px, 380px) 1fr; gap: 16px; padding: 16px 20px 40px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 12px 16px; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin-bottom: 16px; }
+  .card h2 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--ink2); }
+  .request { font-size: 15px; white-space: pre-wrap; word-break: break-word; max-height: 7.5em; overflow: hidden; position: relative; }
+  .request.open { max-height: none; }
+  .more { background: none; border: 0; color: var(--accent); font: inherit; font-size: 13px; padding: 4px 0 0; cursor: pointer; }
+  .timeline-box { max-height: 70vh; overflow-y: auto; }
+  .meta { color: var(--ink2); font-size: 13px; margin-top: 6px; }
+  .timeline { list-style: none; margin: 0; padding: 0; }
+  .timeline li { display: grid; grid-template-columns: 52px 1fr; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); }
+  .timeline li:first-child { border-top: 0; }
+  .t { color: var(--ink2); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .who { font-weight: 700; font-size: 13px; }
+  .what { color: var(--ink2); font-size: 13px; }
+  .detail { font-size: 13px; white-space: pre-wrap; word-break: break-word; margin-top: 2px; }
+  .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; margin-right: 6px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 1200px) { .grid2 { grid-template-columns: 1fr; } }
+  pre.plan { max-height: 60vh; overflow-y: auto; white-space: pre-wrap; word-break: break-word; margin: 0; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink); }
+  .mock { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+  .panel { width: 240px; border-radius: 20px; padding: 16px; border: 3px solid transparent; }
+  .panel .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 1.2px; }
+  .panel .title { font-size: 24px; font-weight: 800; font-style: italic; line-height: 1.1; margin: 4px 0 8px; }
+  .panel .pitch { font-size: 13px; }
+  .panel .btn { display: inline-block; margin-top: 12px; padding: 8px 16px; border-radius: 999px; font-weight: 800; font-size: 13px; }
+  .swatches { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .swatch { width: 28px; height: 28px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); }
+  table.sounds { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.sounds td { padding: 6px 4px; border-top: 1px solid var(--line); vertical-align: middle; }
+  table.sounds code { color: var(--accent); }
+  button.play { background: var(--line); color: var(--ink); border: 0; border-radius: 999px; width: 30px; height: 30px; cursor: pointer; font-size: 12px; }
+  button.play:hover { background: #343a4a; }
+  .film { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+  .film figure { margin: 0; }
+  .film img { width: 100%; border-radius: 10px; border: 1px solid var(--line); cursor: zoom-in; display: block; }
+  .film figcaption { color: var(--ink2); font-size: 12px; margin-top: 4px; }
+  .criteria { list-style: none; padding: 0; margin: 0; }
+  .criteria li { padding: 6px 0; border-top: 1px solid var(--line); font-size: 13px; }
+  .criteria li:first-child { border-top: 0; }
+  .ok { color: var(--good); font-weight: 800; }
+  .no { color: var(--bad); font-weight: 800; }
+  .gap { color: var(--ink2); margin-top: 2px; }
+  .empty { color: var(--ink2); font-size: 13px; }
+  .assets .empty, .film .empty { grid-column: 1 / -1; }
+  #zoom { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; align-items: center; justify-content: center; z-index: 5; cursor: zoom-out; }
+  #zoom img { max-width: 94vw; max-height: 94vh; border-radius: 12px; }
+  a { color: var(--accent); }
+  .assets { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .asset { background: #12141b; border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .asset img { width: 100%; border-radius: 8px; cursor: zoom-in; display: block; }
+  .asset audio { width: 100%; }
+  .asset .prompt { font-size: 12px; color: var(--ink2); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+  .asset .tag { font-size: 12px; font-weight: 700; }
+  .asset .making { font-size: 13px; color: var(--warn); }
+  header nav { margin-left: auto; display: flex; gap: 12px; }
+  header nav a { text-decoration: none; font-weight: 700; font-size: 14px; }
+  #library { display: none; padding: 16px 20px 40px; }
+  @media (max-width: 900px) { #library { padding: 12px 16px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Studio</h1>
+  <select id="runs" aria-label="Run"></select>
+  <span id="status" class="status">-</span>
+  <span id="clock" class="meta"></span>
+  <nav><a href="/studio/library" id="libraryLink">Asset library</a></nav>
+</header>
+<main>
+  <section>
+    <div class="card"><h2>Request</h2><div id="request" class="request"></div><button id="more" class="more" hidden>Show the whole brief</button><div id="meta" class="meta"></div></div>
+    <div class="card"><h2>The team at work</h2><div id="timelineBox" class="timeline-box"><ul id="timeline" class="timeline"></ul></div></div>
+  </section>
+  <section>
+    <div class="grid2">
+      <div class="card"><h2>Design doc</h2><pre id="plan" class="plan"></pre></div>
+      <div>
+        <div class="card"><h2>Identity</h2><div id="identity"></div></div>
+        <div class="card"><h2>Sounds</h2><div id="sounds"></div></div>
+      </div>
+    </div>
+    <div class="card"><h2>Generated assets</h2><div id="assets" class="assets"></div></div>
+    <div class="card"><h2>Play-test film</h2><div id="film" class="film"></div></div>
+    <div class="card"><h2>Reviews</h2><div id="grader"></div></div>
+  </section>
+</main>
+<section id="library"><div class="card"><h2>Asset library: every game's generated pictures and sounds</h2><div id="libraryGrid" class="assets"></div></div></section>
+<div id="zoom"><img alt=""></div>
+<script>
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const COLORS = { designer: '#ffb38a', director: '#7cf7d4', 'model-maker': '#8ab4ff', grader: '#ff7a6b', 'play-test': '#9aa2b8' };
+let current = location.pathname.split('/')[2] || '';
+let lastJson = '';
+
+async function loadRuns() {
+  const { runs } = await (await fetch('/api/studio')).json();
+  const select = $('runs');
+  select.textContent = '';
+  for (const r of runs) {
+    const o = el('option', null, `${r.status === 'writing' ? '● ' : ''}${(r.request || r.runId).slice(0, 90)}  (${r.kind}, ${r.model || '?'})`);
+    o.value = r.runId;
+    select.append(o);
+  }
+  if (!current && runs[0]) current = runs[0].runId;
+  select.value = current;
+}
+$('runs').onchange = (e) => { location.assign(`/studio/${e.target.value}`); };
+
+function chip(who) {
+  const c = el('span', 'chip', who);
+  c.style.background = (COLORS[who] || '#9aa2b8') + '33';
+  c.style.color = COLORS[who] || '#9aa2b8';
+  return c;
+}
+
+function render(run) {
+  const request = run.request || '';
+  // The app's designer turns a request into a long brief: show its first lines, the rest on demand.
+  $('request').textContent = request;
+  $('more').hidden = request.length < 320;
+  $('more').onclick = () => { const open = $('request').classList.toggle('open'); $('more').textContent = open ? 'Show less' : 'Show the whole brief'; };
+  $('meta').textContent = `${run.kind} · ${run.model || ''} · run ${run.runId}${run.seconds ? ` · ${run.seconds} s` : ''}${run.rubric?.status ? ` · grader: ${run.rubric.status}` : ''}`;
+  const status = $('status');
+  status.textContent = run.status;
+  status.className = `status ${run.status}`;
+
+  const tl = $('timeline');
+  tl.textContent = '';
+  const events = run.events || [];
+  if (!events.length) tl.append(el('li', 'empty', 'Nothing yet.'));
+  for (const e of events) {
+    const li = el('li');
+    li.append(el('div', 't', `${e.t}s`));
+    const body = el('div');
+    const head = el('div');
+    head.append(chip(e.who));
+    head.append(el('span', 'what', e.what + (e.to ? ` → ${e.to}` : '')));
+    body.append(head);
+    if (e.detail) body.append(el('div', 'detail', e.detail));
+    li.append(body);
+    tl.append(li);
+  }
+  $('timelineBox').scrollTop = $('timelineBox').scrollHeight; // the newest step, without moving the page
+
+  $('plan').textContent = run.texts?.['plan.md'] || 'The coder has not written the plan yet.';
+
+  const id = run.identity || {};
+  const box = $('identity');
+  box.textContent = '';
+  if (!id.title) box.append(el('div', 'empty', 'The game\'s identity is not written yet.'));
+  else {
+    const mock = el('div', 'mock');
+    const skin = id.skin || {};
+    const panel = el('div', 'panel');
+    panel.style.background = skin.paper || '#1d2238';
+    panel.style.borderColor = skin.edge || 'transparent';
+    panel.style.color = skin.ink || '#fff';
+    const eyebrow = el('div', 'eyebrow', id.eyebrow || '');
+    eyebrow.style.color = skin.accent || '#fff';
+    const title = el('div', 'title', id.title);
+    title.style.color = skin.accent || '#fff';
+    const btn = el('span', 'btn', 'Start');
+    btn.style.background = skin.button || skin.accent || '#fff';
+    btn.style.color = skin.paper || '#000';
+    panel.append(eyebrow, title, el('div', 'pitch', id.pitch || ''), btn);
+    mock.append(panel);
+    box.append(mock);
+    const sw = el('div', 'swatches');
+    for (const [k, v] of Object.entries(skin)) { const s = el('div', 'swatch'); s.style.background = v; s.title = `${k} ${v}`; sw.append(s); }
+    box.append(sw);
+  }
+
+  const sounds = $('sounds');
+  sounds.textContent = '';
+  if (!run.sounds?.length) sounds.append(el('div', 'empty', 'The game\'s sounds are not written yet.'));
+  else {
+    const table = el('table', 'sounds');
+    for (const s of run.sounds) {
+      const tr = el('tr');
+      const play = el('button', 'play', '▶');
+      play.title = 'Play';
+      play.onclick = () => playEntry(s.plays);
+      const a = el('td'); a.append(play);
+      const b = el('td'); b.append(el('strong', null, s.event));
+      const c = el('td'); c.append(el('code', null, s.plays));
+      tr.append(a, b, c);
+      table.append(tr);
+    }
+    sounds.append(table);
+  }
+
+  const assets = $('assets');
+  assets.textContent = '';
+  if (!run.media?.length) assets.append(el('div', 'empty', 'No generated pictures or sounds in this run.'));
+  for (const m of run.media || []) assets.append(assetCard(m));
+
+  const film = $('film');
+  film.textContent = '';
+  const shots = (run.files || []).filter((f) => /^playtest\/view-\d+\.png$/.test(f)).sort((a, b) => +a.match(/\d+/)[0] - +b.match(/\d+/)[0]);
+  if (!shots.length) film.append(el('div', 'empty', 'No play-test yet.'));
+  for (const f of shots) {
+    const fig = el('figure');
+    const img = el('img');
+    img.src = `/api/studio/${run.runId}/file/${f}`;
+    img.alt = f;
+    img.onclick = () => { $('zoom').querySelector('img').src = img.src; $('zoom').style.display = 'flex'; };
+    fig.append(img, el('figcaption', null, f.replace('playtest/', '')));
+    film.append(fig);
+  }
+
+  const grader = $('grader');
+  grader.textContent = '';
+  const verdicts = events.filter((e) => e.who === 'grader');
+  if (!verdicts.length) grader.append(el('div', 'empty', 'No grade yet: the grader checks the finished game.'));
+  verdicts.forEach((v) => {
+    const head = el('div', 'what', ` ${v.what} at ${v.t}s`);
+    head.prepend(chip('grader'));
+    grader.append(head);
+    const ul = el('ul', 'criteria');
+    for (const c of v.criteria || []) {
+      const li = el('li');
+      li.append(el('span', c.passed ? 'ok' : 'no', c.passed ? '✓ ' : '✗ '), document.createTextNode(c.name || ''));
+      if (!c.passed && c.gap) li.append(el('div', 'gap', c.gap));
+      ul.append(li);
+    }
+    grader.append(ul);
+  });
+}
+$('zoom').onclick = () => { $('zoom').style.display = 'none'; };
+
+function assetCard(m) {
+  const card = el('div', 'asset');
+  if (m.kind === 'image' && m.status === 'ready') {
+    const img = el('img');
+    img.src = `/api/media/${m.id}`;
+    img.alt = m.prompt || m.id;
+    img.loading = 'lazy';
+    img.onclick = () => { $('zoom').querySelector('img').src = img.src; $('zoom').style.display = 'flex'; };
+    card.append(img);
+  } else if (m.status === 'ready') {
+    const audioEl = el('audio');
+    audioEl.controls = true;
+    audioEl.preload = 'none';
+    audioEl.src = `/api/media/${m.id}`;
+    card.append(audioEl);
+  } else {
+    card.append(el('div', 'making', m.status === 'failed' ? `failed: ${m.error || ''}` : 'being made…'));
+  }
+  const cost = m.costUsd != null ? ` · $${Number(m.costUsd).toFixed(3)}` : '';
+  const tag = el('div', 'tag', `${m.kind}${m.length ? ` · ${m.length} s` : ''}${cost}`);
+  tag.style.color = { image: '#ff9ad5', sound: '#ffc857', music: '#8ab4ff' }[m.kind] || 'inherit';
+  card.append(tag, el('div', 'prompt', m.prompt || ''));
+  const id = el('code', null, m.id);
+  id.style.fontSize = '11px';
+  id.style.color = 'var(--ink2)';
+  card.append(id);
+  return card;
+}
+
+async function showLibrary() {
+  document.querySelector('main').style.display = 'none';
+  $('library').style.display = 'block';
+  $('status').textContent = 'library';
+  $('status').className = 'status';
+  const { media } = await (await fetch('/api/media')).json();
+  const grid = $('libraryGrid');
+  grid.textContent = '';
+  if (!media.length) grid.append(el('div', 'empty', 'No generated pictures or sounds yet.'));
+  for (const m of media) grid.append(assetCard(m));
+}
+
+// A small synth for the sound list, close to the headset's (apps/xr/src/genui/sound.ts).
+let audio;
+function tone(f, s, type = 'sine', v = 0.25, delay = 0, glide) {
+  audio ??= new AudioContext();
+  const t = audio.currentTime + delay, o = audio.createOscillator(), g = audio.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t); if (glide) o.frequency.exponentialRampToValueAtTime(glide, t + s);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + s);
+  o.connect(g).connect(audio.destination); o.start(t); o.stop(t + s + 0.02);
+}
+const EFFECTS = {
+  pop: () => tone(520, 0.09, 'sine', 0.3, 0, 900), click: () => tone(1800, 0.03, 'square', 0.1), tick: () => tone(1200, 0.04, 'triangle', 0.15),
+  good: () => { tone(660, 0.12, 'triangle'); tone(990, 0.18, 'triangle', 0.25, 0.09); }, bad: () => tone(220, 0.25, 'sawtooth', 0.1, 0, 150),
+  coin: () => { tone(988, 0.07, 'square', 0.1); tone(1319, 0.2, 'square', 0.1, 0.07); }, bounce: () => tone(180, 0.15, 'sine', 0.3, 0, 90),
+  win: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.22, 'triangle', 0.25, i * 0.11)), whoosh: () => tone(300, 0.35, 'sawtooth', 0.06, 0, 2400), splash: () => tone(1800, 0.45, 'sawtooth', 0.06, 0, 250),
+};
+function playEntry(text) {
+  const clip = text.match(/clip:\s*'((?:snd|mus)-[0-9a-f]{10})'/);
+  if (clip) { const a = new Audio(`/api/media/${clip[1]}`); a.volume = Math.min(1, +(text.match(/volume:\s*([\d.]+)/) || [])[1] || 0.7); a.play(); return; }
+  const names = [...text.matchAll(/'(\w+)'/g)].map((m) => m[1]).filter((n) => EFFECTS[n]);
+  names.forEach((n, i) => setTimeout(EFFECTS[n], i * 250));
+  const t = text.match(/tone:\s*(\d+)/); if (t) tone(+t[1], 0.3, (text.match(/type:\s*'(\w+)'/) || [])[1] || 'sine');
+  const n = text.match(/note:\s*'([A-G][#b]?-?\d)'/); if (n) { const m = /^([A-G])([#b]?)(-?\d)$/.exec(n[1]); const steps = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }; tone(440 * 2 ** ((steps[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0) + (m[3] - 4) * 12 - 9) / 12), 0.5, 'triangle'); }
+}
+
+async function refresh() {
+  if (!current) return;
+  const res = await fetch(`/api/studio/${current}`);
+  if (!res.ok) return;
+  const text = await res.text();
+  if (text !== lastJson) { lastJson = text; render(JSON.parse(text)); }
+  const run = JSON.parse(text);
+  $('clock').textContent = run.status === 'writing' ? `live · ${Math.round(Date.now() / 1000 - run.started)} s` : '';
+}
+(async () => {
+  if (current === 'library') { current = ''; await loadRuns(); $('runs').value = ''; await showLibrary(); return; }
+  await loadRuns(); await refresh(); setInterval(refresh, 3000); setInterval(loadRuns, 15000);
+})();
+</script>
+</body>
+</html>

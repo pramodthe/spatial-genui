@@ -1,0 +1,17 @@
+{
+ "id": "snd-bf5d153ae5",
+ "kind": "sound",
+ "file": "snd-bf5d153ae5.mp3",
+ "prompt": "a small river flowing over stones, steady water, no music",
+ "model": "elevenlabs-sound-effects-v2",
+ "costUsd": 0.023,
+ "length": 10,
+ "loop": true,
+ "seconds": 7.8,
+ "runId": null,
+ "status": "ready",
+ "created": 1794872013.490098,
+ "name": "river-flow",
+ "library": true,
+ "bytes": 160957
+}

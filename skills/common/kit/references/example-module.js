@@ -1,4 +1,5 @@
-// The worked example in the system prompt (apps/api/app/pipeline/prompts.py), and what POST /api/generate returns for "/example".
+// A copy, for reading, of the worked example in the system prompt: prompts.py reads apps/gate/src/example-module.js.
+// Nothing keeps the two in step; change both.
 // Real code, so it can be checked and run like any generated module. Keep it short: models imitate it.
 export default function build({ THREE, kit, traits, ui, isGrabbed }) {
   const root = new THREE.Group();

@@ -48,7 +48,8 @@ def _repair_json(text: str) -> Any:
                 best = candidate
                 best_at = reached
 
-        for index in range(at, max(0, at - 200) - 1, -1):
+        # The error can sit just past the end (a reply cut off mid-object): start at the last character.
+        for index in range(min(at, len(current) - 1), max(0, at - 200) - 1, -1):
             if current[index] in "}]":
                 consider(current[:index] + current[index + 1:])
         for index in range(at, max(0, at - 3) - 1, -1):

@@ -2,7 +2,7 @@
   "name": "genui-gate",
   "version": "0.1.0",
   "private": true,
-  "description": "The Node half of the backend: the lesson gate (static check and locked-down dry run with three.js and kit.js) and the course 3D model pipeline the Python API drives; plus the research harness: the published one-call agent loop and the benchmark, judge and 3D scripts the paper's numbers come from.",
+  "description": "The Node half of the backend: the gate, which checks a generated module before a headset loads it (static checks, a locked-down dry run with three.js and the kit, and the layout check).",
   "type": "module",
   "engines": {
     "node": ">=22.12.0"

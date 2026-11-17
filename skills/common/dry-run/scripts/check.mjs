@@ -10,6 +10,11 @@ const child = spawnSync(tsx, [gate], {
   input: JSON.stringify({ code, short: true }),
   encoding: 'utf8',
 });
+// The gate did not start at all (no tsx, or no gate at GATE_ENTRY): say so rather than exit 1 in silence.
+if (child.error) {
+  process.stderr.write(`The gate did not start: ${child.error.message}\n`);
+  process.exit(1);
+}
 process.stdout.write(child.stdout || '');
 if (child.stderr) process.stderr.write(child.stderr);
 process.exit(child.status ?? 1);

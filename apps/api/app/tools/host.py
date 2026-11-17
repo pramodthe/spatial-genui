@@ -1,4 +1,4 @@
-"""Library, asset jobs and real size. Secrets stay in this process."""
+"""Library lookup and real size. Secrets stay in this process."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import json
 
 from langchain_core.tools import tool
 
-from app import assets, library, real_size as sizes
+from app import library, real_size as sizes
 
 
 @tool
@@ -32,33 +32,6 @@ def library_lookup(query: str) -> str:
         if len(found) >= 8:
             break
     return json.dumps(found)
-
-
-@tool
-def start_asset_job(name: str, describe: str, parts: str = "") -> str:
-    """Start a background 3D model job on the host. parts is a comma-separated list. Returns the job id and status."""
-    wanted = {
-        "name": name,
-        "describe": describe,
-        "parts": [part.strip() for part in parts.split(",") if part.strip()],
-    }
-    job = assets.start_asset_job(wanted)
-    return json.dumps({"id": job["id"], "status": job["status"], "name": job["name"]})
-
-
-@tool
-def asset_job_status(job_id: str) -> str:
-    """Read a background model job. When status is done, assetId is the library id to use."""
-    job = assets.asset_job(job_id)
-    if job is None:
-        return json.dumps({"error": "Unknown job"})
-    return json.dumps({
-        "id": job["id"],
-        "status": job["status"],
-        "assetId": job.get("assetId"),
-        "error": job.get("error"),
-        "stage": (job.get("events") or [{}])[-1].get("message") if job.get("events") else None,
-    })
 
 
 @tool

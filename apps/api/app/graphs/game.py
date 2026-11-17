@@ -16,7 +16,7 @@ from langgraph.graph import END, START, StateGraph
 from typing_extensions import TypedDict
 
 from app import llm, media
-from app.a2ui.catalog import extract_json
+from app.json_reply import extract_json
 from app.graphs.lesson import _new_id, get_checkpointer, run_lesson
 from app.guard import record_spend
 from app.llm import default_target

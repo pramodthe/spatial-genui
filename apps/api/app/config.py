@@ -35,9 +35,6 @@ class Config:
     max_repairs: int
     max_completion_tokens: int
     runs_dir: Path
-    on_demand_assets: bool
-    worker3d_url: str
-    worker3d_token: str
     app_db: Path
     library_dir: Path
     courses_dir: Path
@@ -46,7 +43,6 @@ class Config:
     static_dir: Path | None
     rate_limit_per_10_min: int
     daily_budget_usd: float
-    course_models: bool
     course_build_all: bool
     course_polish: bool
 
@@ -65,9 +61,6 @@ def load_config() -> Config:
         max_repairs=2,
         max_completion_tokens=64000,
         runs_dir=_path("RUNS_DIR", REPO_ROOT / "apps" / "api" / "runs"),
-        on_demand_assets=os.environ.get("ASSETS_ON_DEMAND") == "1",
-        worker3d_url=os.environ.get("WORKER3D_URL") or "",
-        worker3d_token=os.environ.get("WORKER3D_TOKEN") or "",
         app_db=_path("APP_DB", REPO_ROOT / "data" / "app.db"),
         library_dir=_path("LIBRARY_DIR", REPO_ROOT / "data" / "library"),
         courses_dir=_path("COURSES_DIR", REPO_ROOT / "data" / "courses"),
@@ -76,7 +69,6 @@ def load_config() -> Config:
         static_dir=_path("STATIC_DIR", Path()) if os.environ.get("STATIC_DIR") else None,
         rate_limit_per_10_min=int(os.environ.get("RATE_LIMIT_PER_10_MIN") or 6),
         daily_budget_usd=float(os.environ.get("DAILY_BUDGET_USD") or 15),
-        course_models=os.environ.get("COURSE_MODELS") != "0",
         course_build_all=os.environ.get("COURSE_BUILD_ALL") == "1",
         course_polish=os.environ.get("COURSE_POLISH") != "0",
     )

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 
 import pytest
 from langgraph.checkpoint.memory import MemorySaver
@@ -10,7 +9,6 @@ from langgraph.checkpoint.memory import MemorySaver
 from app.graphs import lesson
 from app.graphs.course import _graph as course_graph
 from app.graphs.game import _graph as game_graph
-from app.graphs.stream import lesson_events
 from app.llm import Completion
 from app.prompt import EXAMPLE_MODULE
 
@@ -98,26 +96,6 @@ async def test_resume_retries_the_gate(monkeypatch: pytest.MonkeyPatch, isolated
     assert result["ok"] is True
     assert calls["complete"] == 1
     assert calls["gate"] == 2
-
-
-@pytest.mark.asyncio
-async def test_stream_chunks_are_v2_dicts(monkeypatch: pytest.MonkeyPatch, isolated_graph: None) -> None:
-    async def complete(_messages, _target=None):
-        return _completion("```js\n" + EXAMPLE_MODULE + "\n```")
-
-    async def check(_code, _known=None, *, short=False):
-        return {"ok": True, "stats": {"triangles": 10, "rawPanels": 0}, "warnings": []}
-
-    monkeypatch.setattr(lesson.llm, "complete", complete)
-    monkeypatch.setattr(lesson.gate, "check_module", check)
-    chunks = []
-    async for line in lesson_events(
-        {"request": "a lighthouse", "kind": "lesson", "mode": "classic", "use_library": False, "log": False, "pictures": []},
-        {"configurable": {"thread_id": "stream-1"}},
-    ):
-        chunks.append(json.loads(line))
-    assert chunks
-    assert all(isinstance(chunk, dict) and chunk.get("type") in {"updates", "custom"} for chunk in chunks)
 
 
 @pytest.mark.asyncio

@@ -1,4 +1,4 @@
-"""SQLite courses, lessons, games and course models. Same schema as the removed TypeScript server's db.ts."""
+"""SQLite courses, lessons and games. Same schema as the removed TypeScript server's db.ts."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from app.clock import now_iso
 from app.config import config
 
 SCHEMA = """
@@ -39,15 +38,6 @@ CREATE TABLE IF NOT EXISTS lessons (
   critique TEXT,
   PRIMARY KEY (course_id, idx)
 );
-CREATE TABLE IF NOT EXISTS models (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  describe TEXT NOT NULL DEFAULT '',
-  parts TEXT NOT NULL DEFAULT '[]',
-  seconds INTEGER,
-  created_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS models_name ON models(name);
 CREATE TABLE IF NOT EXISTS games (
   id TEXT PRIMARY KEY,
   request TEXT NOT NULL,
@@ -168,33 +158,6 @@ def save_course(course: dict[str, Any]) -> None:
 def count_courses() -> int:
     row = open_db().execute("SELECT COUNT(*) AS n FROM courses").fetchone()
     return int(row["n"])
-
-
-def save_model(model: dict[str, Any]) -> None:
-    now = now_iso()
-    open_db().execute(
-        """INSERT INTO models (id, name, describe, parts, seconds, created_at) VALUES (?, ?, ?, ?, ?, ?)
-           ON CONFLICT(id) DO UPDATE SET name = excluded.name, describe = excluded.describe, parts = excluded.parts,
-             seconds = COALESCE(excluded.seconds, seconds)""",
-        (
-            model["id"], str(model["name"]).lower(), model.get("describe") or "",
-            json.dumps(model.get("parts") or []), model.get("seconds"), now,
-        ),
-    )
-
-
-def saved_models() -> list[dict[str, Any]]:
-    rows = []
-    for row in open_db().execute("SELECT * FROM models ORDER BY created_at"):
-        rows.append({
-            "id": row["id"],
-            "name": row["name"],
-            "describe": row["describe"],
-            "parts": json.loads(row["parts"]),
-            "seconds": row["seconds"],
-            "createdAt": row["created_at"],
-        })
-    return rows
 
 
 def load_games() -> list[dict[str, Any]]:

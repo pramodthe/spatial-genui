@@ -36,7 +36,7 @@ export type TutorEvents = {
 const FUNCTIONS = [
   {
     name: 'create_course',
-    description: 'Plan a new hands-on course about a subject the learner asks for. Its lessons are written in the background over a few minutes; a course about one physical object first gets its own 3D model, which takes about 20 minutes.',
+    description: 'Plan a new hands-on course about a subject the learner asks for. Its lessons are written in the background over a few minutes.',
     parameters: { type: 'object', properties: { subject: { type: 'string', description: 'What the course is about, in a few words, e.g. "how a jet engine works"' } }, required: ['subject'] },
   },
   {

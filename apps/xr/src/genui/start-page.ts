@@ -388,7 +388,7 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
       [courses, games] = await Promise.all([listCourses(), listGames()]);
       renderCourses();
       renderGames();
-      const active = courses.some((c) => c.status === 'planning' || c.model?.status === 'building' || c.lessons.some((l) => l.status === 'generating'))
+      const active = courses.some((c) => c.status === 'planning' || c.lessons.some((l) => l.status === 'generating'))
         || games.some((g) => g.status === 'writing');
       if (active) wait = 4000;
     } catch {

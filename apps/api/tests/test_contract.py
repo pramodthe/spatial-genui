@@ -56,7 +56,6 @@ def test_health_catalog_example_and_errors() -> None:
 
         assert client.get("/api/courses").json() == {"courses": []}
         assert client.get("/api/games").json() == {"games": []}
-        assert client.get("/api/assets/jobs").json() == {"jobs": []}
         assert client.get("/api/nope").json()["error"] == "Not found"
 
         size = client.post("/api/real-size", json={})

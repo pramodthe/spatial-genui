@@ -23,7 +23,6 @@ os.environ["MEDIA_API_KEY"] = ""
 os.environ["REAL_SIZE_CACHE"] = str(_ROOT / "sizes.json")
 os.environ["CHECKPOINT_DB"] = str(_ROOT / "langgraph.sqlite")
 os.environ["MODERATION"] = "off"
-os.environ["COURSE_MODELS"] = "0"
 os.environ["COURSE_POLISH"] = "0"
 
 # The app reads these variables when it is imported.

@@ -1,8 +1,7 @@
 """Lesson and game prompts. SYSTEM_PROMPT is the benchmark's published text.
 
-The long strings live in prompt_text.json, frozen from prompt.ts (now the benchmark harness's,
-apps/gate/src/prompt.ts); tests/test_prompts.py checks them against recorded fingerprints and against the
-harness live, so a change to the published prompt fails a test. GAME_SYSTEM_PROMPT is built from SYSTEM_PROMPT by the same passage swaps.
+The long strings live in prompt_text.json; tests/test_prompts.py checks them against recorded fingerprints, so a
+change to the published prompt fails a test. GAME_SYSTEM_PROMPT is built from SYSTEM_PROMPT by the same passage swaps.
 """
 
 from __future__ import annotations
@@ -25,10 +24,6 @@ def _example_module() -> str:
 EXAMPLE_MODULE = _example_module()
 SYSTEM_PROMPT: str = _TEXT["SYSTEM_PROMPT"]
 REVIEW_MESSAGE: str = _TEXT["REVIEW_MESSAGE"]
-A2UI_SYSTEM_PROMPT: str = _TEXT["A2UI_SYSTEM_PROMPT"]
-TEMPLATE_SYSTEM_PROMPT: str = _TEXT["TEMPLATE_SYSTEM_PROMPT"]
-PARALLEL_PLANNER_PROMPT: str = _TEXT["PLANNER_PROMPT"]
-BUILDER_SYSTEM: str = _TEXT["BUILDER_SYSTEM"]
 
 
 def repair_message(error: str) -> str:
@@ -36,14 +31,6 @@ def repair_message(error: str) -> str:
         "Your module failed the host checks:\n\n"
         f"{error}\n\n"
         "Fix the problem and reply with the complete corrected module in one ```js code block."
-    )
-
-
-def json_repair_message(error: str) -> str:
-    return (
-        "Your JSON failed the renderer's checks:\n\n"
-        f"{error}\n\n"
-        "Fix the problem and reply with the complete corrected JSON in one ```json code block."
     )
 
 
@@ -141,13 +128,3 @@ def game_system_prompt(system: str = SYSTEM_PROMPT) -> str:
 
 
 GAME_SYSTEM_PROMPT = game_system_prompt()
-
-
-def system_prompt_for(fmt: str) -> str:
-    if fmt in ("a2ui", "a2ui-parallel"):
-        return A2UI_SYSTEM_PROMPT
-    if fmt == "template":
-        return TEMPLATE_SYSTEM_PROMPT
-    if fmt == "code":
-        return SYSTEM_PROMPT
-    raise RuntimeError(f"Unknown format {fmt}")

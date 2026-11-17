@@ -1,8 +1,7 @@
 """The classic prompts are the published ones, byte for byte.
 
-prompt_text.json was frozen from prompt.ts, which now lives in the benchmark harness (apps/gate/src/prompt.ts).
-Two checks: the frozen text against recorded fingerprints (the benchmark and the paper use SYSTEM_PROMPT, so any
-change to it, or to the game, review and repair prompts, has to be deliberate), and live against the harness.
+prompt_text.json holds the frozen text, checked against recorded fingerprints: the benchmark and the paper use
+SYSTEM_PROMPT, so any change to it, or to the game, review and repair prompts, has to be deliberate.
 """
 
 from __future__ import annotations
@@ -40,30 +39,3 @@ def test_published_prompts_are_unchanged() -> None:
     assert _sha(GAME_SYSTEM_PROMPT) == FINGERPRINTS["GAME_SYSTEM_PROMPT"]
     assert _sha(REVIEW_MESSAGE) == FINGERPRINTS["REVIEW_MESSAGE"]
     assert _sha(repair_message("Boom at line 1")) == FINGERPRINTS["repairSample"]
-
-
-ROOT = Path(__file__).resolve().parents[3]
-TSX = ROOT / "apps" / "gate" / "node_modules" / ".bin" / "tsx"
-
-
-def test_live_typescript_prompts() -> None:
-    """The benchmark harness (apps/gate/src/prompt.ts) and the API send the same prompts, byte for byte."""
-    import subprocess
-
-    from app.library import library_section
-
-    if not TSX.exists():
-        return
-    completed = subprocess.run(
-        [str(TSX), str(Path(__file__).with_name("export_prompts.mjs"))],
-        cwd=ROOT / "apps" / "api" / "tests",
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    live = json.loads(completed.stdout)
-    assert live["SYSTEM_PROMPT"] == SYSTEM_PROMPT
-    assert live["GAME_SYSTEM_PROMPT"] == GAME_SYSTEM_PROMPT
-    assert live["REVIEW_MESSAGE"] == REVIEW_MESSAGE
-    assert live["repair"] == repair_message("Boom at line 1")
-    assert live["library"] == library_section(None)

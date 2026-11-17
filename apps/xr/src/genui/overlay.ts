@@ -23,8 +23,6 @@ export type LessonStatus = {
   since: number;
 };
 
-// Parallel generation (SPEC.md Phase 5): /?parallel=1 streams a lesson in part by part (/api/generate-stream).
-const PARALLEL = new URLSearchParams(location.search).has('parallel');
 
 // A runtime error this soon after mounting comes from loading the lesson (a panel element it never
 // created, a broken first frame), not from the learner using it: repair once without asking.
@@ -39,10 +37,8 @@ type GenerateResponse = {
   model?: string;
   stats?: Record<string, unknown>;
   /** Models being fetched or generated in the background for this lesson (the server's on-demand path). */
-  pendingAssets?: { jobId: string; name: string }[];
 };
 
-type AssetJob = { id: string; name: string; status: 'queued' | 'running' | 'done' | 'failed'; events: { message: string }[]; assetId?: string; error?: string };
 
 type GenUIState = {
   prompt: string | null;
@@ -56,7 +52,6 @@ type GenUIState = {
   runtimeErrors: string[];
   busy: boolean;
   /** Background model jobs for the current lesson, as last polled. */
-  assetJobs: AssetJob[];
   /** performance.now() when the current lesson mounted. */
   mountedAt: number;
   /** The current lesson has had its one automatic repair. */
@@ -72,7 +67,6 @@ const state: GenUIState = {
   lastMount: null,
   runtimeErrors: [],
   busy: false,
-  assetJobs: [],
   mountedAt: 0,
   autoRepaired: false,
 };
@@ -105,11 +99,8 @@ function setPhase(phase: LessonStatus['phase'], message = '', keepSince = false)
 }
 
 let statusEl: HTMLDivElement;
-let assetsEl: HTMLDivElement;
 let codeEl: HTMLPreElement;
 let repairButton: HTMLButtonElement;
-let rebuildButton: HTMLButtonElement;
-let assetWatch = 0;
 
 /** The developer prompt box: write any lesson live, repair, see the code. Returns it for the start page to hold. */
 export function createOverlay(): HTMLElement {
@@ -126,21 +117,17 @@ export function createOverlay(): HTMLElement {
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button data-action="generate">Generate</button>
       <button data-action="repair" hidden>Repair runtime error</button>
-      <button data-action="rebuild" hidden>Rebuild with the accurate model</button>
       <button data-action="clear">Clear</button>
       <button data-action="code">Show code</button>
     </div>
     <div data-role="status" style="white-space:pre-wrap;color:#b8bec8"></div>
-    <div data-role="assets" style="white-space:pre-wrap;color:#9fd3a8"></div>
     <pre data-role="code" hidden style="max-height:40vh;overflow:auto;margin:0;font:12px/1.4 ui-monospace,monospace;background:#0f1114;padding:8px;border-radius:8px"></pre>`;
   for (const button of root.querySelectorAll('button')) button.className = 'sp-btn sp-secondary';
   root.querySelector('[data-action="generate"]')!.className = 'sp-btn sp-primary';
-  for (const pre of root.querySelectorAll<HTMLElement>('[data-role="status"], [data-role="assets"]')) pre.style.color = 'rgba(255, 255, 255, 0.7)';
+  for (const pre of root.querySelectorAll<HTMLElement>('[data-role="status"]')) pre.style.color = 'rgba(255, 255, 255, 0.7)';
 
   const input = root.querySelector('textarea')!;
   statusEl = root.querySelector('[data-role="status"]')!;
-  assetsEl = root.querySelector('[data-role="assets"]')!;
-  rebuildButton = root.querySelector('[data-action="rebuild"]')!;
   codeEl = root.querySelector('[data-role="code"]')!;
   repairButton = root.querySelector('[data-action="repair"]')!;
 
@@ -153,7 +140,6 @@ export function createOverlay(): HTMLElement {
     const action = (event.target as HTMLElement).dataset.action;
     if (action === 'generate') void generate(input.value);
     if (action === 'repair') void repair();
-    if (action === 'rebuild') void rebuild();
     if (action === 'clear') clear();
     if (action === 'code') codeEl.hidden = !codeEl.hidden;
   });
@@ -174,13 +160,11 @@ export function createOverlay(): HTMLElement {
   // Scriptable entry point for automated tests (CLI/Playwright) and the benchmark harness.
   (window as unknown as { genui: unknown }).genui = {
     generate,
-    generateParallel: (prompt: string) => generateStream(prompt),
     startLesson,
     openWritten,
     watchLive,
     lessonStatus: () => lessonStatus,
     repair,
-    rebuild,
     mount,
     clear,
     state,
@@ -238,7 +222,6 @@ export async function generate(prompt: string, extra: { previousCode?: string; c
   if (!prompt || state.busy) return state;
   liveWatch++; // a live lesson replaces the one being watched
   streaming = false; // the superseded watch leaves the flag to whoever runs now
-  if (PARALLEL && !extra.previousCode) return generateStream(prompt);
   state.busy = true;
   repairPending = false;
   if (!extra.previousCode) state.autoRepaired = false; // a new lesson gets its own automatic repair
@@ -249,7 +232,6 @@ export async function generate(prompt: string, extra: { previousCode?: string; c
   }
   state.prompt = prompt;
   repairButton.hidden = true;
-  stopWatchingAssets();
   setStatus('Generating…');
   setPhase(extra.previousCode ? 'fixing' : 'building');
   try {
@@ -275,7 +257,6 @@ export async function generate(prompt: string, extra: { previousCode?: string; c
           (state.lastMount.credits.length ? `\n${state.lastMount.credits.join('\n')}` : ''),
       );
     }
-    if (data.pendingAssets?.length) watchAssets(data.pendingAssets);
   } catch (err) {
     setStatus(`Request failed: ${(err as Error).message}`);
     setPhase('failed', (err as Error).message);
@@ -287,89 +268,6 @@ export async function generate(prompt: string, extra: { previousCode?: string; c
 
 /** True while a parallel lesson streams in (its partial mounts don't dock the picker or trigger repairs). */
 let streaming = false;
-
-/**
- * Parallel generation: placeholders as soon as the plan exists, then each part as it is ready. Every event
- * carries the whole lesson so far, so each one is a plain remount.
- */
-async function generateStream(prompt: string) {
-  prompt = prompt.trim();
-  if (!prompt || state.busy) return state;
-  state.busy = true;
-  streaming = true;
-  repairPending = false;
-  state.autoRepaired = false;
-  state.prompt = prompt;
-  state.kind = 'lesson';
-  state.mode = null;
-  repairButton.hidden = true;
-  stopWatchingAssets();
-  setStatus('Planning…');
-  setPhase('building', 'planning');
-  try {
-    const res = await fetch('/api/generate-stream', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ prompt }),
-    });
-    if (!res.ok || !res.body) throw new Error(res.statusText || `HTTP ${res.status}`);
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffered = '';
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffered += decoder.decode(value, { stream: true });
-      for (let nl = buffered.indexOf('\n'); nl >= 0; nl = buffered.indexOf('\n')) {
-        const line = buffered.slice(0, nl).trim();
-        buffered = buffered.slice(nl + 1);
-        if (line) await onStreamEvent(JSON.parse(line));
-      }
-    }
-  } catch (err) {
-    setStatus(`Request failed: ${(err as Error).message}`);
-    setPhase('failed', (err as Error).message);
-  } finally {
-    streaming = false;
-    state.busy = false;
-  }
-  return state;
-}
-
-type StreamEvent =
-  | { type: 'PLAN_READY'; ms: number; code: string; plan: { parts: { id: string }[] } }
-  | { type: 'COMPONENT_READY'; ms: number; code: string; ready: number; total: number; partId: string }
-  | { type: 'COMPONENT_FAILED'; ms: number; partId: string; error: string }
-  | { type: 'RESULT'; result: GenerateResponse & { timings?: { planMs: number; firstPartMs: number | null; totalMs: number } } }
-  | { type: string };
-
-async function onStreamEvent(event: StreamEvent) {
-  if (event.type === 'PLAN_READY' && 'plan' in event) {
-    await mountPartial(event.code);
-    setPhase('building', `0 of ${event.plan.parts.length} parts`, true);
-    setStatus(`Plan ready in ${(event.ms / 1000).toFixed(1)} s: ${event.plan.parts.map((p) => p.id).join(', ')}`);
-  } else if (event.type === 'COMPONENT_READY' && 'ready' in event) {
-    await mountPartial(event.code);
-    setPhase('building', `${event.ready} of ${event.total} parts`, true);
-    setStatus(`${event.partId} ready at ${(event.ms / 1000).toFixed(1)} s (${event.ready} of ${event.total})`);
-  } else if (event.type === 'COMPONENT_FAILED' && 'error' in event) {
-    setStatus(`${event.partId} failed: ${event.error}`);
-  } else if (event.type === 'RESULT' && 'result' in event) {
-    const result = event.result;
-    state.lastResponse = result;
-    if (!result.ok || !result.code) {
-      setStatus(`Generation failed: ${result.error ?? 'unknown error'}`);
-      setPhase('failed', result.error ?? 'unknown error');
-      return;
-    }
-    streaming = false; // the finished lesson is a normal lesson (picker docks, repairs apply)
-    await mount(result.code);
-    const t = result.timings;
-    if (state.lastMount?.ok && t) {
-      setStatus(`Done in ${(t.totalMs / 1000).toFixed(1)} s (plan ${(t.planMs / 1000).toFixed(1)} s, first part ${((t.firstPartMs ?? 0) / 1000).toFixed(1)} s) with ${result.model}.`);
-    }
-  }
-}
 
 /** Mount a lesson that is still streaming in: no picker docking, no repair. */
 async function mountPartial(code: string, preview = false) {
@@ -394,7 +292,7 @@ export type LiveOutcome = { code?: string; failed?: string } | null;
  * Watch a course lesson or a game while the server writes it (GET /api/live/<key>, the server's live.py): the
  * status line follows what the writer is doing, and every gate-checked snapshot of the scene so far is mounted
  * on the desk, its new parts growing in. When the shelf has the code (`outcome`) it opens as usual. Before the
- * writer starts (a lesson waiting for its course's 3D model) there is nothing to show yet, so it waits.
+ * writer starts (a lesson still queued) there is nothing to show yet, so it waits.
  */
 export async function watchLive(key: string, prompt: string, kind: LessonKind, outcome: () => Promise<LiveOutcome>) {
   if (state.busy) return state;
@@ -404,7 +302,6 @@ export async function watchLive(key: string, prompt: string, kind: LessonKind, o
   state.mode = null;
   state.autoRepaired = false;
   repairPending = false;
-  stopWatchingAssets();
   streaming = true;
   setStatus('Watching it being written…');
   setPhase('building', 'starting');
@@ -478,7 +375,6 @@ export async function startLesson(prompt: string) {
     state.mode = null;
     state.autoRepaired = false;
     repairPending = false;
-    stopWatchingAssets();
     await mount(saved.code);
     if (state.lastMount?.ok) {
       setStatus(`Ready-made lesson (written by ${saved.model}, ${saved.generatedAt.slice(0, 10)}).` +
@@ -500,7 +396,6 @@ export async function openWritten(code: string, prompt: string, kind: LessonKind
   state.kind = kind;
   state.autoRepaired = false;
   repairPending = false;
-  stopWatchingAssets();
   await mount(code);
   if (state.lastMount?.ok) setStatus(kind === 'game' ? 'A saved game.' : 'Lesson from a saved course.');
   return state;
@@ -544,45 +439,6 @@ async function lookUpRealSize(request: string, ticket: number) {
   }
 }
 
-/**
- * On-demand assets: the lesson was built from shapes because the library had no model of its subject;
- * the server is fetching or generating one. Show its progress and, when it is in the library, offer
- * to build the lesson again around it (never automatically: the learner may be mid-lesson).
- */
-function watchAssets(pending: { jobId: string; name: string }[]) {
-  const watch = ++assetWatch;
-  const poll = async () => {
-    if (watch !== assetWatch) return;
-    try {
-      state.assetJobs = await Promise.all(pending.map(async (p) => (await fetch(`/api/assets/jobs/${p.jobId}`)).json() as Promise<AssetJob>));
-    } catch {
-      setTimeout(poll, 5000); // the server may be restarting
-      return;
-    }
-    if (watch !== assetWatch) return;
-    assetsEl.textContent = state.assetJobs.map((job) =>
-      job.status === 'done' ? `An accurate model of ${job.name} is ready.`
-        : job.status === 'failed' ? `No accurate model of ${job.name}: ${job.error}`
-          : `Getting an accurate model of ${job.name}: ${job.events[job.events.length - 1]?.message ?? 'queued'}...`).join('\n');
-    const running = state.assetJobs.some((job) => job.status === 'queued' || job.status === 'running');
-    rebuildButton.hidden = running || !state.assetJobs.some((job) => job.status === 'done');
-    if (running) setTimeout(poll, 3000);
-  };
-  void poll();
-}
-
-function stopWatchingAssets() {
-  assetWatch++;
-  state.assetJobs = [];
-  assetsEl.textContent = '';
-  rebuildButton.hidden = true;
-}
-
-/** Build the current lesson again, now that the model it lacked is in the library. */
-async function rebuild() {
-  return state.prompt ? generate(state.prompt) : state;
-}
-
 export async function repair() {
   if (!state.prompt || !state.code || state.runtimeErrors.length === 0) return state;
   return generate(state.prompt, { previousCode: state.code, clientError: state.runtimeErrors.join('\n') });
@@ -595,7 +451,6 @@ function clear() {
   state.code = null;
   state.runtimeErrors = [];
   repairButton.hidden = true;
-  stopWatchingAssets();
   setStatus('');
   setPhase('idle');
 }

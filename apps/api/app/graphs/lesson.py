@@ -18,7 +18,7 @@ from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 from typing_extensions import TypedDict
 
-from app import assets, config as config_mod
+from app import config as config_mod
 from app import gate, library, live, llm, router
 from app.agents.coder import write_with_agent
 from app.llm import LlmTarget
@@ -50,7 +50,6 @@ class LessonState(TypedDict, total=False):
     client_error: str | None
     pictures: list[str]
     given_assets: list[str] | None
-    on_demand: bool
     use_library: bool
     log: bool
     messages: list[dict[str, Any]]
@@ -64,7 +63,6 @@ class LessonState(TypedDict, total=False):
     critique: str | None
     refused: bool
     route: dict[str, Any] | None
-    pending_assets: list[dict[str, str]] | None
     run_id: str
     # The plan's reference pictures for the coder (game.py PLAN_PICTURES), put in the sandbox as /work/plan/<name>.
     plan_pictures: list[dict[str, Any]] | None
@@ -139,18 +137,7 @@ def _system(state: LessonState) -> str:
 async def _route(state: LessonState) -> dict[str, Any] | None:
     if not state.get("use_library") or state.get("previous_code") or state.get("given_assets") is not None:
         return None
-    routed = await router.route_assets(state["request"], _target_from(state), want_objects=bool(state.get("on_demand")))
-    if state.get("on_demand") and routed.get("wanted"):
-        pending: list[dict[str, str]] = []
-        for wanted in routed["wanted"]:
-            job = assets.start_asset_job(wanted)
-            if job["status"] == "done" and job.get("assetId") and job["assetId"] in library.library_catalog():
-                routed["assets"].append(job["assetId"])
-            elif job["status"] != "failed":
-                pending.append({"jobId": job["id"], "name": job["name"]})
-        if pending:
-            routed = {**routed, "_pending": pending}
-    return routed
+    return await router.route_assets(state["request"], _target_from(state))
 
 
 def _base(state: LessonState, target: LlmTarget) -> LessonState:
@@ -168,10 +155,6 @@ def _base(state: LessonState, target: LlmTarget) -> LessonState:
 async def prepare(state: LessonState) -> dict[str, Any]:
     target = _target_from(state) if state.get("target") else llm.default_target()
     routed = await _route(state)
-    pending = None
-    if routed and routed.get("_pending"):
-        pending = routed["_pending"]
-        routed = {key: value for key, value in routed.items() if key != "_pending"}
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": _system({**state, "route": routed})},
         {"role": "user", "content": state["request"]},
@@ -179,10 +162,7 @@ async def prepare(state: LessonState) -> dict[str, Any]:
     if state.get("previous_code") and state.get("client_error"):
         messages.append({"role": "assistant", "content": "```js\n" + state["previous_code"] + "\n```"})
         messages.append({"role": "user", "content": repair_message(f"In the headset runtime: {state['client_error']}")})
-    update: dict[str, Any] = {**_base(state, target), "messages": messages, "route": routed}
-    if pending:
-        update["pending_assets"] = pending
-    return update
+    return {**_base(state, target), "messages": messages, "route": routed}
 
 
 async def look_and_fix(state: LessonState) -> dict[str, Any]:
@@ -367,8 +347,6 @@ def result_of(state: LessonState) -> dict[str, Any]:
         result["error"] = state["error"]
     if state.get("route") is not None:
         result["route"] = state["route"]
-    if state.get("pending_assets"):
-        result["pendingAssets"] = state["pending_assets"]
     if state.get("kept"):
         result["kept"] = True
     if state.get("critique"):
@@ -398,7 +376,6 @@ async def run_lesson(
     client_error: str | None = None,
     pictures: list[str] | None = None,
     assets: list[str] | None = None,
-    on_demand: bool = False,
     use_library: bool | None = None,
     log: bool = True,
     mode: str = "classic",
@@ -418,7 +395,6 @@ async def run_lesson(
         "client_error": client_error,
         "pictures": pictures or [],
         "given_assets": assets,
-        "on_demand": on_demand,
         "use_library": library_on,
         "log": log,
         "target": _public_target(chosen),
@@ -438,7 +414,6 @@ async def run_lesson(
         "critique": None,
         "refused": False,
         "route": None,
-        "pending_assets": None,
         "total_ms": 0,
     }
     graph = compiled()

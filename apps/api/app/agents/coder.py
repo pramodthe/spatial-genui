@@ -33,7 +33,7 @@ from app.agents.model_maker import model_maker_spec
 from app.config import REPO_ROOT
 from app.llm import agent_model, gpt_chat
 from app.state import CoderState, RunContext
-from app.tools.host import asset_job_status, library_lookup, real_size, start_asset_job
+from app.tools.host import library_lookup, real_size
 from app.tools.media import SOUND_TOOLS
 from sandbox.image import coder_image
 
@@ -65,7 +65,7 @@ PLAYTEST = "/skills/play/playtest/scripts/playtest.mjs"
 _LESSON_SKILLS = ["kit", "panels", "learning-game", "dry-run"]
 _GAME_SKILLS = ["kit", "panels", "learning-game", "hand-play", "dry-run"]
 
-_HOST_TOOLS = [library_lookup, start_asset_job, asset_job_status, real_size]
+_HOST_TOOLS = [library_lookup, real_size]
 
 # The lesson graph and the coder share the durable saver. Set from app startup.
 _checkpointer: Any = None

@@ -1,4 +1,4 @@
-"""plan -> build the course model -> start the first lesson. Later lessons start when one is opened."""
+"""plan -> start the first lesson. Later lessons start when one is opened."""
 
 from __future__ import annotations
 
@@ -24,13 +24,6 @@ async def plan_node(state: CourseRun) -> dict[str, Any]:
     return {"status": course.get("status") or "failed"}
 
 
-async def build_model_node(state: CourseRun) -> dict[str, Any]:
-    course = courses.get_course(state["course_id"])
-    if course and (course.get("model") or {}).get("status") == "building":
-        await courses.build_model(course)
-    return {"status": (course or {}).get("status") or "failed"}
-
-
 async def write_lesson_node(state: CourseRun) -> dict[str, Any]:
     course = courses.get_course(state["course_id"])
     if course and course.get("status") == "building":
@@ -38,12 +31,10 @@ async def write_lesson_node(state: CourseRun) -> dict[str, Any]:
     return {"status": (course or {}).get("status") or "failed"}
 
 
-def _after_plan(state: CourseRun) -> Literal["build_model", "write_lesson", "done"]:
+def _after_plan(state: CourseRun) -> Literal["write_lesson", "done"]:
     course = courses.get_course(state["course_id"])
     if course is None or course.get("status") == "failed":
         return "done"
-    if (course.get("model") or {}).get("status") == "building":
-        return "build_model"
     return "write_lesson"
 
 
@@ -54,12 +45,10 @@ async def done_node(state: CourseRun) -> dict[str, Any]:
 def _graph():
     graph = StateGraph(CourseRun)
     graph.add_node("plan", plan_node)
-    graph.add_node("build_model", build_model_node)
     graph.add_node("write_lesson", write_lesson_node)
     graph.add_node("done", done_node)
     graph.add_edge(START, "plan")
     graph.add_conditional_edges("plan", _after_plan)
-    graph.add_edge("build_model", "write_lesson")
     graph.add_edge("write_lesson", END)
     graph.add_edge("done", END)
     return graph.compile(checkpointer=get_checkpointer())

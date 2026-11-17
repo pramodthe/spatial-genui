@@ -1,4 +1,4 @@
-"""Saved courses: plan, optional 3D model, lessons one at a time. Same rules as courses.ts."""
+"""Saved courses: a plan of 3 to 5 levels, then the lessons one at a time."""
 
 from __future__ import annotations
 
@@ -11,11 +11,10 @@ import uuid
 from typing import Any
 
 from app import config as config_mod
-from app import library, live, llm
-from app.a2ui.catalog import extract_json
+from app import live, llm
+from app.json_reply import extract_json
 from app.clock import now_iso
-from app.db import count_courses, load_courses, save_course, save_model, saved_models
-from app.assets import start_asset_job
+from app.db import count_courses, load_courses, save_course
 from app.clock import js_round
 from app.graphs.lesson import run_lesson
 from app.guard import record_spend
@@ -29,12 +28,10 @@ Plan 3 to 5 levels for the player's request:
 - Each level is simple enough to understand in five seconds: one main action with one hand (fold, throw, cut, pour, push, stack, steer), said in one sentence; no level adds extra controls, modes or bonus rules.
 - A request for a game with no subject still teaches: find the real idea under it (a racing game: speed, grip and turning; a tower game: centre of mass) and plan the levels on it, keeping it a game.
 - "prompt" is the full request for the agent that builds that level. It knows nothing else, so in 2 to 4 sentences name the idea, the goal in the player's words, what the hands do (the moves), and what the challenge measures.
-- "model": when the course is about ONE real physical object (a jet engine, a microscope, a guitar, a heart), describe it, and a realistic 3D model of its outside is built with separate parts. "name" is its everyday name (1 to 3 words), "describe" is one sentence on what it looks like from outside, "parts" are 4 to 7 outside parts a learner could take off and name. The lessons then use this model. Use null when the course is about a process, an idea or several things (the water cycle, photosynthesis, the solar system).
-- If the request comes with a list of models already made and one of them is this course's object, use it instead of describing a new one: "model": {"use": "<its id>"}. Then plan the lessons around the parts it has.
-- "style" is the look every lesson of the course is drawn in. When the request names one, use it. Otherwise pick the one that fits best, or null for plain realistic materials: "exploded-view" (what is inside an object and how it goes together), "paper-pop-up" (a story or process in a few steps), "ink-toon" (steps, recipes and how-tos with a few objects), "painted" (a process or story that happens in a place), "soft-clay" (friendly objects on a table: amounts, growth, comparison), "voxel" (a small model that builds up in stages), "low-poly" (cycles and journeys in a landscape), "circuit-city" (something travelling through a system, stage by stage). With a style, set "model" to null: the lessons build everything in the look.
+- "style" is the look every lesson of the course is drawn in. When the request names one, use it. Otherwise pick the one that fits best, or null for plain realistic materials: "exploded-view" (what is inside an object and how it goes together), "paper-pop-up" (a story or process in a few steps), "ink-toon" (steps, recipes and how-tos with a few objects), "painted" (a process or story that happens in a place), "soft-clay" (friendly objects on a table: amounts, growth, comparison), "voxel" (a small model that builds up in stages), "low-poly" (cycles and journeys in a landscape), "circuit-city" (something travelling through a system, stage by stage).
 
 Reply with only this JSON:
-{"title": "2 to 5 words", "subtitle": "one short line", "style": null, "model": {"name": "...", "describe": "...", "parts": ["..."]}, "lessons": [{"title": "2 to 4 words", "objective": "After this you can ...", "prompt": "..."}]}"""
+{"title": "2 to 5 words", "subtitle": "one short line", "style": null, "lessons": [{"title": "2 to 4 words", "objective": "After this you can ...", "prompt": "..."}]}"""
 
 STYLES = {
     "exploded-view": "Exploded view", "paper-pop-up": "Paper pop-up",
@@ -42,7 +39,6 @@ STYLES = {
     "low-poly": "Low-poly", "circuit-city": "Circuit city",
 }
 
-PLAIN_NAME = re.compile(r"^[\w '-]{2,40}$", re.ASCII)
 REMOVED_KIT = re.compile(r"\bkit\.(matchQuiz|flashcards)\b")
 MAX_COURSES = 200
 
@@ -87,17 +83,6 @@ def summary(course: dict[str, Any]) -> dict[str, Any]:
     return {**course, "lessons": lessons}
 
 
-def _remember(model: dict[str, Any] | None) -> None:
-    if model and model.get("status") == "ready" and model.get("assetId"):
-        save_model({
-            "id": model["assetId"],
-            "name": model["name"],
-            "describe": model.get("describe") or "",
-            "parts": model.get("built") or model.get("parts") or [],
-            "seconds": model.get("seconds"),
-        })
-
-
 def _import_legacy() -> None:
     folder = config_mod.config.courses_dir
     if not folder.exists():
@@ -106,7 +91,6 @@ def _import_legacy() -> None:
         try:
             course = json.loads(path.read_text(encoding="utf-8"))
             save_course(course)
-            _remember(course.get("model"))
         except Exception as exc:
             print(f"Skipping unreadable course file {path.name}: {exc}")
 
@@ -139,10 +123,7 @@ def load() -> None:
         elif planning:
             save_course(course)
         _courses[course["id"]] = course
-        if (course.get("model") or {}).get("status") == "building":
-            _spawn(build_model(course))
-        else:
-            for index in resume_at:
+        for index in resume_at:
                 if index < len(course["lessons"]):
                     queue(course, index)
 
@@ -224,33 +205,11 @@ def _chain(coro: Any) -> None:
     _tail = track(asyncio.create_task(run()))
 
 
-def _models_made() -> list[dict[str, Any]]:
-    catalog = library.library_catalog()
-    return [model for model in saved_models() if model["id"] in catalog]
-
-
-def _wanted_model(model: Any) -> dict[str, Any] | None:
-    if not isinstance(model, dict):
-        return None
-    name = model.get("name")
-    describe = model.get("describe")
-    if not isinstance(name, str) or not PLAIN_NAME.fullmatch(name.strip()) or not isinstance(describe, str) or not describe.strip():
-        return None
-    parts = [str(part).strip().lower() for part in (model.get("parts") or [])]
-    parts = [part for part in parts if PLAIN_NAME.fullmatch(part)][:8]
-    return {"name": name.strip().lower(), "describe": describe.strip()[:300], "parts": parts}
-
-
 async def plan(course: dict[str, Any]) -> None:
     try:
         target = _planner_target()
-        made = _models_made() if config_mod.config.course_models else []
-        have = ""
-        if made:
-            lines = "\n".join(f"- {item['id']}: {item['name']} (parts: {', '.join(item['parts'])})" for item in made)
-            have = f"\n\nModels already made:\n{lines}"
         reply = await llm.complete(
-            [{"role": "system", "content": PLANNER_PROMPT}, {"role": "user", "content": course["request"] + have}],
+            [{"role": "system", "content": PLANNER_PROMPT}, {"role": "user", "content": course["request"]}],
             target,
         )
         await record_spend([{"model": target.id, "promptTokens": reply.prompt_tokens, "completionTokens": reply.completion_tokens}])
@@ -293,19 +252,6 @@ async def plan(course: dict[str, Any]) -> None:
                 "status": "pending",
             })
         course["status"] = "building"
-        reused = None
-        use = (outline or {}).get("model") if isinstance((outline or {}).get("model"), dict) else None
-        use_id = use.get("use") if isinstance(use, dict) else None
-        if config_mod.config.course_models:
-            reused = next((item for item in made if item["id"] == use_id), None)
-        wanted = _wanted_model(outline.get("model") if outline else None) if config_mod.config.course_models and not reused and not look else None
-        if reused:
-            course["model"] = {
-                "name": reused["name"], "describe": reused["describe"], "parts": reused["parts"],
-                "status": "ready", "assetId": reused["id"], "built": reused["parts"],
-            }
-        elif wanted:
-            course["model"] = {**wanted, "status": "building", "stage": "Waiting to start"}
         save_course(course)
     except Exception as exc:
         course["status"] = "failed"
@@ -321,51 +267,12 @@ def queue_first(course: dict[str, Any]) -> None:
             queue(course, index)
 
 
-async def build_model(course: dict[str, Any]) -> None:
-    model = course["model"]
-    started = time.time() * 1000
-    job = start_asset_job(
-        {"name": model["name"], "describe": model["describe"], "parts": model.get("parts") or []},
-        {"search": False, "parts": "blender"},
-    )
-    while job["status"] in {"queued", "running"}:
-        events = job.get("events") or []
-        model["stage"] = events[-1]["message"] if events else "Waiting to start"
-        await asyncio.sleep(2)
-    model.pop("stage", None)
-    if job["status"] == "done" and job.get("assetId"):
-        model.update(status="ready", assetId=job["assetId"], built=job.get("parts") or [])
-    else:
-        model.update(status="failed", error=str(job.get("error") or "no model")[:300])
-    model["seconds"] = js_round((time.time() * 1000 - started) / 1000)
-    save_course(course)
-    _remember(model)
-    queue_first(course)
-
-
-def _model_for(course: dict[str, Any]) -> dict[str, Any]:
-    model = course.get("model") or {}
-    if model.get("status") != "ready" or not model.get("assetId"):
-        return {"note": "", "assets": None}
-    parts = ", ".join(model.get("built") or [])
-    return {
-        "note": (
-            f"\nA realistic 3D model of the {model['name']} was made for this course ('{model['assetId']}', "
-            f"with separate parts: {parts}). Use it whenever the lesson shows the {model['name']} from outside, "
-            "so that every lesson of the course shows the same object."
-        ),
-        "assets": [model["assetId"]],
-    }
-
-
 def queue(course: dict[str, Any], index: int, retry: bool = False) -> None:
     lessons = course.get("lessons") or []
     if index < 0 or index >= len(lessons):
         return
     lesson = lessons[index]
     if not (lesson.get("status") == "pending" or (retry and lesson.get("status") == "failed")):
-        return
-    if (course.get("model") or {}).get("status") == "building":
         return
     lesson["status"] = "generating"
     lesson.pop("error", None)
@@ -375,7 +282,6 @@ def queue(course: dict[str, Any], index: int, retry: bool = False) -> None:
 async def build_lesson(course: dict[str, Any], lesson: dict[str, Any]) -> None:
     started = time.time() * 1000
     try:
-        given = _model_for(course)
         index = course["lessons"].index(lesson)
         # Every level is a learning game, which needs the skills only the agent writer has (sandbox, scripts).
         # LESSON_MODE=classic sends unstyled lessons to the one-call writer instead (faster, no skills).
@@ -383,9 +289,7 @@ async def build_lesson(course: dict[str, Any], lesson: dict[str, Any]) -> None:
         mode = "classic" if os.environ.get("LESSON_MODE") == "classic" and not styled else "agent"
         with live.watching(live.lesson_key(course["id"], index)):
             result = await run_lesson(
-                lesson["prompt"] + given["note"],
-                on_demand=False,
-                assets=given["assets"],
+                lesson["prompt"],
                 thread_id=f"{course['id']}:lesson:{index}",
                 mode=mode,
             )
@@ -427,13 +331,10 @@ def polish_lesson(course: dict[str, Any], index: int, pictures: list[str]) -> bo
 
     async def run() -> None:
         try:
-            given = _model_for(course)
             result = await run_lesson(
-                lesson["prompt"] + given["note"],
+                lesson["prompt"],
                 previous_code=lesson.get("code"),
                 pictures=pictures,
-                on_demand=False,
-                assets=given["assets"],
                 thread_id=f"{course['id']}:polish:{index}",
             )
             await record_spend([
@@ -460,5 +361,5 @@ def polish_lesson(course: dict[str, Any], index: int, pictures: list[str]) -> bo
 
 
 def resume_pending() -> None:
-    """Lessons a restart put back to pending, and model builds, are already re-queued by load()."""
+    """Lessons a restart put back to pending are already re-queued by load()."""
     load()

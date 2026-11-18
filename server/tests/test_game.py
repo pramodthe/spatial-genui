@@ -82,9 +82,14 @@ def test_plan_pictures_are_drawn_for_the_coder(monkeypatch, tmp_path) -> None:
     assert "/work/plan/first-view.png" in task and "/work/plan/hero.png" in task and "low-poly" in task
     assert "Never show these pictures in the game" in task
     assert [path for path, _ in coder._picture_files({"plan_pictures": pictures})] == ["/work/plan/first-view.png", "/work/plan/hero.png"]
+    # Each picture is kept in the run's Studio record, and its timeline step shows it.
+    run = studio.read_run(handed["run_id"])
+    assert {"plan/first-view.png", "plan/hero.png"} <= set(run["files"])
+    shown = [e for e in run["events"] if e["what"] == "plan picture"]
+    assert [e["file"] for e in shown] == ["plan/first-view.png", "plan/hero.png"] and "low-poly" in shown[0]["detail"]
 
 
-def test_plan_pictures_are_on_by_default_and_can_be_turned_off(monkeypatch) -> None:
+def test_plan_pictures_are_on_by_default_and_can_be_turned_off(monkeypatch, capsys) -> None:
     from app.services import media
 
     monkeypatch.setattr(media, "enabled", lambda: True)
@@ -92,6 +97,9 @@ def test_plan_pictures_are_on_by_default_and_can_be_turned_off(monkeypatch) -> N
     assert design.pictures_enabled()
     monkeypatch.setenv("PLAN_PICTURES", "0")
     assert not design.pictures_enabled()
+    assert capsys.readouterr().out == ""  # turned off on purpose: nothing to say
     monkeypatch.delenv("PLAN_PICTURES", raising=False)
     monkeypatch.setattr(media, "enabled", lambda: False)
     assert not design.pictures_enabled()
+    # On, but no provider: one line says why there are none.
+    assert capsys.readouterr().out.strip() == "Plan pictures skipped: MEDIA_BASE_URL or MEDIA_API_KEY is not set."

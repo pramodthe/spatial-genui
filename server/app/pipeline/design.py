@@ -72,8 +72,14 @@ def brief(request: str, design: dict[str, Any] | None) -> str:
 
 def pictures_enabled() -> bool:
     """The plan's reference pictures (needs the media provider). Side by side (Nov 17, four games) the games built
-    from them followed their plan and came out cleaner in three; PLAN_PICTURES=0 turns them off."""
-    return os.environ.get("PLAN_PICTURES", "1") != "0" and media.enabled()
+    from them followed their plan and came out cleaner in three; PLAN_PICTURES=0 turns them off. Pictures that are
+    on but have no provider are skipped with one line in the server log, so a missing key is not silent."""
+    if os.environ.get("PLAN_PICTURES", "1") == "0":
+        return False
+    if not media.enabled():
+        print("Plan pictures skipped: MEDIA_BASE_URL or MEDIA_API_KEY is not set.")
+        return False
+    return True
 
 
 async def plan_pictures(request: str, design: dict[str, Any], run_id: str, studio: StudioRun | None) -> list[dict[str, Any]] | None:
@@ -107,6 +113,13 @@ async def plan_pictures(request: str, design: dict[str, Any], run_id: str, studi
         return {"name": name, "id": record["id"], "file": record["file"], "prompt": prompt, "look": look}
 
     drawn = [p for p in await asyncio.gather(*(draw(n, t) for n, t in prompts.items())) if p]
-    if studio is not None and drawn:
-        studio.event("designer", "plan pictures", f"{look}: " + ", ".join(p["name"] for p in drawn))
+    if studio is not None:
+        # Each picture kept in the run's record, so the Studio's timeline shows it (as the final view is).
+        for picture in drawn:
+            found = media.file_of(picture["id"])
+            if not found:
+                continue
+            name = f"plan/{picture['name']}{found[0].suffix}"
+            studio.save(name, found[0].read_bytes())
+            studio.event("designer", "plan picture", f"{look}: {picture['name']}: {picture['prompt']}", file=name)
     return drawn or None

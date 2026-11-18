@@ -104,9 +104,26 @@ def _price_of(model_id: str) -> dict[str, Any] | None:
     return _prices[model_id]
 
 
+def attempt_calls(result: dict[str, Any]) -> list[dict[str, Any]]:
+    """What a lesson or game run's attempts cost, for record_spend: an agent attempt by the dollars its cost meters
+    counted (`costUsd`: cached input at its cached price, the grader and the model-maker included), a one-call
+    attempt by its tokens."""
+    model = result.get("model")
+    if not model:
+        return []
+    return [
+        {"model": model, "usd": float(attempt["costUsd"])} if attempt.get("costUsd") is not None else
+        {"model": model, "promptTokens": attempt.get("promptTokens") or 0, "completionTokens": attempt.get("completionTokens") or 0}
+        for attempt in result.get("attempts") or []
+    ]
+
+
 async def record_spend(calls: list[dict[str, Any]]) -> None:
     usd = 0.0
     for call in calls:
+        if call.get("usd") is not None:
+            usd += float(call["usd"])  # already priced by a cost meter
+            continue
         entry = _price_of(str(call["model"]))
         price_in = 3 if entry is None or entry.get("priceIn") is None else entry["priceIn"]
         price_out = 15 if entry is None or entry.get("priceOut") is None else entry["priceOut"]

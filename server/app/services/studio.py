@@ -35,13 +35,20 @@ def run_dir(run_id: str) -> Path | None:
 # Card pictures for the start page and the headset dashboard: each game's and course level's final view, by name.
 PICTURES = Path(os.environ.get("PICTURES_DIR") or REPO_ROOT / "server" / "data" / "pictures")
 PICTURE_NAME = re.compile(r"^[a-z0-9-]{1,60}$")
+# Card pictures asked for before their run's final view was taken, by run: the coder takes the final view after it has
+# returned the module (coder/agent.py), so a game or level is often saved first. Kept when the view lands.
+_waiting: dict[str, list[str]] = {}
 
 
 def keep_picture(name: str, run_id: str | None) -> bool:
-    """Keep the run's final view (the finished game as it opens) as the picture of what it made. True when kept."""
+    """Keep the run's final view (the finished game as it opens) as the picture of what it made. True when kept now;
+    a final view still being taken is kept when it lands (StudioRun.keep_final_view)."""
     folder = run_dir(run_id) if run_id else None
     source = folder / "files" / "final-view.png" if folder is not None else None
-    if source is None or not source.is_file() or not PICTURE_NAME.fullmatch(name):
+    if source is None or not PICTURE_NAME.fullmatch(name):
+        return False
+    if not source.is_file():
+        _waiting.setdefault(str(run_id), []).append(name)
         return False
     try:
         PICTURES.mkdir(parents=True, exist_ok=True)
@@ -108,6 +115,14 @@ class StudioRun:
         path.write_bytes(data)
         self._sizes[name] = len(data)
         return True
+
+    def keep_final_view(self, data: bytes) -> None:
+        """The finished game as it opens, kept as final-view.png, and as the card picture of every game or level that
+        asked for it before it was taken (keep_picture)."""
+        self.save("final-view.png", data)
+        self.event("play-test", "final view", "the game as it opens", file="final-view.png")
+        for name in _waiting.pop(self.run_id, []):
+            keep_picture(name, self.run_id)
 
     def saved(self, name: str) -> bytes | None:
         """A file the sync copied from the sandbox, if there is one."""

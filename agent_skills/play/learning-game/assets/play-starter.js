@@ -2,8 +2,8 @@
 // together and fills in __LOOK__). It runs as it is, with the look's demo pieces. Replace the demo, MOVES and
 // CHALLENGE; the game's name, pitch and colours come from IDENTITY and its sounds from SOUNDS (the parts above,
 // /work/parts; references/parts.md). Keep the shape: learn by doing (one hand action per move, each with its why),
-// then the same idea as a challenge with a measured result, stars and Try again. Nothing scores before Start;
-// nothing is allocated in update().
+// then the same idea as a challenge with a measured result, stars and Try again, then harder levels of the same
+// round. Nothing scores before Start; nothing is allocated in update().
 export default function build({ THREE, kit, traits, ui, isGrabbed, hands, sound }) {
   const root = new THREE.Group();
   // Desk or world (new-game.mjs --world; references/world.md). A world is built in the same desk units around the
@@ -41,9 +41,19 @@ export default function build({ THREE, kit, traits, ui, isGrabbed, hands, sound 
   ];
   // The challenge: the same idea, now measured. Stars by thresholds: [one star, two, three]. REPLACE.
   const CHALLENGE = { say: 'Touch every piece, fast.', label: 'seconds', stars: [20, 10, 5], lowerIsBetter: true };
+  // Levels: the same round again with one setting changed, a little harder each time (references/play.md). A round
+  // that earns a star opens the next level; Try again replays the same level. Each level names the one thing it
+  // changes; here it is the star thresholds. REPLACE with the game's own (a farther target, less time, a lighter
+  // load), keeping every level winnable.
+  const LEVELS = [
+    { name: 'Warm up', stars: CHALLENGE.stars },
+    { name: 'Quicker', stars: [15, 8, 4] },
+    { name: 'Fastest', stars: [12, 6, 3] },
+  ];
 
   let phase = 'learn'; // learn -> ready -> play -> done
   let move = 0;
+  let level = 0; // LEVELS[level] is being played
   let clock = 0;
   let shown = 0;
   let nudge = 0;
@@ -66,8 +76,10 @@ export default function build({ THREE, kit, traits, ui, isGrabbed, hands, sound 
       { progress: 0, label: `0 of ${MOVES.length}`, id: 'moves' },
       { stat: '-', label: CHALLENGE.label, id: 'result' },
       { stat: '-', label: 'best', id: 'best' },
+      { stat: `1 of ${LEVELS.length}`, label: 'level', id: 'level' },
       { buttons: [
         { label: 'Start', id: 'start', onPress() { start(); } },
+        { label: 'Next level', id: 'next', onPress() { nextLevel(); } },
         { label: 'Try again', id: 'again', onPress() { start(); } },
         { label: 'Show me', id: 'hint', onPress() { showMe(); } },
       ] },
@@ -75,6 +87,7 @@ export default function build({ THREE, kit, traits, ui, isGrabbed, hands, sound 
   });
   root.add(panel.object3D);
   panel.show('start', false);
+  panel.show('next', false);
   panel.show('again', false);
 
   // Rewards: stars over the game when a challenge ends, a burst and a pop when a move is done.
@@ -153,16 +166,27 @@ export default function build({ THREE, kit, traits, ui, isGrabbed, hands, sound 
     resultSign.visible = false;
     startButton.visible = false;
     pointer.userData.at(null);
-    panel.set('state', CHALLENGE.say, 'neutral');
+    panel.set('state', level > 0 ? `Level ${level + 1}, ${LEVELS[level].name}: ${CHALLENGE.say}` : CHALLENGE.say, 'neutral');
     panel.set('result', '0.0');
+    panel.set('level', `${level + 1} of ${LEVELS.length}`);
     panel.show('start', false);
+    panel.show('next', false);
     panel.show('again', false);
+  }
+  // A round that earned a star opens the next level: the same round with its one setting changed. Stars and best are
+  // per level.
+  function nextLevel() {
+    if (phase !== 'done' || !(lastStars > 0) || level >= LEVELS.length - 1) return;
+    level++;
+    best = null;
+    panel.set('best', '-');
+    start();
   }
   function finish() {
     phase = 'done';
     const result = clock;
     best = best === null ? result : CHALLENGE.lowerIsBetter ? Math.min(best, result) : Math.max(best, result);
-    const k = playStarsFor(result, CHALLENGE.stars, CHALLENGE.lowerIsBetter);
+    const k = playStarsFor(result, LEVELS[level].stars, CHALLENGE.lowerIsBetter);
     lastResult = result;
     lastStars = k;
     stars.userData.show(k);
@@ -181,7 +205,10 @@ export default function build({ THREE, kit, traits, ui, isGrabbed, hands, sound 
     pointer.userData.at(startButton);
     panel.set('result', result.toFixed(1));
     panel.set('best', best.toFixed(1));
-    panel.set('state', k === 3 ? 'Three stars!' : `${k} of 3 stars. Try again to beat ${best.toFixed(1)}.`, k >= 2 ? 'good' : 'neutral');
+    const more = k > 0 && level < LEVELS.length - 1;
+    const next = more ? ` Next level: ${LEVELS[level + 1].name}.` : k > 0 ? ' Every level done!' : '';
+    panel.set('state', `${k === 3 ? 'Three stars!' : `${k} of 3 stars. Try again to beat ${best.toFixed(1)}.`}${next}`, k >= 2 ? 'good' : 'neutral');
+    panel.show('next', more);
     panel.show('again', true);
   }
   function showMe() {
@@ -217,7 +244,9 @@ export default function build({ THREE, kit, traits, ui, isGrabbed, hands, sound 
     play: {
       learn: MOVES.map((m) => touchOf(m.target ?? 0)),
       challenge: targets.map((_, i) => touchOf(i)),
-      state: () => ({ phase, move, result: phase === 'done' ? lastResult : null, stars: phase === 'done' ? lastStars : null }),
+      // Next level is the panel button 'next'; the check plays level 1, then each level to the last.
+      levels: LEVELS.length,
+      state: () => ({ phase, move, result: phase === 'done' ? lastResult : null, stars: phase === 'done' ? lastStars : null, level: level + 1 }),
     },
     update(time, delta) {
       const dt = Math.min(delta, 0.05);

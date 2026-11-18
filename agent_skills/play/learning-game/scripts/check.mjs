@@ -101,11 +101,13 @@ let played = '';
 if (playCheck !== '0') {
   const strict = playCheck !== 'note';
   if (!s.play) add(strict ? fix : note, 'Play: build() returns no `play` block, so nothing can play the game through (references/play.md).');
+  else if (/\bconst LEVELS\s*=/.test(game) && !/\blevels\s*:/.test(game)) add(note, 'Play: the game has LEVELS but its play block has no `levels: LEVELS.length`, so the check plays level 1 only (references/play.md).');
   else {
     for (const f of s.play.findings ?? []) add(strict && f.level === 'fix' ? fix : note, `Play: ${f.text}`);
     const r = s.play.rounds ?? {};
     const round = (x) => (x?.phase === 'done' ? `${x.stars} star${x.stars === 1 ? '' : 's'} (result ${Number(x.result).toFixed(2)})` : 'no result');
     if (r.played) played = `played through: ${round(r.played)} as play.challenge plays it, ${round(r.slow)} at 30 frames a second, ${round(r.idle)} with no hand`;
+    if (r.played && r.levels?.length) played += `; levels: ${r.levels.map((x, i) => `${i + 1}: ${round(x)}`).join(', ')}`;
   }
 }
 for (const m of game.matchAll(/\bwhy:\s*(['"`])((?:(?!\1).)*)\1/g)) {

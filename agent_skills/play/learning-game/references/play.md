@@ -78,6 +78,29 @@ that plays it. Use the helper's places, which stay right wherever the game is pl
 | twist (`handTwist`) | `{ hold: knob, pinch: true, roll: 90, seconds: 1 }` |
 | cut (`handCut`) | `{ grab: knife, path: cut.path, seconds: 0.5 }` |
 
+## Levels
+
+A game has levels inside it: the same round again with one setting changed, a little harder each time. The starter
+keeps them in `LEVELS`:
+
+```js
+const LEVELS = [
+  { name: 'Follow the recipe', guides: true,  ovenC: 180 },
+  { name: 'From the card',     guides: false, ovenC: 180 },
+  { name: 'Fix the recipe',    guides: false, ovenC: 120 },
+];
+```
+
+- Each level changes one setting, and the round reads it from `LEVELS[level]`.
+- A round that earns at least one star shows the level and a Next level button (the panel button `next`); the next
+  level starts its round. Try again replays the same level. Stars and best are per level.
+- The play block says how many there are: `levels: LEVELS.length`. When Next level is not the panel button `next`,
+  name what the hand does: `next: { press: nextLever }`.
+- `state()` returns `level`, 1 for the first.
+- The check plays level 1, then Next level after each round, to the last, with the same `challenge`; a level the
+  challenge cannot win fails. When a later level needs other gestures (the target moved), make `challenge` a
+  function that reads the level.
+
 ## The round, Start and Try again
 
 - `learn` is for moves done before Start. When the moves are done inside the round (Start, then fold eight
@@ -98,7 +121,8 @@ that plays it. Use the helper's places, which stay right wherever the game is pl
   `phase === 'idle' ? 'ready' : phase === 'won' || phase === 'lost' ? 'done' : 'play'`;
 - `move`: how many moves are done so far;
 - `result`: the measured result of the round that just ended (a number), `null` at any other time;
-- `stars`: 0 to 3 for that round, `null` at any other time.
+- `stars`: 0 to 3 for that round, `null` at any other time;
+- `level`: the level being played, 1 for the first (with `levels` in the play block).
 
 In an ECS game these come from the Round entity: `phase: round.getValue(Round, 'phase')`.
 
@@ -113,6 +137,9 @@ In an ECS game these come from the Round entity: `phase: round.getValue(Round, '
 | The round did not end | 30 s after the last gesture the game is still in `play` | end the round by itself; or the gestures did nothing: check where each aims and the hand's pose |
 | What the gesture waits for (until) had not happened | the hold did not do its work | aim it where the tool's effect lands; give the pose the game reads |
 | Ended without a measured result | `result` is not a number or `stars` is not 0 to 3 | set both when the round ends |
+| Level N cannot earn a star | the challenge's gestures do not win that level | make the level's one change smaller, or let `challenge` (a function) play that level |
+| Next level did not open level N | the Next level button is missing, hidden, or does not add one to `level` | show it after a round with a star; it adds one and starts the round |
+| Try again on level N went to level M | Try again changed the level | Try again replays the same level |
 | Earned no star | the game did not answer its own best play | the gestures do not play it well, or the scoring is wrong |
 | Completed M of the game's N moves | a move in the round is never counted | count it when the hand has done it |
 | Did not fly | a thrown thing stopped where the hand let go | give it the hand's speed at release (how far the hand moved in the last frames, divided by the time) |

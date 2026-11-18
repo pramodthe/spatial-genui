@@ -9,7 +9,11 @@ import * as THREE from 'three';
  *
  * `play` is returned by build():
  *   { learn: [gesture], challenge: [gesture] | () => [gesture], start?: gesture, again?: gesture, moves?: number,
- *     state: () => ({ phase: 'learn' | 'ready' | 'play' | 'done', move, result, stars }) }
+ *     levels?: number, next?: gesture,
+ *     state: () => ({ phase: 'learn' | 'ready' | 'play' | 'done', move, result, stars, level }) }
+ * With levels (the same round, one setting changed each time), a round that earns a star opens the next level by
+ * `next` (the panel button 'next' when left out), Try again replays the same level, and every level must be winnable
+ * by the challenge's gestures: the play-through plays level 1, then each level to the last.
  * A gesture is one of
  *   { grab: place, to?: place, path?: [place], seconds?, throw?, keep?, until? }   pinch there, carry, let go
  *   { press: object }                                                      press a 3D button
@@ -29,13 +33,13 @@ import * as THREE from 'three';
 
 export type PlayFinding = { level: 'fix' | 'note'; rule: string; text: string };
 /** How a round ended: `move` is the highest count of moves seen in it, `seconds` the game time until it ended. */
-export type PlayRound = { phase: string; move: number; result: number | null; stars: number | null; seconds: number };
+export type PlayRound = { phase: string; move: number; result: number | null; stars: number | null; level: number | null; seconds: number };
 export type PlayReport = {
   ok: boolean;
   findings: PlayFinding[];
   /** The round as played at 72 Hz and at 30 Hz, the second round after Try again, the round after another Try again
    * with no hand, and the first round with no hand. */
-  rounds: { played?: PlayRound; slow?: PlayRound; again?: PlayRound; unplayed?: PlayRound; idle?: PlayRound };
+  rounds: { played?: PlayRound; slow?: PlayRound; again?: PlayRound; unplayed?: PlayRound; idle?: PlayRound; levels?: PlayRound[] };
   /** False when the computing budget ran out; `unchecked` then names the runs that were not finished. */
   complete: boolean;
   unchecked: string[];
@@ -83,7 +87,7 @@ const IDLE_ROUND_S = 45;
 const BUDGET_CPU_MS = 30_000; // computing time for the whole play-through (CPU time: a busy machine must not change the verdict)
 const RUN_WALL_MS = 60_000; // one run taking this long on the clock is a loop that never ends
 
-type State = { phase: string; move: number; result: number | null; stars: number | null };
+type State = { phase: string; move: number; result: number | null; stars: number | null; level: number | null };
 type Add = (level: PlayFinding['level'], rule: string, text: string) => void;
 
 /** The run cannot go on; its finding is already recorded. */
@@ -146,6 +150,8 @@ function shapeProblems(play: any): string[] {
     else problems.push(...gestureProblems(play.challenge, 'play.challenge'));
   }
   if (typeof play.state !== 'function') problems.push('play.state must be a function returning { phase, move, result, stars }.');
+  if ('levels' in play && !(Number.isInteger(play.levels) && play.levels >= 1)) problems.push('play.levels is how many levels the game has (LEVELS.length), a whole number from 1.');
+  if ('next' in play) problems.push(...gestureProblems([play.next], 'play.next'));
   for (const one of ['start', 'again']) if (play[one] !== undefined) problems.push(...gestureProblems([play[one]], `play.${one}`));
   if (play.moves !== undefined && !(Number.isInteger(play.moves) && play.moves >= 0)) problems.push('play.moves is how many moves the game counts (a whole number).');
   return problems;
@@ -211,6 +217,7 @@ class Player {
       move: Number.isFinite(Number(s.move)) ? Number(s.move) : 0,
       result: s.result == null ? null : Number(s.result),
       stars: s.stars == null ? null : Number(s.stars),
+      level: s.level == null || !Number.isFinite(Number(s.level)) ? null : Number(s.level),
     };
   }
 
@@ -588,6 +595,7 @@ function* learn(p: Player): Generator<void, void> {
 
 const startOf = (p: Player) => p.play.start ?? { button: 'start' };
 const againOf = (p: Player) => p.play.again ?? { button: 'again' };
+const nextOf = (p: Player) => p.play.next ?? { button: 'next' };
 
 function* start(p: Player, what = 'Start', rule = 'start'): Generator<void, void> {
   yield* p.perform(startOf(p), what, rule);
@@ -734,6 +742,52 @@ export function playThrough(make: () => PlayInstance, describeError: (err: unkno
   });
   if (failed() || !rounds.played || !measured(rounds.played)) return report();
   const played = rounds.played;
+
+  // Every level as a player meets them: level 1, then Next after each round that earns a star, to the last. Each level
+  // must be winnable by the challenge's gestures, and Try again stays on the level.
+  const levels = Number.isInteger(play.levels) ? play.levels : 1;
+  if (levels > 1) {
+    run(`the ${levels} levels`, FAST_HZ, function* (p) {
+      p.add = (level, _rule, text) => add(level, 'level', text);
+      yield* p.rest(0.5);
+      yield* learn(p);
+      yield* start(p);
+      const each: PlayRound[] = (rounds.levels = []);
+      for (let n = 1; n <= levels; n++) {
+        const at = p.state().level;
+        if (at !== n) {
+          p.add('fix', 'level', `play.state() gives level ${at} while level ${n} of ${levels} is played: state() returns level, 1 for the first, and Next level adds one.`);
+          throw new Abort();
+        }
+        const r = yield* round(p, ROUND_END_WAIT_S);
+        each.push(r);
+        if (!measured(r)) {
+          p.add('fix', 'level', `Level ${n} of ${levels} did not end with a measured result (phase '${r.phase}', result ${r.result}): every level's round ends with a result and stars.`);
+          throw new Abort();
+        }
+        if (r.stars === 0) {
+          p.add('fix', 'level', `Level ${n} of ${levels} cannot earn a star as play.challenge plays it (result ${r.result}): every level must be winnable. Make the level's one change smaller, or let play.challenge play that level (a function can read the level).`);
+          throw new Abort();
+        }
+        if (n === levels) break;
+        yield* p.perform(nextOf(p), `Next level after level ${n}`, 'level');
+        if (!(yield* p.until(() => p.state().level === n + 1, START_WAIT_S))) {
+          p.add('fix', 'level', `Next level after level ${n} did not open level ${n + 1}: ${START_WAIT_S} s later play.state() gives level ${p.state().level}. A round that earns a star shows a Next level button that adds one to the level.`);
+          throw new Abort();
+        }
+        if (p.state().phase === 'ready') yield* start(p, `Start on level ${n + 1}`, 'level');
+        else if (!(yield* p.until(() => p.state().phase === 'play', START_WAIT_S))) {
+          p.add('fix', 'level', `Level ${n + 1} did not begin a round after Next level: the game is in phase '${p.state().phase}'.`);
+          throw new Abort();
+        }
+      }
+      // Try again replays the same level.
+      yield* p.perform(againOf(p), `Try again on level ${levels}`, 'level');
+      yield* p.until(() => p.state().phase !== 'done', START_WAIT_S);
+      if (p.state().level !== levels) p.add('fix', 'level', `Try again on level ${levels} went to level ${p.state().level}: Try again replays the same level.`);
+    });
+    if (failed()) return report();
+  }
 
   // A first round with no hand at all does not win by waiting, and counts no move.
   run('a round with no hand', SLOW_HZ, function* (p) {

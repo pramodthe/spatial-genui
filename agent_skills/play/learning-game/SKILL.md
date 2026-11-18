@@ -18,7 +18,8 @@ why a dart flies.
 That is the loop every game here follows:
 
 > **a goal** -> **moves done by hand**, one at a time -> **the scene answers** at once -> **one line of why** ->
-> **a challenge** that measures the same idea -> **stars, best result, Try again**
+> **a challenge** that measures the same idea -> **stars, best result, Try again** -> **the next level**: the same
+> round with one setting changed
 
 Players are anyone from about 9 years old to adults. Write so a 10-year-old follows it and an adult does not feel
 talked down to: short, concrete, plain words, real numbers with units.
@@ -38,7 +39,10 @@ with six steps from catching to a Serve button. Nobody could tell how to play th
 - **The scene shows the first move.** Before the player tries, the hero does the move by itself once (the flap folds
   half way and back, a ghost swipe crosses the fruit) and the next thing to touch bounces; Show me plays it again.
 - **Depth comes from the idea, not from rules.** The challenge gets harder by asking for more of the same action
-  (a harder fraction, a longer throw), never by adding controls.
+  (a harder fraction, a longer throw), never by adding controls. That is what levels are: `LEVELS` in the starter,
+  three or more, each the same round with one setting changed (a farther target, less time, a heavier load). A round
+  that earns a star shows the level and a Next level button; Try again replays the same level; every level must be
+  winnable by the play block's challenge.
 
 ## Steps
 
@@ -67,7 +71,8 @@ with six steps from catching to a Serve button. Nobody could tell how to play th
    - the hero: the one thing the hands work on (the sheet, the boat, the bridge), big and in front;
    - 3 to 7 moves: the hand action, what the scene does in answer, and the why (one line, about 12 words);
    - the challenge: what is measured, why that number depends on the idea, and the thresholds for 1, 2 and 3 stars;
-   - what a player changes on Try again to do better (that is where the learning sticks).
+   - what a player changes on Try again to do better (that is where the learning sticks);
+   - the levels: three or more, each naming the one setting it changes and its star thresholds in real units.
 
    When the game started with `/work/parts/scene.js`, plan the scene there too (`references/scene.md`): every
    thing with its size, its role and how it stands to the others. `scripts/layout.mjs` finds the places, and in

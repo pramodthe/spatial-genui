@@ -1,6 +1,6 @@
-// Draws the Muse's Lab logo and icon and writes them as PNG files: docs/brand/*.png for the README and the video,
+// Draws the Muse's Lab logo and icon and writes them as PNG files: .github/assets/*.png for the README and the video,
 // public/logo.png and public/icon-*.png for the web app. The logo is made for the sky-blue ground: Muse and its name
-// are white with an ink outline. docs/brand/banner.png puts it on that ground, for pages that are white. Muse is the mascot's own drawing (public/ui/muse.svg, from mascot.ts), here
+// are white with an ink outline. .github/assets/banner.png puts it on that ground, for pages that are white. Muse is the mascot's own drawing (public/ui/muse.svg, from mascot.ts), here
 // holding a lab flask; the name is set in Lilita One, the start page's display face, loaded from Google Fonts.
 // Run from apps/xr after the drawing changes: node scripts/write-muse.mjs && node scripts/render-brand.mjs
 import { chromium } from 'playwright';
@@ -95,9 +95,9 @@ await tab.evaluate(() => {
     mark.querySelector('.lab').setAttribute('transform', `translate(${width + size * 0.28} 0)`);
   }
 });
-mkdirSync('../../docs/brand', { recursive: true });
+mkdirSync('../../.github/assets', { recursive: true });
 for (const id of ['logo', 'logo-tagline', 'banner', 'icon']) {
-  await tab.locator(`#${id}`).screenshot({ path: `../../docs/brand/${id}.png`, omitBackground: true });
+  await tab.locator(`#${id}`).screenshot({ path: `../../.github/assets/${id}.png`, omitBackground: true });
 }
 // The start page's name, top left.
 await tab.locator('#logo').screenshot({ path: 'public/logo.png', omitBackground: true });
@@ -109,4 +109,4 @@ for (const size of [192, 512]) {
   await small.close();
 }
 await browser.close();
-console.log('wrote docs/brand/logo.png, logo-tagline.png, icon.png and public/logo.png, icon-192.png, icon-512.png');
+console.log('wrote .github/assets/logo.png, logo-tagline.png, icon.png and public/logo.png, icon-192.png, icon-512.png');

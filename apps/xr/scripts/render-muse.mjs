@@ -1,5 +1,5 @@
 // Draws the 3D Muse (src/genui/muse3d.ts) waving and looking about, and writes it as an animated PNG for the
-// README: docs/brand/muse.png. Run from apps/xr: node scripts/render-muse.mjs
+// README: .github/assets/muse.png. Run from apps/xr: node scripts/render-muse.mjs
 import { build } from 'esbuild';
 import { chromium } from 'playwright';
 import { writeFileSync } from 'node:fs';
@@ -92,5 +92,5 @@ pngs.forEach((png, i) => {
   }
 });
 parts.push(chunk('IEND', Buffer.alloc(0)));
-writeFileSync('../../docs/brand/muse.png', Buffer.concat(parts));
-console.log(`wrote docs/brand/muse.png (${FRAMES} frames)`);
+writeFileSync('../../.github/assets/muse.png', Buffer.concat(parts));
+console.log(`wrote .github/assets/muse.png (${FRAMES} frames)`);

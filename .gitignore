@@ -35,3 +35,6 @@ __pycache__/
 
 # Local MCP config (machine-specific paths)
 .mcp.json
+
+# Private project documents: the spec, the competition brief and the paper (kept locally, never pushed)
+docs/

@@ -1332,7 +1332,7 @@ function spotAhead(position: Vector3, frame: Object3D): boolean {
 
 /**
  * Put the lesson at the session's spot. The first lesson finds it: the learner's desk (a detected
- * horizontal surface below the eyes, in front and within reach; docs/spec.md, Phase 4) or, without one, floating
+ * horizontal surface below the eyes, in front and within reach; Phase 4 of the spec) or, without one, floating
  * at seated desk height in front. Later lessons open there too, and a lesson the learner drags moves it.
  * `front` is how far this lesson reaches toward the learner from its centre: it is set back far enough
  * that nothing starts in their face. Returns the surface's label, or null when floating.

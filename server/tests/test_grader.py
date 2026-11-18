@@ -31,7 +31,7 @@ def test_grader_tools_run_in_the_sandbox() -> None:
             commands.append(command)
             return SimpleNamespace(output="game ok")
 
-    playtest, check, read, pictures, iwsdk, state, play_in_app = grader.grader_tools(Backend(), "game")
+    playtest, check, read, pictures, iwsdk, state, play_in_headset = grader.grader_tools(Backend(), "game")
     assert asyncio.run(check.ainvoke({})) == "game ok"
     asyncio.run(read.ainvoke({"offset": 300}))
     asyncio.run(playtest.ainvoke({}))
@@ -42,7 +42,7 @@ def test_grader_tools_run_in_the_sandbox() -> None:
     assert "No plan pictures" in str(asyncio.run(pictures.ainvoke({})))
     # The game in the real app: its state, and its play block played by the emulated hand.
     asyncio.run(state.ainvoke({}))
-    asyncio.run(play_in_app.ainvoke({}))
+    asyncio.run(play_in_headset.ainvoke({}))
     assert commands[-2] == grader.STATE and commands[-1] == grader.PLAYTEST + " --game --play"
     assert grader.GRADER_CALLS == 20
 

@@ -99,11 +99,11 @@ if (!shotOnly) {
   report = run.data?.result || {};
 }
 if (replay) {
-  // The game is open and fresh: play its moves, Start and one round, as its play block says (scripts/replay.mjs), one
+  // The game is open and fresh: play its moves, Start and one round, as its play block says (scripts/play.mjs), one
   // step per browser script (a script may run 110 s at most).
-  copyFileSync(join(here, 'replay.mjs'), join(XR, 'tests', '.playtest-replay.mjs'));
+  copyFileSync(join(here, 'play.mjs'), join(XR, 'tests', '.playtest-play.mjs'));
   const step = (name, index = 0) => {
-    const run = iwsdk(['browser', 'run', 'tests/.playtest-replay.mjs', '--timeout', '105000'], 130000, { REPLAY_STEP: name, REPLAY_INDEX: String(index) });
+    const run = iwsdk(['browser', 'run', 'tests/.playtest-play.mjs', '--timeout', '105000'], 130000, { REPLAY_STEP: name, REPLAY_INDEX: String(index) });
     return run.ok ? run.data?.result ?? { ok: false, error: 'no answer' } : { ok: false, error: run.error?.message || 'the replay step could not run' };
   };
   const played = { ok: false, mounted: report.mounted, moves: [], start: null, challenge: [], round: null, errors: [] };

@@ -460,7 +460,7 @@ export function debugRoot(): Object3D | null {
 }
 
 /** Test-only: the mounted game's own play block, live (its places, until and pose functions), for the play-test's
- * replay of its gestures (agent_skills/play/playtest/scripts/replay.mjs). Null without one. */
+ * replay of its gestures (agent_skills/play/playtest/scripts/play.mjs). Null without one. */
 export function debugPlay(): unknown {
   return current?.play ?? null;
 }

@@ -240,6 +240,92 @@ near(held.velocity.z, -0.4, 0.02, 'the speed a thing leaves the hand with');
 const places = [vec(0, 0, 0), { position: vec(0.1, 0, 0) }];
 sure(kit.motionSnap(vec(0.08, 0, 0), places, 0.05) === 1 && kit.motionSnap(vec(0.3, 0, 0), places, 0.05) === -1, 'the nearest place within reach, or none');
 
+// Filling: the level is the volume over the area; what does not fit is spilled; what is taken is only what was there,
+// so pouring from one into another makes and loses nothing.
+const bowl = kit.motionFill({ area: 0.01, capacity: 0.005 });
+near(bowl.add(0.002), 0.2, 1e-9, 'the level of 0.002 in an area of 0.01');
+bowl.add(0.01);
+sure(bowl.full && Math.abs(bowl.volume - 0.005) < 1e-12 && Math.abs(bowl.spilled - 0.007) < 1e-12, 'a full bowl spilling what does not fit');
+const jugFill = kit.motionFill({ volume: 0.3 });
+const tin = kit.motionFill({ area: 0.02 });
+let pouredOut = 0;
+for (let i = 0; i < 7; i++) {
+  const taken = jugFill.take(0.05);
+  pouredOut += taken;
+  tin.add(taken);
+}
+sure(jugFill.empty && Math.abs(pouredOut - 0.3) < 1e-12 && Math.abs(tin.volume + jugFill.volume - 0.3) < 1e-12, 'pouring all of a jug into a tin to keep every drop');
+near(tin.level, 0.3 / 0.02, 1e-9, "the tin's level from what was poured");
+
+// Heating: Newton's law, value = setting + (start - setting) e^(-rate t), the same at 30 and 72 frames a second,
+// never past the setting, and the time to a temperature from the same law.
+const cake = (hz: number) => {
+  const heat = kit.motionHeat({ value: 20, setting: 180, rate: 0.05 });
+  run(10, hz, (dt) => heat.step(dt));
+  return heat.value;
+};
+near(cake(72), 180 - 160 * Math.exp(-0.5), 0.0001, 'a cake heating for 10 s toward 180');
+near(cake(30), cake(72), 1e-6, 'the same heating at 30 frames a second');
+const oven = kit.motionHeat({ value: 20, setting: 180, rate: 0.05 });
+near(oven.timeTo(100), Math.log(2) / 0.05, 1e-9, 'the time to heat half way');
+sure(oven.timeTo(200) === Infinity, 'never reaching a temperature past the setting');
+oven.step(1000);
+sure(oven.value <= 180 && oven.value > 179.99, 'a long step not passing the setting');
+oven.step(1000, 60);
+sure(oven.value >= 60 && oven.value < 60.01, 'cooling to a lower setting and no further');
+
+// A mechanism from one driver angle: gear turns are exact ratios, a crank's slider is r cos + the rod across, a cam
+// lifts by rise (1 - cos) / 2; turned by a hand at a steady speed, the same at 30 and 72 frames a second.
+sure(kit.motionGearRatio(10, 20) === -0.5 && kit.motionGearRatio(10, 15, 30) === 1 / 3, 'gear ratios: first over last, turned round at each mesh');
+const engine = (hz: number) => {
+  const machine = kit.motionMechanism({
+    ratios: { wheel: kit.motionGearRatio(12, 36), cam: 0.5 },
+    cranks: { piston: { radius: 0.03, rod: 0.1 } },
+    cams: { valve: { on: 'cam', rise: 0.008 } },
+  });
+  let angle = 0;
+  run(2, hz, (dt) => {
+    angle += Math.PI * dt; // a hand turning the crank half a turn a second
+    machine.drive(angle);
+  });
+  return machine.parts;
+};
+const turned = engine(72);
+near(turned.driver, 2 * Math.PI, 1e-6, 'the crank turned one whole turn in 2 s');
+near(turned.wheel, (-2 * Math.PI) / 3, 1e-6, 'the big gear a third of a turn the other way');
+near(turned.piston, 0.03 + 0.1, 1e-9, 'the piston at the top after a whole turn');
+near(turned.valve, 0.008, 1e-9, 'the valve fully open with the cam half way round');
+near(engine(30).wheel, turned.wheel, 1e-9, 'the same machine at 30 frames a second');
+const halfway = kit.motionMechanism({ cranks: { piston: { radius: 0.03, rod: 0.1 } } }).drive(Math.PI / 2);
+near(halfway.piston, Math.sqrt(0.1 * 0.1 - 0.03 * 0.03), 1e-12, 'the piston with the crank across');
+
+// A slope: still until tan(angle) passes the friction, then sliding at g (sin - friction cos); a moving block slows to
+// rest on a gentler slope and stays.
+const slid = (hz: number) => {
+  const slope = kit.motionSlope({ angle: THREE.MathUtils.degToRad(30), friction: 0.2, gravity: G });
+  run(1, hz, (dt) => slope.step(dt));
+  return slope;
+};
+const pull = G * (Math.sin(Math.PI / 6) - 0.2 * Math.cos(Math.PI / 6));
+near(slid(72).distance, pull / 2, 0.001, 'a block sliding for 1 s down 30 degrees with friction 0.2');
+near(slid(30).distance, slid(72).distance, 1e-9, 'the same slide at 30 frames a second');
+sure(slid(72).sliding, 'a block on a steep enough slope to be sliding');
+const held2 = kit.motionSlope({ angle: THREE.MathUtils.degToRad(10), friction: 0.2, gravity: G });
+run(2, 72, (dt) => held2.step(dt));
+sure(held2.distance === 0 && !held2.sliding, 'a block on a slope gentler than tan(angle) = friction to stay put');
+const steep = THREE.MathUtils.degToRad(12);
+const tipping = kit.motionSlope({ friction: Math.tan(steep) - 0.001, gravity: G });
+tipping.step(0.01, steep);
+sure(tipping.sliding, 'a block to start sliding just past tan(angle) = friction');
+const slowing = kit.motionSlope({ angle: THREE.MathUtils.degToRad(30), friction: 0.2, gravity: G });
+run(1, 72, (dt) => slowing.step(dt));
+let lowest = Infinity;
+run(3, 72, (dt) => {
+  slowing.step(dt, THREE.MathUtils.degToRad(5));
+  lowest = Math.min(lowest, slowing.speed);
+});
+sure(slowing.speed === 0 && !slowing.sliding && lowest >= 0, 'a sliding block coming to rest on a gentle slope, never sliding back up');
+
 // A throwing game built on the kit: it passes the gate as part of a module, and the simulated hand throws the ball.
 const game = `${source}
 export default function build({ THREE, traits, isGrabbed }) {

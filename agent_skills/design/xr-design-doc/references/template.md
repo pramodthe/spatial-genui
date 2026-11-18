@@ -54,7 +54,9 @@ const SCENE = {
 <World only: sky, ground, the path, the near and far areas.>
 
 Motion (only when something moves by a physical rule): <the motion kit helper for each, from
-/skills/game/motion (motionHeld + motionBody for a throw, motionGlide, motionFloat, motionLever...), with its numbers:
+/skills/game/motion (motionHeld + motionBody for a throw, motionGlide, motionFloat, motionLever, motionFill for what
+fills, motionHeat for what heats or cools, motionMechanism for gears, cranks and cams, motionSlope for what slides...),
+with its numbers:
 masses, sizes, gravity scale (SCALE), and what the player's action changes>
 
 ## 6. Levels and progression

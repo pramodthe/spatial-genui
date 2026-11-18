@@ -11,6 +11,7 @@ import base64
 import json
 import logging
 import os
+import shlex
 from typing import Any, Callable
 
 from deepagents import RubricMiddleware
@@ -24,10 +25,18 @@ logger = logging.getLogger(__name__)
 
 # Each revision is another coder run inside the same 15-minute sandbox, so two grader passes at most.
 RUBRIC_ITERATIONS = 2
-GRADER_CALLS = 12
+# A look at the game and the check take a few calls; trying moves in the app (game_state, a move, game_state) takes
+# three more each, so 12 was too few.
+GRADER_CALLS = 20
 GRADER_BUDGET_USD = 0.5
 CHECK = "node /skills/play/learning-game/scripts/check.mjs /work/module.js"
 PLAYTEST = "node /skills/play/playtest/scripts/playtest.mjs /work/module.js"
+# The headset app inside the sandbox, where `npx iwsdk` runs (server/sandbox/image.py XR_ROOT).
+XR_ROOT = "/opt/xr"
+# Runtime command groups the grader may use: playing and reading the scene, never starting or stopping the server.
+# Not `ecs`: those commands read the host's world, and a game runs its own.
+IWSDK_GROUPS = {"xr", "scene", "browser"}
+STATE = "node /skills/play/playtest/scripts/playtest.mjs --state"
 
 # The learning-game loop (agent_skills/play/learning-game) as checkable statements, plus the request's own idea.
 RUBRIC = """- run_play_check prints "game ok" for /work/module.js.
@@ -51,7 +60,14 @@ and the result that play earned, and a "Play:" line says where a player would be
 the game does (moves, whys, challenge, panel, hand wiring, the play block). When the plan was drawn
 (plan_pictures returns pictures), put the playtest screenshot beside the first view and the built main thing beside
 the sheet, and name what is missing or different. For every failed criterion, name the exact code (a line or a value)
-and say what to change, so the coder can fix it in one pass."""
+and say what to change, so the coder can fix it in one pass.
+
+play_in_app plays the game by its own play block in the real headset app, with the emulated hand: every move, Start and
+one round, in one call. A move that registers in the gate's play-through and not in the app is a failure of the hand
+wiring. For a closer look, after playtest: game_state, then iwsdk with `xr run-sequence` on the thing the game says to
+touch first (its `center` is in the playtest report, or name it as the step's target), then game_state again. The piece
+should have moved where the game says, and the values in `game` should change as the moves say. A game whose main action
+does nothing when a hand does it fails, however it looks. A game whose `game` is null has no `play` block: say so."""
 
 
 def rubric_for(request: str) -> str:
@@ -117,7 +133,44 @@ def grader_tools(backend: Any, kind: str = "lesson") -> list[Any]:
                 blocks.append({"type": "image", "base64": base64.b64encode(data).decode(), "mime_type": f"image/{'jpeg' if ext == 'jpg' else ext}"})
         return blocks or [{"type": "text", "text": "The plan pictures could not be read."}]
 
-    return [playtest, run_play_check, read_game_code, plan_pictures]
+    @tool
+    async def iwsdk(command: str) -> str:
+        """Run one IWSDK runtime command on the game the last `playtest` opened, and return its output.
+        Only the xr, scene and browser groups are allowed. Examples:
+        `xr list-targets` (the things a hand can be sent to, by name);
+        `xr run-sequence --input-json '{"device":"hand-right","steps":[{"label":"grab","target":"Coin 2","approach":{"distance":0.06},"pinch":{"value":1,"at":"arrival"}},{"label":"carry","position":{"x":0,"y":1.2,"z":-0.45}},{"label":"let go","pinch":0,"duration":0.15}]}'`
+        (grab, carry and let go as a player would; a press is {"target": ..., "press": {}});
+        a tipped hand (a jug pours) is a step with "orientation": {"fingers": [0, -0.7, -0.7], "palm": [0, -0.7, 0.7]}.
+        Run `playtest` first: it starts the runtime and opens the game. Check what a move did with `game_state`."""
+        try:
+            parts = shlex.split(command)
+        except ValueError as exc:
+            return f"Could not read the command: {exc}"
+        if parts and parts[0] == "iwsdk":
+            parts = parts[1:]
+        if not parts or parts[0] not in IWSDK_GROUPS:
+            return "Only xr, scene and browser commands are allowed, e.g. `xr list-targets`."
+        # shlex.join quotes every argument, so a command cannot add a second shell command.
+        result = await backend.aexecute(f"cd {XR_ROOT} && npx iwsdk {shlex.join(parts)}", timeout=120)
+        return (result.output or "no output")[-4000:]
+
+    @tool
+    async def game_state() -> str:
+        """What the open game is doing now, as text: each piece the hands can pick up with its centre (metres) and
+        whether it is held, what glows, how many presses the game answered, and `game`, the values its play block's
+        state() reports. Call it before and after an `iwsdk` move to see what the move changed."""
+        result = await backend.aexecute(STATE, timeout=90)
+        return (result.output or "no output")[-4000:]
+
+    @tool
+    async def play_in_app() -> str:
+        """Play /work/module.js by its own play block in the real headset app, with the emulated hand: every move,
+        Start, then one round. Returns JSON: for each move whether it registered, whether Start began a round, how the
+        round ended (phase, result, stars), and what went wrong."""
+        result = await backend.aexecute(PLAYTEST + (" --game" if kind == "game" else "") + " --play", timeout=420)
+        return (result.output or "no output")[-4000:]
+
+    return [playtest, run_play_check, read_game_code, plan_pictures, iwsdk, game_state, play_in_app]
 
 
 def enabled() -> bool:

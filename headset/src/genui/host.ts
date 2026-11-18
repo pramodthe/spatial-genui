@@ -74,6 +74,8 @@ type Mounted = {
   handlerCalls: number;
   panels: Map<Entity, PanelRecord>;
   update?: (time: number, delta: number) => void;
+  /** The game's play block (agent_skills/play/learning-game/references/play.md), kept for tests; the headset never plays it. */
+  play?: { state?: () => unknown };
   startTime: number;
   /** Teaching rigs of library models in the scene; ticked every frame. */
   rigs: TeachingRig[];
@@ -441,6 +443,8 @@ export type MountedInspection = {
   glowing: string[];
   /** What the host moved out of the 3D: cards and name tags (see splitLayers), by name. */
   layers: { cards: string[]; annotations: string[] };
+  /** What the game's play.state() returns now, as JSON; null without a play block; { error } when it threw. */
+  game: unknown;
 };
 
 /** A picture of the mounted lesson from a virtual camera (JPEG data URL), or null when there is none. */
@@ -453,6 +457,12 @@ export function capture(options: CaptureOptions = {}): string | null {
 /** Test-only: the mounted lesson's root, for scripts that inspect what was built. */
 export function debugRoot(): Object3D | null {
   return current?.root ?? null;
+}
+
+/** Test-only: the mounted game's own play block, live (its places, until and pose functions), for the play-test's
+ * replay of its gestures (agent_skills/play/playtest/scripts/replay.mjs). Null without one. */
+export function debugPlay(): unknown {
+  return current?.play ?? null;
 }
 
 /** Test-only: the lesson frame's handles, what is being dragged, and where the lesson stands and faces. */
@@ -623,7 +633,18 @@ export function inspectMounted(): MountedInspection | null {
       const mid = centers.reduce((sum, c) => sum.add(c), new Vector3()).divideScalar(centers.length || 1);
       return { parts: parts.length, names: parts.map((part) => part.name), spread: centers.reduce((sum, c) => sum + c.distanceTo(mid), 0) / (centers.length || 1) };
     }),
+    game: readGame(mounted),
   };
+}
+
+/** The game's own state, copied to plain JSON so a test cannot change the game through it. */
+function readGame(mounted: Mounted): unknown {
+  if (typeof mounted.play?.state !== 'function') return null;
+  try {
+    return JSON.parse(JSON.stringify(mounted.play.state() ?? null));
+  } catch (err) {
+    return { error: describe(err) };
+  }
 }
 
 function isPressableNow(element: Object3D): boolean {
@@ -789,7 +810,7 @@ export async function mountGenerated(code: string, options: { kind?: 'lesson' | 
     ecs: ECS,
   };
 
-  let result: { root?: unknown; update?: unknown; real?: { size?: unknown }; mode?: unknown; sky?: unknown; ground?: unknown; title?: unknown };
+  let result: { root?: unknown; update?: unknown; play?: unknown; real?: { size?: unknown }; mode?: unknown; sky?: unknown; ground?: unknown; title?: unknown };
   try {
     result = (build as (a: typeof api) => typeof result)(api) ?? {};
   } catch (err) {
@@ -970,6 +991,7 @@ export async function mountGenerated(code: string, options: { kind?: 'lesson' | 
   }
 
   mounted.update = typeof result.update === 'function' ? (result.update as Mounted['update']) : undefined;
+  mounted.play = result.play && typeof result.play === 'object' ? (result.play as Mounted['play']) : undefined;
   // The land and paths a world marks walkable (world-kit.js: userData.walkable): the player walks over them.
   const walkable: Entity[] = [];
   if (inWorld) root.traverse((object) => { if (object.userData?.walkable && (object as Mesh).isMesh) walkable.push(entityFor(object)); });

@@ -1,4 +1,4 @@
-import { aimPoint, capture, dropLessonRealSize, inspectFrame, zoomGame, forgetLessonSpot, inspectMounted, debugHands, debugRay, debugRoot, lessonDeclaresRealSize, mountGenerated, setLessonRealSize, setLessonView, unmountGenerated, type MountReport, type PlayMode } from './host.js';
+import { aimPoint, capture, dropLessonRealSize, inspectFrame, zoomGame, forgetLessonSpot, inspectMounted, debugHands, debugPlay, debugRay, debugRoot, lessonDeclaresRealSize, mountGenerated, setLessonRealSize, setLessonView, unmountGenerated, type MountReport, type PlayMode } from './host.js';
 import { inspectPill, pressPill, setPillHidden } from './hud.js';
 import { EXAMPLE_LESSONS, type SavedLesson } from './lessons.js';
 import { inspectPicker, pickerCourses, redockPicker, setPickerHidden } from './picker.js';
@@ -175,6 +175,7 @@ export function createOverlay(): HTMLElement {
     debugRay,
     debugRoot,
     debugHands,
+    debugPlay,
     zoomGame,
     capture,
     aimPoint,

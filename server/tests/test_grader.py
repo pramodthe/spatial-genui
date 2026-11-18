@@ -31,7 +31,7 @@ def test_grader_tools_run_in_the_sandbox() -> None:
             commands.append(command)
             return SimpleNamespace(output="game ok")
 
-    playtest, check, read, pictures = grader.grader_tools(Backend(), "game")
+    playtest, check, read, pictures, iwsdk, state, play_in_app = grader.grader_tools(Backend(), "game")
     assert asyncio.run(check.ainvoke({})) == "game ok"
     asyncio.run(read.ainvoke({"offset": 300}))
     asyncio.run(playtest.ainvoke({}))
@@ -40,6 +40,32 @@ def test_grader_tools_run_in_the_sandbox() -> None:
     assert commands[2] == grader.PLAYTEST + " --game"
     # No pictures drawn for this game: the grader is told so instead of seeing an error.
     assert "No plan pictures" in str(asyncio.run(pictures.ainvoke({})))
+    # The game in the real app: its state, and its play block played by the emulated hand.
+    asyncio.run(state.ainvoke({}))
+    asyncio.run(play_in_app.ainvoke({}))
+    assert commands[-2] == grader.STATE and commands[-1] == grader.PLAYTEST + " --game --play"
+    assert grader.GRADER_CALLS == 20
+
+
+def test_the_grader_runs_only_iwsdk_commands_that_play_or_read() -> None:
+    commands: list[str] = []
+
+    class Backend:
+        async def aexecute(self, command: str, timeout: int | None = None) -> SimpleNamespace:
+            commands.append(command)
+            return SimpleNamespace(output="{}")
+
+    iwsdk = next(t for t in grader.grader_tools(Backend(), "game") if t.name == "iwsdk")
+    asyncio.run(iwsdk.ainvoke({"command": "iwsdk xr list-targets"}))
+    assert commands[-1] == f"cd {grader.XR_ROOT} && npx iwsdk xr list-targets"
+    # A second shell command becomes quoted arguments to iwsdk, never a command of its own.
+    asyncio.run(iwsdk.ainvoke({"command": "xr list-targets; rm -rf /work"}))
+    assert commands[-1] == f"cd {grader.XR_ROOT} && npx iwsdk xr 'list-targets;' rm -rf /work"
+    # The ECS commands read the host's world, not the game's; starting or stopping the runtime is not the grader's.
+    before = len(commands)
+    for refused in ("ecs query", "dev down", "", "rm -rf /work"):
+        assert "Only xr, scene and browser" in asyncio.run(iwsdk.ainvoke({"command": refused}))
+    assert len(commands) == before
 
 
 def test_tool_images_move_to_a_user_message() -> None:

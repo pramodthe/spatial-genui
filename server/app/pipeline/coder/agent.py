@@ -333,7 +333,15 @@ def _design_text(state: dict[str, Any]) -> str:
         "skill's references/play.md), and each value a check names (bowlGrams, ovenC) as a field of play.state(), so "
         "the check plays the design's own checks."
     )
-    if design.get("scene") and not _later(state):
+    if design.get("scene") and not _later(state) and state.get("layout_error"):
+        # The solver refused the plan when the sandbox opened: say so, not that it is placed.
+        text += (
+            " Its scene plan (section 5) is copied into /work/parts/scene.js, but the solver could not place it:\n"
+            f"{state['layout_error']}\nFix the plan there first (its things and relations; the learning-game skill's "
+            f"references/scene.md) and run `node {LAYOUT} /work/module.js` until it places every thing; never give "
+            "coordinates. Then stand each thing where the plan put it with sceneAt."
+        )
+    elif design.get("scene") and not _later(state):
         text += (
             " Its scene plan (section 5) is already copied into /work/parts/scene.js and placed by the solver: stand "
             "each thing where the plan put it with sceneAt (the learning-game skill's references/scene.md). When a "
@@ -415,6 +423,8 @@ async def _write_with_agent(state: dict[str, Any], studio: StudioRun | None) -> 
     # A repair: the last attempt's sandbox holds this run's sandbox name until it is closed.
     await _close_last_attempt(run_id)
     design = _designed(state)
+    # What the solver said when it could not place the design's scene plan as the sandbox opened (for the brief).
+    layout_error: str | None = None
     sandbox = await asyncio.to_thread(_open_sandbox, run_id, scene_plan=bool(design and design.get("scene")))
     backend = ModalSandbox(sandbox=sandbox)
     backend_token = scope.backend.set(backend)
@@ -437,7 +447,10 @@ async def _write_with_agent(state: dict[str, Any], studio: StudioRun | None) -> 
             await backend.aupload_files(design_files)
             if any(path == "/work/parts/scene.js" for path, _ in design_files):
                 # The plan's places, written under it before the coder starts (new-game.mjs keeps a scene part it finds).
-                await backend.aexecute(f"node {LAYOUT} /work/module.js")
+                placed = await backend.aexecute(f"node {LAYOUT} /work/module.js")
+                output = (getattr(placed, "output", "") or "").strip()
+                if "LAYOUT: not placed" in output:
+                    layout_error = output[:1500]
             # A course level or an /api/generate game has no design stage of its own in the Studio: its document is
             # kept here.
             if studio is not None and design is not None and studio.saved("design.md") is None:
@@ -476,7 +489,7 @@ async def _write_with_agent(state: dict[str, Any], studio: StudioRun | None) -> 
         pinned = _LESSON_SKILLS if kind != "game" else _GAME_SKILLS
         continuing = bool(state.get("attempts")) or bool(values.get("messages"))
         payload: dict[str, Any] = {
-            "messages": [{"role": "user", "content": _task_text(state)}],
+            "messages": [{"role": "user", "content": _task_text({**state, "layout_error": layout_error})}],
             "skills_fingerprint": stamp,
             # Each attempt has its own budget: a repair continues the thread, and with the first attempt's spend still
             # on it the cost meter stopped it after one reply (Nov 17: a game left as the starter, both repairs empty).

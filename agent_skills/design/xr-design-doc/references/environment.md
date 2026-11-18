@@ -51,5 +51,10 @@ or too big up close). The rules below are what the roles and sizes must respect.
      floats above the ground;
    - only the relations that matter to the game: `left of`, `right of`, `in front of`, `behind`, `beside`, `near`,
      `far`, `on`, `above`, `in`, `between`, `around`, `facing`, and `room` for the space a moving thing needs.
+     Each is `[thing, relation, other]`, where the other is a thing of the plan or `player`; `between` names two:
+     `['bridge', 'between', 'left bank', 'right bank']`. Each thing stands to things placed before it, never in a
+     circle (not `['river', 'left of', 'path']` with `['path', 'near', 'river']`), and nothing stands to a panel: the
+     host places panels.
    The roles do the rest: the hero in front of the player, what the hands use in reach, the set out of the way.
+   The design step runs the solver on the plan; a plan it cannot place comes back with its words.
 3. What the player sees in the first second, and the one thing that bounces to say "touch me first".

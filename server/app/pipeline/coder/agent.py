@@ -15,7 +15,6 @@ from deepagents.backends.protocol import FileDownloadResponse
 from deepagents.profiles import GeneralPurposeSubagentProfile, HarnessProfile, register_harness_profile
 from langchain.agents.middleware import (
     ModelCallLimitMiddleware,
-    ModelFallbackMiddleware,
     ModelRetryMiddleware,
     TodoListMiddleware,
     ToolCallLimitMiddleware,
@@ -25,8 +24,8 @@ from langchain.agents.middleware.model_refusal import ModelRefusalError
 from langchain_modal import ModalSandbox
 from langgraph.config import get_stream_writer
 
-from app.core.config import SKILLS_DIR
-from app.core.llm import agent_model, gpt_chat
+from app.core.config import SKILLS_DIR, config
+from app.core.llm import agent_model
 from app.pipeline import grader
 from app.pipeline.coder import scope
 from app.pipeline.coder.middleware import CostMeterMiddleware, TimeLeftMiddleware, ToolImagesAsUserMessage
@@ -166,7 +165,7 @@ def _tool_error(exc: Exception, request: Any) -> str:
 
 
 def coder_middleware(model: Any) -> list[Any]:
-    model_id = getattr(model, "model_name", None) or "gpt-6.1-sol"
+    model_id = getattr(model, "model_name", None) or config.model
     middleware: list[Any] = [
         TodoListMiddleware(),
         ModelCallLimitMiddleware(run_limit=MODEL_CALLS),
@@ -177,9 +176,8 @@ def coder_middleware(model: Any) -> list[Any]:
         # Play-test screenshots read with read_file reach the model as pictures, not as noise.
         ToolImagesAsUserMessage(),
     ]
-    base = getattr(model, "openai_api_base", None) or ""
-    if "api.meta.ai" in base or str(model_id).startswith("muse"):
-        middleware.append(ModelFallbackMiddleware(gpt_chat()))
+    # A Muse run stays on Muse: no OpenAI model takes over when Muse answers with an error (the app runs on Meta's models
+    # only; Nov 19 a Sol fallback with no OpenAI key failed every game before it began). ModelRetryMiddleware retries.
     return middleware
 
 

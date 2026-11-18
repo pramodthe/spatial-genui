@@ -52,12 +52,13 @@ writeFileSync(kitsFile, [
   `// learning-game look: ${look}`,
   '// The kits a learning game uses, ready as they are: every function here is in scope in game.js. Their APIs are in',
   '// the skills (the look kit and the look: /skills/looks; the play kit: assets/play-kit.js; the ECS kit: /skills/common/ecs;',
-  '// the motion kit: /skills/game/motion).',
+  '// the motion kit: /skills/game/motion; the hands kit: /skills/game/hands).',
   read(join(looks, 'shared', 'look-kit.js')),
   read(look === 'plain' ? join(here, 'assets', 'plain.js') : join(looks, look, 'assets', `${look}.js`)),
   read(join(here, 'assets', 'play-kit.js')),
   read(join(here, '..', '..', 'common', 'ecs', 'assets', 'ecs-kit.js')),
   read(join(here, '..', '..', 'game', 'motion', 'assets', 'motion-kit.js')),
+  read(join(here, '..', '..', 'game', 'hands', 'assets', 'hands-kit.js')),
   ...(process.argv.includes('--world') ? [read(join(here, 'assets', 'world-kit.js'))] : []),
 ].join('\n\n'));
 writeFileSync(gameFile, [

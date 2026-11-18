@@ -57,8 +57,8 @@ with six steps from catching to a Serve button. Nobody could tell how to play th
    through. Starting from it means your effort goes into the game, not into plumbing. Three files:
    - **/work/game.js** - the game's own code (the parts block and `build()`). The only file you edit.
    - **/work/kits.js** - the look kit, the look's builders, the play kit (stars, bursts, pops), the ECS kit, the
-     motion kit and, for a world, the land kit. Every function in it is in scope in game.js. Do not read or edit it: the APIs are in the
-     look's skill, `assets/play-kit.js` notes, `/skills/common/ecs` and `/skills/game/motion`.
+     motion kit, the hands kit and, for a world, the land kit. Every function in it is in scope in game.js. Do not read or edit it: the APIs are in the
+     look's skill, `assets/play-kit.js` notes, `/skills/common/ecs`, `/skills/game/motion` and `/skills/game/hands`.
    - **/work/module.js** - built from the two by the check and the play-test; what the headset gets. Never edit it.
 
 2. **Plan before any geometry.** Write /work/plan.md (the format is in `references/parts.md`), using `references/design.md`:
@@ -90,7 +90,8 @@ with six steps from catching to a Serve button. Nobody could tell how to play th
    action answered, and ideas about pitch, rhythm or echoes taught by ear), use `sound` (`/skills/common/sound`).
    Whatever moves by a rule (thrown, falling, bouncing, gliding, carried by wind or water, swinging, hanging,
    balancing, floating) is built on the motion kit (`/skills/game/motion`): its helpers are tested, are already in
-   the module, and give the same result at any frame rate.
+   the module, and give the same result at any frame rate. A hand that pours, stirs, folds, twists or cuts is read
+   with the hands kit (`/skills/game/hands`), each helper with the gesture that plays it.
 
    Then write the game's `play` block (`references/play.md`): one gesture for each move, the gestures of one good
    round, and `state()`. It says what a player's hand does, as data; the check plays it. Whenever a move or the

@@ -82,10 +82,11 @@ export default async function run({ frame, page }) {
     // The hand's pose, as the gate's simulated hand turns it (play.ts): fingers away from the player, tilt tips them
     // down (a jug pours), roll lowers the right side (a bar steers), yaw turns them right. Read again every step.
     const Euler = root.rotation.constructor;
+    const LEVEL = { fingers: 'forward', palm: 'down' };
     const orientation = (g) => {
       const angle = (value) => Number(call(value) || 0) * Math.PI / 180;
       const tilt = angle(g.tilt), roll = angle(g.roll), yaw = angle(g.yaw);
-      if (!tilt && !roll && !yaw) return { fingers: 'forward', palm: 'down' };
+      if (!tilt && !roll && !yaw) return LEVEL;
       const turn = new Euler(-tilt, -yaw, -roll, 'YXZ');
       const along = (v) => [v.x, v.y, v.z].map((n) => +n.toFixed(4));
       return { fingers: along(new Vec(0, 0, -1).applyEuler(turn)), palm: along(new Vec(0, -1, 0).applyEuler(turn)) };
@@ -143,6 +144,9 @@ export default async function run({ frame, page }) {
     const perform = async (g) => {
       const device = g.hand === 'left' ? 'hand-left' : 'hand-right';
       const pose = orientation(g);
+      // A hand about to pinch arrives level and turns once it holds the thing, as play.ts does: the jug is taken
+      // upright and then tipped, the knob taken and then turned. A hand that already holds turns at once.
+      const reachPose = holding[device] ? pose : LEVEL;
       for (const key of ['grab', 'press', 'hold']) if (key in g) await whenShown(g[key]);
       if ('grab' in g && byRay(call(g.grab))) {
         // Pieces too close together for a near pinch are taken by pointing and pinching, and move with the hand
@@ -156,6 +160,10 @@ export default async function run({ frame, page }) {
         const by = { x: to.x - at.x, y: to.y - at.y, z: to.z - at.z };
         await remote.dispatch('animate_to', { device, position: { x: from.x + by.x, y: from.y + by.y, z: from.z + by.z }, duration: Math.max(0.3, Number(g.seconds ?? 0.6)), easing: 'minimum-jerk' });
         await wait(150);
+        // A grab with `until` holds the piece where it was carried until that is true, as a near grab does.
+        if (typeof g.until === 'function' && !g.throw && !(await until(() => g.until(), UNTIL_MAX_S * 1000))) {
+          throw new Error(`what the grab waits for (until) had not happened after ${UNTIL_MAX_S} s`);
+        }
         if (!g.keep) await remote.dispatch('set_select_value', { device, value: 0, duration: 0.1 });
         holding[device] = Boolean(g.keep);
         await wait(250);
@@ -163,15 +171,26 @@ export default async function run({ frame, page }) {
       }
       if ('grab' in g) {
         // anchor 'grasp': the point between thumb and index goes to the place (a position alone places the ray).
-        const steps = [{ label: 'grab', position: where(g.grab), anchor: 'grasp', orientation: pose, approach: { distance: 0.06 }, pinch: { value: 1, at: 'arrival' } }];
+        const steps = [{ label: 'grab', position: where(g.grab), anchor: 'grasp', orientation: reachPose, approach: { distance: 0.06 }, pinch: { value: 1, at: 'arrival' } }];
+        let last = where(g.grab);
         if (Array.isArray(g.path)) {
-          for (const place of g.path) steps.push({ label: 'carry', position: where(place), orientation: pose, duration: Math.max(0.05, Number(g.seconds ?? 0.6) / g.path.length) });
+          for (const place of g.path) steps.push({ label: 'carry', position: (last = where(place)), orientation: pose, duration: Math.max(0.05, Number(g.seconds ?? 0.6) / g.path.length) });
         } else if ('to' in g) {
-          steps.push({ label: 'carry', position: where(g.to), orientation: pose, ...(g.seconds ? { duration: Number(g.seconds) } : {}) });
+          steps.push({ label: 'carry', position: (last = where(g.to)), orientation: pose, ...(g.seconds ? { duration: Number(g.seconds) } : {}) });
+        } else if (pose !== LEVEL) steps.push({ label: 'turn', position: last, orientation: pose, duration: 0.3 });
+        const waits = typeof g.until === 'function' && !g.throw;
+        if (waits) {
+          // Held where it was carried until what the gesture waits for has happened (a jug over the bowl, pouring).
+          await run(device, steps.splice(0));
+          const started = performance.now();
+          while (performance.now() - started < UNTIL_MAX_S * 1000 && !g.until()) {
+            await run(device, [{ label: 'hold', position: last, orientation: orientation(g), duration: STEP_S }]);
+          }
+          if (!g.until()) throw new Error(`what the grab waits for (until) had not happened after ${UNTIL_MAX_S} s`);
         }
         if (!g.keep) steps.push({ label: 'let go', pinch: 0, duration: g.throw ? 0.05 : 0.15 });
         holding[device] = Boolean(g.keep);
-        return run(device, steps);
+        return steps.length ? run(device, steps) : null;
       }
       if ('press' in g) {
         // A player pokes a 3D button; when the poke reaches no handler, a pointed pinch (the hand's ray) does.
@@ -201,7 +220,7 @@ export default async function run({ frame, page }) {
         const limit = Number(g.seconds ?? (g.until ? UNTIL_MAX_S : 1)) * 1000;
         const started = performance.now();
         const pinchNow = g.pinch && !holding[device];
-        await run(device, [{ label: 'hold', position: where(g.hold), anchor: g.pinch ? 'grasp' : 'index-tip', orientation: pose, ...(pinchNow ? { pinch: { value: 1, at: 'arrival' } } : {}) }]);
+        await run(device, [{ label: 'hold', position: where(g.hold), anchor: g.pinch ? 'grasp' : 'index-tip', orientation: pinchNow ? LEVEL : pose, ...(pinchNow ? { pinch: { value: 1, at: 'arrival' } } : {}) }]);
         while (performance.now() - started < limit && !(g.until && g.until())) {
           await run(device, [{ label: 'follow', position: where(g.hold), anchor: g.pinch ? 'grasp' : 'index-tip', orientation: orientation(g), duration: STEP_S }]);
         }
@@ -213,7 +232,7 @@ export default async function run({ frame, page }) {
       if ('path' in g) {
         const points = g.path.map(where);
         const each = Math.max(0.05, Number(g.seconds ?? 1) / points.length);
-        const steps = points.map((position, i) => ({ label: `path ${i + 1}`, position, orientation: pose, duration: each, ...(i === 0 ? { anchor: 'index-tip', pinch: g.pinch ? 1 : 0 } : {}) }));
+        const steps = points.map((position, i) => ({ label: `path ${i + 1}`, position, orientation: i === 0 && g.pinch ? reachPose : pose, duration: each, ...(i === 0 ? { anchor: 'index-tip', pinch: g.pinch ? 1 : 0 } : {}) }));
         if (g.pinch && !g.keep) steps.push({ label: 'let go', pinch: 0, duration: 0.15 });
         return run(device, steps);
       }

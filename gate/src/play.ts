@@ -11,14 +11,16 @@ import * as THREE from 'three';
  *   { learn: [gesture], challenge: [gesture] | () => [gesture], start?: gesture, again?: gesture, moves?: number,
  *     state: () => ({ phase: 'learn' | 'ready' | 'play' | 'done', move, result, stars }) }
  * A gesture is one of
- *   { grab: place, to?: place, path?: [place], seconds?, throw?, keep? }   pinch there, carry, let go
+ *   { grab: place, to?: place, path?: [place], seconds?, throw?, keep?, until? }   pinch there, carry, let go
  *   { press: object }                                                      press a 3D button
  *   { button: id }                                                         press a panel button (kit.panel)
  *   { hold: place, seconds?, pinch?, until? }                              keep the hand there (pour, steer)
  *   { path: [place], seconds?, pinch? }                                    sweep the hand (swipe, slice)
  *   { wait: seconds, until? }
  * each with hand: 'left' | 'right' (right by default) and the hand's pose in degrees, read every frame when given
- * as functions: tilt (fingertips down), roll (right side down), yaw (turned to the right). A place is an object
+ * as functions: tilt (fingertips down), roll (right side down), yaw (turned to the right). A gesture that pinches
+ * keeps the hand level until it has pinched, so what it takes turns with the hand (a jug tips, a knob turns). A grab
+ * with `until` stays where it carried the thing until it is true (a pour). A place is an object
  * (its centre), [x, y, z] in root's coordinates (the units the game is built in, as `hands` are), or a function
  * returning either.
  *
@@ -106,7 +108,8 @@ function gestureText(g: any): string {
   const hand = g.hand === 'left' ? ' with the left hand' : '';
   if ('grab' in g) {
     const carry = Array.isArray(g.path) ? `, move it along ${g.path.length} points` : 'to' in g ? `, carry it to ${placeText(g.to)}` : '';
-    return `pinch ${placeText(g.grab)}${carry}${g.keep ? ', keep hold' : ', let go'}${hand}`;
+    const wait = g.until && !g.throw ? ', hold it there until what it waits for' : '';
+    return `pinch ${placeText(g.grab)}${carry}${wait}${g.keep ? ', keep hold' : ', let go'}${hand}`;
   }
   if ('press' in g) return `press ${placeText(g.press)}${hand}`;
   if ('button' in g) return `press the panel button '${g.button}'`;
@@ -422,7 +425,14 @@ class Player {
     }.bind(this);
     this.tracked[side] = true;
     this.last = `${what} (${gestureText(g)})`;
-    this.pose[side] = this.poseOf(g);
+    // A hand that is about to pinch stays as it is until it has: then what it takes turns with it, as a player picks
+    // a jug up level and then tips it. A hand that already holds something (keep) or does not pinch turns at once.
+    const pose = this.poseOf(g);
+    const pinches = 'grab' in g || (('hold' in g || 'path' in g) && Boolean(g.pinch));
+    const turned = () => {
+      this.pose[side] = pose;
+    };
+    if (!pinches || (this.pinching[side] && this.carried[side])) turned();
     if ('grab' in g) {
       const { point, object } = yield* this.reachable(g.grab, `${what}: grab`, rule);
       // A hand that kept hold (keep: true) of this very thing does not let go to take it again.
@@ -430,6 +440,7 @@ class Player {
         release();
         yield* this.reach(side, point);
         this.pinching[side] = true;
+        turned();
         yield* this.rest(0.15);
       }
       const thrown = this.carried[side] ?? object;
@@ -445,6 +456,8 @@ class Player {
         const to = this.place(g.to, `${what}: to`).point;
         yield* this.reach(side, to, num(g.seconds, 0) || Math.max(0.3, this.travel(from.distanceTo(to))), flying);
       } else yield* this.rest(num(g.seconds, 0.3));
+      // Held where it was carried until what the gesture waits for has happened (a jug over the bowl, pouring).
+      if (g.until && !g.throw) yield* waiting(UNTIL_MAX_S);
       if (this.pinching[side] && !g.keep) {
         release();
         yield;
@@ -480,6 +493,7 @@ class Player {
     } else if ('hold' in g) {
       yield* this.reach(side, this.place(g.hold, `${what}: hold`).point);
       if (g.pinch) this.pinching[side] = true;
+      turned();
       // The place may move (a kite, the next hoop): the hand follows it, no faster than a hand can.
       const step = FOLLOW_SPEED_M * this.unit * this.dt;
       yield* waiting(num(g.seconds, g.until ? UNTIL_MAX_S : 1), () => {
@@ -496,10 +510,9 @@ class Player {
     } else if ('path' in g) {
       const points = g.path.map((p: unknown) => this.place(p, `${what}: path`).point);
       yield* this.reach(side, points[0]);
-      if (g.pinch) {
-        this.pinching[side] = true;
-        yield* this.rest(0.1);
-      }
+      if (g.pinch) this.pinching[side] = true;
+      turned();
+      if (g.pinch) yield* this.rest(0.1);
       yield* this.sweep(side, points, num(g.seconds, 0) || undefined);
       if (this.pinching[side] && !g.keep) {
         release();

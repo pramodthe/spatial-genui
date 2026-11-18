@@ -29,6 +29,7 @@ return {
 | `{ grab: place, to: place }` | pinches there, carries to the second place, lets go with a still hand | folding, placing, stacking, sorting |
 | `{ grab: place }` | pinches there for a moment and lets go | picking a thing up, a tap by pinch |
 | `{ grab: place, path: [place, ...], seconds, throw: true }` | pinches, moves along the points in `seconds`, lets go while still moving | throwing, launching, flicking |
+| `{ grab: place, to: place, until: () => boolean }` | pinches, carries, and holds it there until `until` is true, then lets go | pouring from a jug into a bowl |
 | `{ press: object }` | presses a 3D button (an object with `onPress`, or spawned `game.Pressable`) | levers, Start on the playfield |
 | `{ button: 'id' }` | presses a panel button by its id | Start, Try again |
 | `{ hold: place, seconds, pinch: true }` | keeps the hand there, pinching or not, following the place when it moves | pouring, steering, hovering |
@@ -40,10 +41,13 @@ Every gesture also takes:
 - `hand: 'left'` (the right hand is the default).
 - **The hand's pose**, in degrees: `tilt` (fingertips tipped down), `roll` (right side down), `yaw` (turned to the
   right). Each is a number, or a function read every frame: `roll: () => 20 * steerToward(nextHoop)`. A level hand
-  is the default. The pose moves `hands.right.palm` against `hands.right.tip`, and a held thing turns with the hand,
-  as in the headset. A jug that pours by tipping needs `tilt`; a bar that steers by its roll needs `roll`.
-- `until: () => boolean` on `hold` and `wait`: the gesture ends when it turns true (a channel opens, the cup is
-  full); `seconds` is then the longest it lasts (20 without it), and running out is a failure.
+  is the default. A held thing turns with the hand, as in the headset, so read a tilt or a twist from the held
+  thing's own rotation (the hands kit does). A gesture that pinches keeps the hand level until it has pinched, then
+  turns it: the jug is taken upright and tipped, the knob is taken and turned. A jug that pours by tipping needs
+  `tilt`; a knob turns by `roll`; a bar that steers by its roll needs `roll`.
+- `until: () => boolean` on `hold`, `wait` and `grab`: the gesture ends when it turns true (a channel opens, the cup
+  is full). On `hold` and `wait`, `seconds` is then the longest it lasts (20 without it); a `grab` waits up to 20 s
+  where it carried the thing. Running out is a failure.
 - `keep: true` on a gesture that pinches: the hand does not let go at its end, and the next gesture of that hand
   carries on holding (take the handle to start, then steer with it).
 
@@ -60,6 +64,19 @@ What the simulated hand does, so the gestures match it:
 - A challenge gesture is cut short when the round ends, and after the last one the round has 30 s to end by
   itself, so no `wait` is needed at the end.
 - In a world, a place farther than an arm (0.8 m) is walked to, at 1.4 m a second.
+
+## Hand actions: the hands kit
+
+Pour, stir, fold, twist and cut have tested helpers in every module (`/skills/game/hands`), each with the gesture
+that plays it. Use the helper's places, which stay right wherever the game is placed:
+
+| Action | Gesture |
+|---|---|
+| pour (`handPour`) | `{ grab: jug, to: pour.above, tilt: 70, until: () => pour.poured >= 150 }` |
+| stir (`handStir`) | `{ grab: spoon, path: stir.path(2), seconds: 3 }` |
+| fold (`handFold`) | `{ grab: corner, path: fold.path, seconds: 0.8 }` |
+| twist (`handTwist`) | `{ hold: knob, pinch: true, roll: 90, seconds: 1 }` |
+| cut (`handCut`) | `{ grab: knife, path: cut.path, seconds: 0.5 }` |
 
 ## The round, Start and Try again
 

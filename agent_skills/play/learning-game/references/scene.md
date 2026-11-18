@@ -54,7 +54,9 @@ building it.
 
 4. **Check.** The check compares what was built with the plan: a thing in the plan and not in the game, or built
    bigger than the box its place was found for, is a `Scene:` FIX. Write its real size in `SCENE` and run
-   `layout.mjs` again; when the plan changes, the places must be solved again too.
+   `layout.mjs` again; when the plan changes, the places must be solved again too. To change one thing without
+   moving the rest of a scene you have built, run `layout.mjs /work/module.js --keep`: only the things whose entry
+   changed (role, size, count, lift or their own relations) are placed again, the others keep their places.
 
 ## Roles
 

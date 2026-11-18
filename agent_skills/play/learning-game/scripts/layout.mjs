@@ -1,7 +1,9 @@
 // Place the scene plan: reads /work/parts/scene.js (SCENE: what stands in the scene and how the things stand to each
 // other), asks the app's placement solver for a place for every thing, and writes them under it as PLACES. Prints
 // the layout from above and the solver's notes. When the plan cannot be placed it says which thing and why, and
-// exits 1. Usage: node layout.mjs [/work/module.js]
+// exits 1. Usage: node layout.mjs [/work/module.js] [--keep]
+// --keep: only the things whose plan entry changed (their role, size, count, lift or their own relations) are placed
+// again; the others stay at their PLACES, so one change does not move the whole scene. A change of mode places all.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -15,6 +17,10 @@ export const PLACES_END = '// ---- end of places ----';
 /** A short mark of a plan, kept with its places: a plan changed since then has to be placed again. */
 export const stampOf = (scene) => createHash('sha256').update(JSON.stringify(scene)).digest('hex').slice(0, 12);
 
+/** A short mark of one thing's own entry in the plan (what it is, and the relations it stands by), and of the plan's
+ * mode (a desk and a world are different spaces), kept with its places. */
+export const entryOf = (scene, name) => stampOf({ mode: scene.mode === 'world' ? 'world' : 'desk', thing: scene.things[name], relations: (scene.relations ?? []).filter((r) => Array.isArray(r) && r[0] === name) });
+
 /** A scene part: its SCENE, the PLACES under it (or null), and whether those were solved from this SCENE. */
 export function readScene(file) {
   const code = readFileSync(file, 'utf8');
@@ -25,8 +31,9 @@ export function readScene(file) {
   return { code, scene, places: box.__places ? JSON.parse(JSON.stringify(box.__places)) : null, fresh: Boolean(scene) && stamp === stampOf(scene) };
 }
 
-/** Solve the plan in a scene part and write its places back. Returns { ok, text }: the text is for the coder. */
-export function layoutScene(file) {
+/** Solve the plan in a scene part and write its places back. Returns { ok, text }: the text is for the coder. With
+ * `keep`, the things whose entry is unchanged since their places were written keep them, and only the rest are placed. */
+export function layoutScene(file, { keep = false } = {}) {
   let part;
   try {
     part = readScene(file);
@@ -36,7 +43,16 @@ export function layoutScene(file) {
   if (!part.scene) return { ok: false, text: `${file} must define const SCENE = { mode, things, relations } (references/scene.md).` };
   const tsx = process.env.GATE_TSX || 'tsx';
   const solver = process.env.GATE_PLACE || (process.env.GATE_ENTRY ? join(dirname(process.env.GATE_ENTRY), 'place.ts') : '/opt/gate/place.ts');
-  const child = spawnSync(tsx, [solver], { input: JSON.stringify(part.scene), encoding: 'utf8' });
+  const kept = {};
+  if (keep && part.places) {
+    for (const name of Object.keys(part.scene.things ?? {})) {
+      const was = part.places[name];
+      const first = Array.isArray(was) ? was[0] : was;
+      if (first?.entry && first.entry === entryOf(part.scene, name)) kept[name] = was;
+    }
+  }
+  const input = Object.keys(kept).length ? { ...part.scene, keep: kept } : part.scene;
+  const child = spawnSync(tsx, [solver], { input: JSON.stringify(input), encoding: 'utf8' });
   let layout;
   try {
     layout = JSON.parse(child.stdout);
@@ -46,27 +62,31 @@ export function layoutScene(file) {
   // A plan that cannot be placed leaves the last places as they were (the game still builds while the plan is
   // mended); the check then says the plan has changed since it was placed.
   if (!layout.ok) return { ok: false, text: `LAYOUT: not placed.\n${layout.error}${layout.notes?.length ? `\n${layout.notes.join('\n')}` : ''}` };
-  // Each place carries the size it was solved for, so sceneAt can stand the thing on its base.
+  // Each place carries the size it was solved for, so sceneAt can stand the thing on its base, and the mark of the
+  // thing's plan entry, so --keep can tell what changed.
   const places = Object.fromEntries(Object.entries(layout.places).map(([name, placed]) => {
     const size = part.scene.things[name].size;
-    return [name, Array.isArray(placed) ? placed.map((p) => ({ ...p, size })) : { ...placed, size }];
+    const entry = entryOf(part.scene, name);
+    return [name, Array.isArray(placed) ? placed.map((p) => ({ ...p, size, entry })) : { ...placed, size, entry }];
   }));
   const at = part.code.indexOf(PLACES_START);
   const head = (at < 0 ? part.code : part.code.slice(0, at)).replace(/\n+$/, '');
   writeFileSync(file, `${head}\n${PLACES_START}\n// plan: ${stampOf(part.scene)}\nconst PLACES = ${JSON.stringify(places)};\n${PLACES_END}\n`);
   const count = Object.values(places).reduce((sum, p) => sum + (Array.isArray(p) ? p.length : 1), 0);
   const lines = Object.entries(places).map(([name, p]) => `  ${name}: ${Array.isArray(p) ? `${p.length} places, the first at` : 'at'} (${(Array.isArray(p) ? p[0] : p).position.join(', ')})`);
-  return { ok: true, text: [`layout ok: ${count} things placed (${layout.mode}). From above, the far side at the top:`, layout.map, ...lines, ...layout.notes.map((n) => `NOTE: ${n}`)].join('\n') };
+  const again = keep ? Object.keys(places).filter((name) => !(name in kept)) : [];
+  const how = keep ? ` Kept ${Object.keys(kept).length}, placed again: ${again.join(', ') || 'nothing (no entry changed)'}.` : '';
+  return { ok: true, text: [`layout ok: ${count} things placed (${layout.mode}).${how} From above, the far side at the top:`, layout.map, ...lines, ...layout.notes.map((n) => `NOTE: ${n}`)].join('\n') };
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const module = process.argv[2] ?? '/work/module.js';
+  const module = process.argv.slice(2).find((arg) => !arg.startsWith('--')) ?? '/work/module.js';
   const file = join(dirname(module), 'parts', 'scene.js');
   if (!existsSync(file)) {
     console.log(`${file} is not there: this game has no scene plan.`);
     process.exit(1);
   }
-  const result = layoutScene(file);
+  const result = layoutScene(file, { keep: process.argv.includes('--keep') });
   console.log(result.text);
   process.exit(result.ok ? 0 : 1);
 }

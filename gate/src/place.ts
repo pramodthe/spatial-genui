@@ -19,7 +19,8 @@ import { measureLayout, type LayoutTarget } from './layout.js';
 export type Role = 'hero' | 'tool' | 'target' | 'button' | 'panel' | 'set' | 'ground' | 'scenery';
 export type PlanThing = { role: Role; size: [number, number, number]; count?: number; lift?: number };
 export type Relation = [string, string, unknown, unknown?];
-export type Plan = { mode?: 'desk' | 'world'; things: Record<string, PlanThing>; relations?: Relation[] };
+/** `keep`: places to keep as they are (layout.mjs --keep), by thing: only the things not in it are placed. */
+export type Plan = { mode?: 'desk' | 'world'; things: Record<string, PlanThing>; relations?: Relation[]; keep?: Record<string, Place | Place[]> };
 export type Place = { position: [number, number, number]; turn: number };
 export type Layout =
   | { ok: true; mode: 'desk' | 'world'; places: Record<string, Place | Place[]>; notes: string[]; map: string }
@@ -49,6 +50,12 @@ type Put = { item: Item; centre: THREE.Vector3; turn: number; box: THREE.Box3; k
 const fail = (mode: 'desk' | 'world', error: string, notes: string[] = []): Layout => ({ ok: false, mode, error, notes });
 const round = (n: number) => Math.round(n * 1000) / 1000;
 const boxOf = (centre: THREE.Vector3, size: THREE.Vector3) => new THREE.Box3().setFromCenterAndSize(centre, size);
+/** The box a thing fills on the ground once it is turned by `turn` (radians, about the vertical). */
+const turnedSize = (size: THREE.Vector3, turn: number) => {
+  const c = Math.abs(Math.cos(turn));
+  const s = Math.abs(Math.sin(turn));
+  return new THREE.Vector3(size.x * c + size.z * s, size.y, size.x * s + size.z * c);
+};
 /** How far apart two boxes are on the ground (0 when one is over the other). */
 const apart = (a: THREE.Box3, b: THREE.Box3) => Math.hypot(Math.max(0, a.min.x - b.max.x, b.min.x - a.max.x), Math.max(0, a.min.z - b.max.z, b.min.z - a.max.z));
 const sizeText = (s: THREE.Vector3) => `${round(s.x)} x ${round(s.y)} x ${round(s.z)}`;
@@ -136,10 +143,11 @@ export function solve(plan: Plan): Layout {
     return found;
   };
 
-  const meshOf = (item: Item, centre: THREE.Vector3) => {
+  const meshOf = (item: Item, centre: THREE.Vector3, turn = 0) => {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(item.size.x, item.size.y, item.size.z), material);
     mesh.name = item.id;
     mesh.position.copy(centre);
+    mesh.rotation.y = turn;
     mesh.userData.role = item.role;
     if (item.role === 'ground') mesh.userData.walkable = true; // the player walks over it: it is not in the way
     return mesh;
@@ -279,8 +287,16 @@ export function solve(plan: Plan): Layout {
   type Lost = { area: number; relations: Map<string, number>; collide: Map<string, number>; layout: Map<string, number>; said: Map<string, string>; left: number };
   let stuck: { item: Item; lost: Lost } | null = null;
 
-  /** Every place an item could go, best first. */
-  const candidates = (item: Item, lost: Lost): { centre: THREE.Vector3; box: THREE.Box3; keep: THREE.Box3 }[] | string => {
+  /** How a thing that faces something is turned when it stands at `centre` (its front is its +z side); 0 else. */
+  const turnAt = (item: Item, centre: THREE.Vector3) => {
+    const facing = item.relations.find((r) => r.kind === 'facing');
+    const toward = facing ? targetBox(facing.target, centre, item)?.getCenter(new THREE.Vector3()) : null;
+    return toward && Math.hypot(toward.x - centre.x, toward.z - centre.z) > 1e-6 ? round(Math.atan2(toward.x - centre.x, toward.z - centre.z)) : 0;
+  };
+
+  /** Every place an item could go, best first: its box turned as it will stand, so a long thing that faces something
+   * is tested for collisions and the layout rules as it really stands. */
+  const candidates = (item: Item, lost: Lost): { centre: THREE.Vector3; turn: number; box: THREE.Box3; keep: THREE.Box3 }[] | string => {
     const y = heightOf(item);
     if (typeof y === 'string') return y;
     const wanted = ideals(item, y);
@@ -293,9 +309,11 @@ export function solve(plan: Plan): Layout {
     // the same thing stand in a row across the player's view rather than one behind the other.
     const first = fan ? null : byThing(item.thing)[0];
     const score = (p: THREE.Vector3) => Math.min(...goals.map((g) => Math.hypot(p.x - g.x, p.z - g.z))) + 0.01 * Math.hypot(p.x - base.x, p.z - base.z) + (first ? Math.abs(p.z - first.centre.z) : 0);
-    const out: { centre: THREE.Vector3; box: THREE.Box3; keep: THREE.Box3; score: number }[] = [];
+    const out: { centre: THREE.Vector3; turn: number; box: THREE.Box3; keep: THREE.Box3; score: number }[] = [];
     for (const centre of points) {
-      const box = boxOf(centre, item.size);
+      const turn = turnAt(item, centre);
+      const size = turnedSize(item.size, turn);
+      const box = boxOf(centre, size);
       if (box.min.x < space.x[0] - 1e-9 || box.max.x > space.x[1] + 1e-9 || box.min.z < space.z[0] - 1e-9 || box.max.z > space.z[1] + 1e-9) {
         lost.area++;
         continue;
@@ -306,13 +324,13 @@ export function solve(plan: Plan): Layout {
         continue;
       }
       // What it keeps free round itself: its own box with a gap, or the room the plan gives it to move in.
-      const keep = boxOf(centre, item.room ? item.room.clone().max(item.size) : item.size).expandByScalar(space.gap / 2);
+      const keep = boxOf(centre, item.room ? turnedSize(item.room, turn).max(size) : size).expandByScalar(space.gap / 2);
       const hit = puts.find((p) => !together(item, p.item) && p.keep.intersectsBox(keep));
       if (hit) {
         lost.collide.set(hit.item.id, (lost.collide.get(hit.item.id) ?? 0) + 1);
         continue;
       }
-      out.push({ centre, box, keep, score: score(centre) });
+      out.push({ centre, turn, box, keep, score: score(centre) });
     }
     lost.left = out.length;
     return out.sort((a, b) => a.score - b.score);
@@ -329,7 +347,7 @@ export function solve(plan: Plan): Layout {
     }
     for (const c of found) {
       if (++tries > MAX_TRIES) return false;
-      const mesh = meshOf(item, c.centre);
+      const mesh = meshOf(item, c.centre, c.turn);
       const broken = fixes(mesh);
       if (broken.length) {
         for (const f of broken) {
@@ -339,7 +357,7 @@ export function solve(plan: Plan): Layout {
         continue;
       }
       scene.add(mesh);
-      puts.push({ item, centre: c.centre, turn: 0, box: c.box, keep: c.keep, mesh });
+      puts.push({ item, centre: c.centre, turn: c.turn, box: c.box, keep: c.keep, mesh });
       if (place(index + 1)) return true;
       scene.remove(mesh);
       puts.pop();
@@ -348,7 +366,25 @@ export function solve(plan: Plan): Layout {
     return false;
   };
 
-  const solid = parsed.items.filter((item) => item.role !== 'scenery' && item.role !== 'panel');
+  // Kept places (layout.mjs --keep: the things whose plan entry did not change) stand first, as they were.
+  const kept = new Set<string>();
+  for (const item of parsed.items) {
+    const was = plan.keep?.[item.thing];
+    const at = Array.isArray(was) ? was[item.index] : item.index === 0 ? was : undefined;
+    if (!at || !Array.isArray(at.position) || at.position.length !== 3 || !at.position.every((n) => Number.isFinite(n))) continue;
+    const centre = new THREE.Vector3(...at.position);
+    const turn = Number.isFinite(at.turn) ? at.turn : 0;
+    const size = turnedSize(item.size, turn);
+    const box = boxOf(centre, size);
+    const keep = item.role === 'panel' ? box : boxOf(centre, item.room ? turnedSize(item.room, turn).max(size) : size).expandByScalar(space.gap / 2);
+    const mesh = meshOf(item, centre, turn);
+    scene.add(mesh);
+    puts.push({ item, centre, turn, box, keep, mesh });
+    kept.add(item.id);
+  }
+  if (kept.size) notes.push(`Kept where they were: ${[...new Set(parsed.items.filter((i) => kept.has(i.id)).map((i) => i.thing))].join(', ')}.`);
+
+  const solid = parsed.items.filter((item) => item.role !== 'scenery' && item.role !== 'panel' && !kept.has(item.id));
   if (!place(0)) {
     if (tries > MAX_TRIES && !stuck) return fail(mode, `The search gave up after ${MAX_TRIES} tries: the plan is too tight. Take a relation out, or make the biggest things smaller.`, notes);
     const { item, lost } = stuck!;
@@ -365,7 +401,7 @@ export function solve(plan: Plan): Layout {
   // no place is left out: the game is not held up for a tree.
   let seed = 20261118;
   const random = () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296);
-  for (const item of parsed.items.filter((i) => i.role === 'scenery')) {
+  for (const item of parsed.items.filter((i) => i.role === 'scenery' && !kept.has(i.id))) {
     const y = heightOf(item);
     if (typeof y === 'string') continue;
     const around = item.relations.find((r) => r.kind === 'around');
@@ -377,22 +413,23 @@ export function solve(plan: Plan): Layout {
       const angle = random() * Math.PI * 2;
       const far = reach[0]! + random() * (reach[1]! - reach[0]!);
       const centre = new THREE.Vector3(round(middle.x + Math.sin(angle) * far), y, round(middle.z + Math.cos(angle) * far));
-      const box = boxOf(centre, item.size);
+      const turn = turnAt(item, centre);
+      const box = boxOf(centre, turnedSize(item.size, turn));
       if (box.min.x < space.x[0] || box.max.x > space.x[1] || box.min.z < space.z[0] || box.max.z > space.z[1]) continue;
       if (item.relations.some((r) => r.kind !== 'around' && !holds(r, box, centre, item))) continue;
       const keep = box.clone().expandByScalar(space.gap / 2);
       if (puts.some((p) => !together(item, p.item) && p.keep.intersectsBox(keep))) continue;
-      const mesh = meshOf(item, centre);
+      const mesh = meshOf(item, centre, turn);
       if (fixes(mesh).length) continue;
       scene.add(mesh);
-      puts.push({ item, centre, turn: 0, box, keep, mesh });
+      puts.push({ item, centre, turn, box, keep, mesh });
       put = true;
     }
     if (!put) notes.push(`No free place for \`${item.id}\`: it was left out.`);
   }
 
   // A desk game's panel stands beside everything, in reach, turned to the player (as the starter's does).
-  for (const item of parsed.items.filter((i) => i.role === 'panel')) {
+  for (const item of parsed.items.filter((i) => i.role === 'panel' && !kept.has(i.id))) {
     const all = new THREE.Box3();
     for (const p of puts) all.union(p.box);
     const extent = all.isEmpty() ? 0.3 : Math.max(...all.getSize(new THREE.Vector3()).toArray());
@@ -400,16 +437,10 @@ export function solve(plan: Plan): Layout {
     const x = all.isEmpty() ? 0.3 : leftSide ? all.min.x - 0.05 - item.size.x / 2 : all.max.x + 0.05 + item.size.x / 2;
     const centre = new THREE.Vector3(round(x), round(Math.max(item.size.y / 2 + 0.02, 0.6 * extent)), 0);
     const box = boxOf(centre, item.size);
-    const mesh = meshOf(item, centre);
+    const turn = leftSide ? 0.3 : -0.3;
+    const mesh = meshOf(item, centre, turn);
     scene.add(mesh);
-    puts.push({ item, centre, turn: leftSide ? 0.3 : -0.3, box, keep: box, mesh });
-  }
-
-  // Turn what faces something toward it (a thing's front is its +z side).
-  for (const p of puts) {
-    const facing = p.item.relations.find((r) => r.kind === 'facing');
-    const toward = facing ? targetBox(facing.target, p.centre)?.getCenter(new THREE.Vector3()) : null;
-    if (toward) p.turn = round(Math.atan2(toward.x - p.centre.x, toward.z - p.centre.z));
+    puts.push({ item, centre, turn, box, keep: box, mesh });
   }
 
   const places: Record<string, Place | Place[]> = {};

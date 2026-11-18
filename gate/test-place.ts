@@ -1,5 +1,9 @@
 // The placement solver (src/place.ts): plans it can place, with every relation holding and nothing for the layout
 // checker to fix, and plans it cannot, each refused in words that name the thing and the relation.
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import * as THREE from 'three';
 import { measureLayout, type LayoutTarget } from './src/layout.js';
 import { solve, type Layout, type Place, type Plan } from './src/place.js';
@@ -125,6 +129,74 @@ const middle = (one(atRiver, 'left').position[0] + one(atRiver, 'right').positio
 sure(Math.abs(one(atRiver, 'sign').position[0] - middle) <= 0.03, 'the sign half way between the banks', atRiver.places);
 const sign = one(atRiver, 'sign');
 sure(Math.abs(sign.turn - Math.atan2(-sign.position[0], -sign.position[2])) < 0.002, 'the sign turned to the player', sign);
+
+// A long thing that faces something is placed as it will stand, turned: a bench beside the hero facing it stands
+// lengthwise along the hero's side, fits on the desk, and its turned box overlaps none of the crates round it.
+const turnedBox = (plan: Plan, name: string, place: Place) => {
+  const [w, h, d] = plan.things[name]!.size;
+  const c = Math.abs(Math.cos(place.turn));
+  const s = Math.abs(Math.sin(place.turn));
+  return new THREE.Box3().setFromCenterAndSize(new THREE.Vector3(...place.position), new THREE.Vector3(w * c + d * s, h, w * s + d * c));
+};
+const gallery: Plan = {
+  mode: 'desk',
+  things: {
+    hero: { role: 'hero', size: [0.12, 0.06, 0.12] },
+    bench: { role: 'set', size: [0.34, 0.05, 0.04] },
+    crate: { role: 'set', size: [0.06, 0.06, 0.06], count: 4 },
+  },
+  relations: [['bench', 'right of', 'hero'], ['bench', 'facing', 'hero'], ['crate', 'near', 'bench']],
+};
+const atGallery = solved(gallery, 'a long bench beside the hero, facing it');
+const bench = one(atGallery, 'bench');
+sure(Math.abs(Math.abs(bench.turn) - Math.PI / 2) < 0.2, 'the bench turned to face the hero beside it', bench);
+const standing = [
+  { name: 'hero', box: turnedBox(gallery, 'hero', one(atGallery, 'hero')) },
+  { name: 'bench', box: turnedBox(gallery, 'bench', bench) },
+  ...all(atGallery, 'crate').map((place, i) => ({ name: `crate ${i}`, box: turnedBox(gallery, 'crate', place) })),
+];
+const touching = standing.flatMap((a, i) => standing.slice(i + 1).filter((b) => a.box.intersectsBox(b.box)).map((b) => `${a.name} and ${b.name}`));
+sure(touching.length === 0, 'nothing to overlap the bench as it stands, turned', { touching, places: atGallery.places });
+sure(turnedBox(gallery, 'bench', bench).max.x <= 0.36 + 1e-9, 'the turned bench on the desk', bench);
+
+// Kept places: only the things not kept are placed; the kept ones stay exactly where they were.
+const moved: Plan = {
+  ...desk,
+  things: { ...desk.things, start: { ...desk.things.start!, size: [0.1, 0.03, 0.06] } },
+  keep: { plane: one(onDesk, 'plane'), runway: one(onDesk, 'runway'), panel: one(onDesk, 'panel') },
+};
+const afterChange = solved(moved, 'the desk plan with a bigger Start and the rest kept');
+for (const name of ['plane', 'runway', 'panel']) sure(JSON.stringify(one(afterChange, name)) === JSON.stringify(one(onDesk, name)), `${name} kept where it was`, afterChange.places);
+sure(Boolean(one(afterChange, 'start')) && afterChange.notes.some((n) => n.startsWith('Kept where they were')), 'Start placed again, and a note of what was kept', afterChange);
+
+// layout.mjs --keep: after one thing's entry changes, only that thing is placed again.
+{
+  process.env.GATE_TSX = fileURLToPath(new URL('./node_modules/.bin/tsx', import.meta.url));
+  process.env.GATE_PLACE = fileURLToPath(new URL('./place.ts', import.meta.url));
+  type Places = Record<string, { position: number[]; size: number[] }>;
+  const { layoutScene, readScene } = (await import(new URL('../agent_skills/play/learning-game/scripts/layout.mjs', import.meta.url).href)) as {
+    layoutScene: (file: string, o?: { keep?: boolean }) => { ok: boolean; text: string };
+    readScene: (file: string) => { places: Places };
+  };
+  const work = mkdtempSync(join(tmpdir(), 'keep-'));
+  try {
+    const file = join(work, 'scene.js');
+    const plan = { ...desk };
+    writeFileSync(file, `const SCENE = ${JSON.stringify(plan)};\n`);
+    sure(layoutScene(file).ok, 'the plan placed by layout.mjs');
+    const first = readScene(file).places;
+    writeFileSync(file, readFileSync(file, 'utf8').replace(JSON.stringify(plan), JSON.stringify({ ...plan, things: { ...plan.things, start: { role: 'button', size: [0.1, 0.03, 0.06] } } })));
+    const again = layoutScene(file, { keep: true });
+    sure(again.ok && again.text.includes('placed again: start'), 'layout.mjs --keep to place only the changed Start again', again);
+    const second = readScene(file).places;
+    for (const name of ['plane', 'runway', 'panel']) sure(JSON.stringify(second[name].position) === JSON.stringify(first[name].position), `${name} not moved by --keep`, { first, second });
+    sure(JSON.stringify(second.start.size) === JSON.stringify([0.1, 0.03, 0.06]), 'the changed Start placed with its new size', second);
+    const unchanged = layoutScene(file, { keep: true });
+    sure(unchanged.ok && unchanged.text.includes('placed again: nothing'), 'nothing placed again when no entry changed', unchanged);
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
+}
 
 // Plans that cannot be placed are refused in words: the thing, and what took its places away.
 const refused = (plan: Plan, words: string[], what: string) => {

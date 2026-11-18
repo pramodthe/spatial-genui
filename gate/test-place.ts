@@ -169,6 +169,10 @@ const afterChange = solved(moved, 'the desk plan with a bigger Start and the res
 for (const name of ['plane', 'runway', 'panel']) sure(JSON.stringify(one(afterChange, name)) === JSON.stringify(one(onDesk, name)), `${name} kept where it was`, afterChange.places);
 sure(Boolean(one(afterChange, 'start')) && afterChange.notes.some((n) => n.startsWith('Kept where they were')), 'Start placed again, and a note of what was kept', afterChange);
 
+// A kept place off the plan's ground (here, far off the desk) is not kept: the thing is placed again, on the desk.
+const strayed = solved({ ...desk, keep: { plane: { position: [2, 0.01, 2], turn: 0 } } }, 'a plan whose kept place is off the desk');
+sure(one(strayed, 'plane').position[0] < 0.36 && !strayed.notes.some((n) => n.startsWith('Kept where they were')), 'a kept place off the desk placed again', strayed);
+
 // layout.mjs --keep: after one thing's entry changes, only that thing is placed again.
 {
   process.env.GATE_TSX = fileURLToPath(new URL('./node_modules/.bin/tsx', import.meta.url));
@@ -193,6 +197,13 @@ sure(Boolean(one(afterChange, 'start')) && afterChange.notes.some((n) => n.start
     sure(JSON.stringify(second.start.size) === JSON.stringify([0.1, 0.03, 0.06]), 'the changed Start placed with its new size', second);
     const unchanged = layoutScene(file, { keep: true });
     sure(unchanged.ok && unchanged.text.includes('placed again: nothing'), 'nothing placed again when no entry changed', unchanged);
+    // A desk plan turned into a world is a new space: --keep places everything again.
+    const small = { mode: 'desk', things: { bell: { role: 'button', size: [0.02, 0.02, 0.02] }, ball: { role: 'tool', size: [0.02, 0.02, 0.02] } }, relations: [['ball', 'near', 'bell']] };
+    writeFileSync(file, `const SCENE = ${JSON.stringify(small)};\n`);
+    sure(layoutScene(file).ok, 'a small plan placed on the desk');
+    writeFileSync(file, readFileSync(file, 'utf8').replace('"mode":"desk"', '"mode":"world"'));
+    const world = layoutScene(file, { keep: true });
+    sure(world.ok && world.text.includes('Kept 0,'), '--keep to place everything again when the mode changes', world);
   } finally {
     rmSync(work, { recursive: true, force: true });
   }

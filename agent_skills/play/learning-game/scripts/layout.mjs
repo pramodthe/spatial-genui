@@ -3,7 +3,7 @@
 // the layout from above and the solver's notes. When the plan cannot be placed it says which thing and why, and
 // exits 1. Usage: node layout.mjs [/work/module.js] [--keep]
 // --keep: only the things whose plan entry changed (their role, size, count, lift or their own relations) are placed
-// again; the others stay at their PLACES, so one change does not move the whole scene.
+// again; the others stay at their PLACES, so one change does not move the whole scene. A change of mode places all.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -17,8 +17,9 @@ export const PLACES_END = '// ---- end of places ----';
 /** A short mark of a plan, kept with its places: a plan changed since then has to be placed again. */
 export const stampOf = (scene) => createHash('sha256').update(JSON.stringify(scene)).digest('hex').slice(0, 12);
 
-/** A short mark of one thing's own entry in the plan (what it is, and the relations it stands by), kept with its places. */
-export const entryOf = (scene, name) => stampOf({ thing: scene.things[name], relations: (scene.relations ?? []).filter((r) => Array.isArray(r) && r[0] === name) });
+/** A short mark of one thing's own entry in the plan (what it is, and the relations it stands by), and of the plan's
+ * mode (a desk and a world are different spaces), kept with its places. */
+export const entryOf = (scene, name) => stampOf({ mode: scene.mode === 'world' ? 'world' : 'desk', thing: scene.things[name], relations: (scene.relations ?? []).filter((r) => Array.isArray(r) && r[0] === name) });
 
 /** A scene part: its SCENE, the PLACES under it (or null), and whether those were solved from this SCENE. */
 export function readScene(file) {

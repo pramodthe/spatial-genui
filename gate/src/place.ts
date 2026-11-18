@@ -376,6 +376,8 @@ export function solve(plan: Plan): Layout {
     const turn = Number.isFinite(at.turn) ? at.turn : 0;
     const size = turnedSize(item.size, turn);
     const box = boxOf(centre, size);
+    // A place off this plan's ground (the mode changed, or the space did) is no place to keep: it is placed again.
+    if (item.role !== 'panel' && (box.min.x < space.x[0] - 1e-9 || box.max.x > space.x[1] + 1e-9 || box.min.z < space.z[0] - 1e-9 || box.max.z > space.z[1] + 1e-9)) continue;
     const keep = item.role === 'panel' ? box : boxOf(centre, item.room ? turnedSize(item.room, turn).max(size) : size).expandByScalar(space.gap / 2);
     const mesh = meshOf(item, centre, turn);
     scene.add(mesh);

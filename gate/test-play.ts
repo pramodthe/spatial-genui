@@ -1,7 +1,7 @@
 // The play-through (src/play.ts): a small game that plays well passes, and the same game broken in one way at a
 // time fails the rule made for that way.
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -328,6 +328,7 @@ const levelsBroken: [string, string, string][] = [
   ['Next level that does not open the next level', 'fix:level', swap(leveled, ["if (phase === 'done' && stars > 0 && level < 3) { level++; begin(); }", 'begin();'])],
   ['Try again that goes back to level 1', 'fix:level', swap(leveled, ["{ label: 'Try again', id: 'again', onPress() { begin(); } }", "{ label: 'Try again', id: 'again', onPress() { level = 1; begin(); } }"])],
   ['a state with no level', 'fix:level', swap(leveled, ['state: () => ({ phase, move, result, stars, level }),', 'state: () => ({ phase, move, result, stars }),'])],
+  ['Try again that does nothing once the last level is played', 'fix:level', swap(leveled, ["{ label: 'Try again', id: 'again', onPress() { begin(); } }", "{ label: 'Try again', id: 'again', onPress() { if (level < 3) begin(); } }"])],
 ];
 for (const [what, expected, code] of levelsBroken) {
   const result = run(code);
@@ -346,6 +347,20 @@ try {
   const levels = starter.stats?.play?.rounds.levels ?? [];
   if (!starter.ok || !starter.stats?.play?.ok || levels.length !== 3 || levels.some((r) => !(Number(r.stars) > 0))) {
     console.error("expected the learning game's starter to play through all three of its levels", starter.error ?? JSON.stringify(starter.stats?.play, null, 1));
+    process.exit(1);
+  }
+  // A game with LEVELS that does not say so in its play block is still held to its play-through's findings: here
+  // its round never ends, and the check fails it as well as noting the missing `levels`.
+  const ending = "    if (phase === 'play' && touched.size === targets.length) finish();";
+  const own = readFileSync(join(work, 'game.js'), 'utf8');
+  if (!own.includes(ending) || !own.includes('levels: LEVELS.length,')) throw new Error('test-play: the starter no longer has the lines this test breaks');
+  writeFileSync(join(work, 'game.js'), own.replace('levels: LEVELS.length,', '').replace(ending, ''));
+  const checked = spawnSync('node', [fileURLToPath(new URL('../agent_skills/play/learning-game/scripts/check.mjs', import.meta.url)), join(work, 'module.js')], {
+    encoding: 'utf8',
+    env: { ...process.env, GATE_TSX: fileURLToPath(new URL('./node_modules/.bin/tsx', import.meta.url)), GATE_ENTRY: gate },
+  });
+  if (checked.status === 0 || !/levels: LEVELS.length/.test(checked.stdout) || !/^FIX: Play: .*did not end/m.test(checked.stdout)) {
+    console.error('expected the check to note LEVELS without `levels` and still fail the round that never ends', checked.stdout.slice(0, 3000));
     process.exit(1);
   }
 } finally {

@@ -43,7 +43,7 @@ fall right, the game makes the fall mean something.
 | a tower, a loaded boat, a crane | `motionCentre`, `motionTopples` | it falls when its centre of mass leaves its base |
 | a dam, a diver, a boat that floats or sinks | `motionPressure`, `motionFloat` | pressure grows with depth; density decides floating |
 | pieces dropped into slots | `motionSnap` | (which slot a piece is over) |
-| a bowl, a tin, a tank or a glass that fills | `motionFill`: `to.add(from.take(amount))` | volume is kept: what leaves one arrives in the other; the level is volume over area |
+| a bowl, a tin, a tank or a glass that fills | `motionFill`: `to.add(from.take(amount))` | volume is kept: what leaves one arrives in the other, or spills over a full one (`.spilled`); the level is volume over area |
 | an oven, a cake baking, a pan cooling, a kettle | `motionHeat` | a thing heats fast at first and slower near the setting, never past it; `timeTo` says when it is ready |
 | gears, a bicycle, a clock, an engine, a pump | `motionMechanism` with `motionGearRatio`, cranks and cams | one turn of the driver sets every part: a small gear turns a big one slower, the other way |
 | a block on a ramp, a sledge, a car parked on a hill | `motionSlope` | it slides once tan(angle) passes the friction; steeper slides faster |

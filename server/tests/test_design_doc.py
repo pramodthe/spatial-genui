@@ -110,6 +110,12 @@ def test_a_scene_plan_is_read_as_data_and_checked() -> None:
     # Read, never run: code in the plan is an error, not something that happens.
     _scene, problems = design._scene(doc(scene=SCENE.replace("[0.06, 0.1, 0.06]", "makeSize()")))
     assert problems and "cannot be read" in problems[0]
+    # A plan nested far deeper than any scene plan is refused in words, not with a crash.
+    _scene, problems = design._scene(doc(scene=SCENE.replace("[0.06, 0.1, 0.06]", "[" * 5000 + "]" * 5000)))
+    assert problems and "cannot be read" in problems[0] and "Nested" in problems[0]
+    # Relations are written as the solver reads them, in lower case.
+    _scene, problems = design._scene(doc(scene=SCENE.replace("'right of'", "'Right of'")))
+    assert any("Right of" in p for p in problems)
 
 
 def test_a_reply_that_is_no_design_or_a_failed_call_gives_none(monkeypatch) -> None:

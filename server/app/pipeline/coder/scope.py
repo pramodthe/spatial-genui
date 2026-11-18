@@ -11,3 +11,7 @@ studio: ContextVar[Any] = ContextVar("studio", default=None)
 backend: ContextVar[Any] = ContextVar("backend", default=None)
 # Generated assets so far, by kind ({"image": 2, ...}); one dict per run, changed in place by the tools.
 made: ContextVar[dict[str, int] | None] = ContextVar("made", default=None)
+# Dollars this attempt has spent on model calls, from every cost meter (the coder, its grader and the model-maker),
+# cached input at its cached price: {"usd": 0.42}, one dict per attempt, changed in place by the meters. The daily
+# budget is charged from it (guard.record_spend).
+spent: ContextVar[dict[str, float] | None] = ContextVar("spent", default=None)

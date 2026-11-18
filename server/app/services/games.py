@@ -11,7 +11,7 @@ from typing import Any
 from app.core.background import track
 from app.core.clock import js_round, now_iso
 from app.core.db import load_games, save_game
-from app.core.guard import record_spend
+from app.core.guard import attempt_calls, record_spend
 from app.pipeline.game import run_game
 from app.services import live, studio
 
@@ -121,10 +121,7 @@ async def write(game: dict[str, Any]) -> None:
         with live.watching(live.game_key(game["id"])) as watcher:
             watcher.set_stage("designing")
             result = await run_game(game["request"], thread_id=game["id"])
-        await record_spend([
-            {"model": result["model"], "promptTokens": attempt.get("promptTokens") or 0, "completionTokens": attempt.get("completionTokens") or 0}
-            for attempt in result.get("attempts") or []
-        ])
+        await record_spend(attempt_calls(result))
         if not result.get("ok") or not result.get("code"):
             raise RuntimeError(result.get("error") or "The game could not be written.")
         game.update(status="ready", code=result["code"], model=result["model"], title=panel_title(result["code"]) or game["title"])

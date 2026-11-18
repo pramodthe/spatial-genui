@@ -14,7 +14,7 @@ from app.core import config as config_mod, llm
 from app.core.background import track
 from app.core.clock import js_round, now_iso
 from app.core.db import count_courses, load_courses, save_course
-from app.core.guard import record_spend
+from app.core.guard import attempt_calls, record_spend
 from app.core.json_reply import extract_json
 from app.pipeline.lesson import run_lesson
 from app.services import live, studio
@@ -293,10 +293,7 @@ async def build_lesson(course: dict[str, Any], lesson: dict[str, Any]) -> None:
                 thread_id=f"{course['id']}:lesson:{index}",
                 mode=mode,
             )
-        await record_spend([
-            {"model": result["model"], "promptTokens": attempt.get("promptTokens") or 0, "completionTokens": attempt.get("completionTokens") or 0}
-            for attempt in result.get("attempts") or []
-        ])
+        await record_spend(attempt_calls(result))
         if not result.get("ok") or not result.get("code"):
             raise RuntimeError(result.get("error") or "The lesson could not be written.")
         lesson.update(status="ready", code=result["code"], model=result["model"], generatedAt=now_iso())
@@ -338,10 +335,7 @@ def polish_lesson(course: dict[str, Any], index: int, pictures: list[str]) -> bo
                 pictures=pictures,
                 thread_id=f"{course['id']}:polish:{index}",
             )
-            await record_spend([
-                {"model": result["model"], "promptTokens": attempt.get("promptTokens") or 0, "completionTokens": attempt.get("completionTokens") or 0}
-                for attempt in result.get("attempts") or []
-            ])
+            await record_spend(attempt_calls(result))
             if not result.get("ok") or not result.get("code"):
                 raise RuntimeError(result.get("error") or "no revision")
             if result.get("critique"):

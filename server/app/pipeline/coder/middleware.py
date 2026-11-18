@@ -11,6 +11,7 @@ from langchain.agents.middleware.types import AgentMiddleware, hook_config
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from app.core.llm import model_prices
+from app.pipeline.coder import scope
 
 # Unknown models use the same stand-in prices as the daily budget.
 _FALLBACK_IN = 3.0
@@ -48,6 +49,10 @@ class CostMeterMiddleware(AgentMiddleware):
         cached = min(prompt, int((usage.get("input_token_details") or {}).get("cache_read") or 0))
         completion = int(usage.get("output_tokens") or 0)
         cost = (prompt - cached) * price_in + cached * price_cached + completion * price_out
+        # The attempt's total across every meter, for the daily budget (the grader's own state is thrown away).
+        run = scope.spent.get()
+        if run is not None:
+            run["usd"] = run.get("usd", 0.0) + cost / 1e6
         spent = float(state.get(self.key) or 0) + cost / 1e6
         if spent < self.budget_usd:
             return {self.key: spent}

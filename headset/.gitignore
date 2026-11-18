@@ -44,3 +44,6 @@ pids/
 .vscode/mcp.json
 .codex/config.toml
 opencode.json
+
+# The play-test copies its browser scripts here to run them (agent_skills/play/playtest/scripts/playtest.mjs)
+tests/.playtest-*.mjs

@@ -57,6 +57,21 @@ if ((s.grabbables ?? 0) === 0) add(note, 'Nothing to pick up: most learning game
 // The layout as the player sees it, measured on the built scene by the dry run (hidden targets, the start spot,
 // reach, label sizes; a world's rules are in references/world.md).
 if (process.env.LAYOUT_CHECK !== '0') for (const f of s.layout?.findings ?? []) add(f.level === 'fix' ? fix : note, `Layout: ${f.text}`);
+// The play-through: a simulated hand plays the game as its `play` block says (references/play.md), in the gate's
+// dry run. Its FIX findings count like any other; PLAY_CHECK=note reports them without failing the check, and
+// PLAY_CHECK=0 skips the play-through (the server passes CODER_PLAY_CHECK here).
+const playCheck = process.env.PLAY_CHECK ?? '1';
+let played = '';
+if (playCheck !== '0') {
+  const strict = playCheck !== 'note';
+  if (!s.play) add(strict ? fix : note, 'Play: build() returns no `play` block, so nothing can play the game through (references/play.md).');
+  else {
+    for (const f of s.play.findings ?? []) add(strict && f.level === 'fix' ? fix : note, `Play: ${f.text}`);
+    const r = s.play.rounds ?? {};
+    const round = (x) => (x?.phase === 'done' ? `${x.stars} star${x.stars === 1 ? '' : 's'} (result ${Number(x.result).toFixed(2)})` : 'no result');
+    if (r.played) played = `played through: ${round(r.played)} as play.challenge plays it, ${round(r.slow)} at 30 frames a second, ${round(r.idle)} with no hand`;
+  }
+}
 for (const m of game.matchAll(/\bwhy:\s*(['"`])((?:(?!\1).)*)\1/g)) {
   const words = m[2].trim().split(/\s+/).length;
   if (words > 22) add(note, `A why of ${words} words ("${m[2].slice(0, 40)}..."): keep each to one short line, about 15 words.`);
@@ -67,6 +82,7 @@ for (const m of game.matchAll(/\btext:\s*(['"`])((?:(?!\1).)*)\1/g)) {
 }
 
 console.log(`gate ok: ${s.meshes} meshes, ${s.drawCalls} draw calls, ${s.triangles} triangles, ${s.grabbables} grabbable, ${s.pressables} pressable, ${s.moving} moving, ${s.panels} panel(s)`);
+if (played) console.log(played);
 for (const f of fix) console.log(toGameLines(f, offset));
 for (const n of note) console.log(toGameLines(n, offset));
 if (!fix.length) console.log('game ok');

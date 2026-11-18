@@ -21,7 +21,7 @@ course:  plan ──▶ the first lesson; each later lesson is written when the 
 | `course.py` | The course graph: plan the levels, then start the first lesson. | a course | the planned course |
 | `coder/` | The coder agent (below). | the brief and the planning pictures | `/work/module.js` |
 | `grader.py` | Grades the coder's game against a rubric for the request, comparing it with the planning pictures; it can send the game back once. | the sandbox | a verdict |
-| `gate.py` | Runs the gate (`gate`): static checks, the sandboxed dry run, and the layout check. | the module | ok, or the error to repair |
+| `gate.py` | Runs the gate (`gate`): static checks, the sandboxed dry run, the layout check, and the play-through of a learning game (a simulated hand plays it by its own `play` block). | the module | ok, or the error to repair |
 | `prompts.py` | The system prompts for one-call writing. The published text is frozen in `prompt_text.json`; `tests/test_prompts.py` checks its fingerprints. | | |
 
 ## The coder
@@ -33,7 +33,8 @@ model library at `/data/library`.
 1. `new-game.mjs` starts the game: `/work/game.js` (the game's own code, the only file the agent edits) and
    `/work/kits.js` (the look's kit, the play kit and the ECS kit).
 2. The agent reads the planning pictures in `/work/plan/` and builds to match them.
-3. `check.mjs` builds `/work/module.js` from the two files and runs the gate and the learning-game rules.
+3. `check.mjs` builds `/work/module.js` from the two files and runs the gate, the learning-game rules and the
+   play-through (`CODER_PLAY_CHECK=0` turns the play-through off here and in the host gate).
 4. `playtest.mjs` opens the module in the real headset app, run headless, and takes screenshots.
 5. When the agent stops, the grader (`grader.py`) reviews the game, and the agent revises it if needed.
 6. The final view is saved to the Studio, and the module is downloaded and checked again on the host.

@@ -1,8 +1,9 @@
 // Host gate and in-sandbox check: static validation plus the locked-down dry run.
-// JSON in on stdin: { code, knownAssets?: string[], assetIds?: string[], short?: boolean }
+// JSON in on stdin: { code, knownAssets?: string[], assetIds?: string[], short?: boolean, play?: boolean }
 // JSON out: { ok, stage?, stats?, warnings?, error?, errorFile? }
 // `short` keeps a long error out of the reply (the dry-run skill); the host writer leaves it off
-// so a repair sees the whole error.
+// so a repair sees the whole error. A module whose build() returns a `play` block is also played through
+// (src/play.ts, in stats.play) unless `play` is false.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -43,7 +44,7 @@ async function main() {
   let out: GateOut;
   try {
     const body = JSON.parse((await readStdin()) || '{}') as {
-      code?: unknown; knownAssets?: unknown; assetIds?: unknown; short?: unknown;
+      code?: unknown; knownAssets?: unknown; assetIds?: unknown; short?: unknown; play?: unknown;
     };
     const code = typeof body.code === 'string' ? body.code : '';
     const short = body.short === true;
@@ -57,7 +58,7 @@ async function main() {
       const ids = Array.isArray(body.assetIds)
         ? body.assetIds.filter((id): id is string => typeof id === 'string')
         : validation.assets;
-      const run = await dryRun(validation.transformed, assetStubs(ids));
+      const run = await dryRun(validation.transformed, assetStubs(ids), { play: body.play !== false });
       if (!run.ok) out = { ok: false, stage: 'dry-run', ...present(run.error, short) };
       else out = { ok: true, stats: run.stats, warnings: run.warnings };
     }

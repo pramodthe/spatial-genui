@@ -160,6 +160,22 @@ to run time, and the result grows in front of them. The challenge: the biggest o
 days or tries. Show time passing (a sun arc, a day counter) and growth that responds to each condition, so the player
 can see which one held it back.
 
+### The play block for each kind
+
+Every game says how a hand plays it (`references/play.md`); the check plays that. The usual gestures:
+
+| Kind | A move | A round |
+|---|---|---|
+| Build it | `{ grab: cornerTab, to: foldEnd }`: carry the handle to where the fold ends | the same gestures in order; the test at the end runs by itself or on a press |
+| Test it | `{ grab: plane, path: [back, forward], seconds: 0.3, throw: true }` | one launch; change one thing and launch again is the next round |
+| Steer it | `{ hold: () => nextCrate, seconds: 3 }`: the hand goes where the hero should go | holds that follow the next target; a held tiller or bar steers with `roll` |
+| Sort it | `{ grab: piece, to: binOf(piece) }` | one for each piece |
+| Balance it | `{ grab: weight, to: mark }` | the weights that settle it |
+| Grow it | `{ grab: pot, to: lightSpot }`, `{ hold: overPot, tilt: 45, until: () => watered }`, `{ press: runButton }` | the conditions, then the press that runs time |
+
+A tool that works by how the hand is turned (a jug that pours, a bar that steers) needs the pose in its gesture
+(`tilt`, `roll`); a hold that lasts "until it happens" says so with `until`.
+
 ## 5. Writing the words
 
 - The goal and each `say`: one sentence, an instruction ("Fold the top corners to the centre line.").

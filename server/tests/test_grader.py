@@ -12,7 +12,8 @@ def test_rubric_names_the_request_and_the_loop() -> None:
     text = grader.rubric_for("Make a bat game with sound:\n  hunt moths by their echoes.")
     assert "Make a bat game with sound: hunt moths by their echoes." in text
     assert "game ok" in text and "Try again" in text and "before Start" in text
-    assert len(text.splitlines()) == 9
+    assert "play block is honest" in text
+    assert len(text.splitlines()) == 10
 
 
 def test_rubric_can_be_turned_off(monkeypatch: pytest.MonkeyPatch) -> None:

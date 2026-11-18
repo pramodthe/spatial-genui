@@ -8,8 +8,8 @@ process.stdin.on('data', (chunk) => (input += chunk));
 process.stdin.on('end', () => {
   let result;
   try {
-    const { transformed, assets } = JSON.parse(input);
-    result = dryRunUnsafe(transformed, assets ?? {});
+    const { transformed, assets, play } = JSON.parse(input);
+    result = dryRunUnsafe(transformed, assets ?? {}, { play: Boolean(play) });
   } catch (err) {
     result = { ok: false, error: `Dry run crashed: ${(err as Error).message}` };
   }

@@ -53,8 +53,8 @@ with six steps from catching to a Serve button. Nobody could tell how to play th
    `--world` and read `references/world.md`.
 
    It writes a game that passes the app's gate as it is: a starter game with a goal, a move to learn, a challenge
-   with a clock, stars, best and Try again, all wired to the hands. Starting from it means your effort goes into the
-   game, not into plumbing. Three files:
+   with a clock, stars, best and Try again, all wired to the hands, and a `play` block the check can already play
+   through. Starting from it means your effort goes into the game, not into plumbing. Three files:
    - **/work/game.js** - the game's own code (the parts block and `build()`). The only file you edit.
    - **/work/kits.js** - the look kit, the look's builders, the play kit (stars, bursts, pops), the ECS kit and, for a
      world, the land kit. Every function in it is in scope in game.js. Do not read or edit it: the APIs are in the
@@ -85,15 +85,23 @@ with six steps from catching to a Serve button. Nobody could tell how to play th
    to follow the hand without a pinch (steering, aiming), use `hands` (`/skills/game/hand-play`); for sound (every
    action answered, and ideas about pitch, rhythm or echoes taught by ear), use `sound` (`/skills/common/sound`).
 
+   Then write the game's `play` block (`references/play.md`): one gesture for each move, the gestures of one good
+   round, and `state()`. It says what a player's hand does, as data; the check plays it. Whenever a move or the
+   challenge changes, change its gesture in the same edit.
+
 5. **Check, then fix.** Run
 
    ```
    node /skills/play/learning-game/scripts/check.mjs /work/module.js
    ```
 
-   It runs the app's gate and dry run, the shared hand rules, the look's rules and the play rules. Fix every `FIX`
-   line, read every `NOTE`, and run it again until it prints `game ok`. Then read `references/mistakes.md` once and
-   make sure none of those happened.
+   It runs the app's gate and dry run, the shared hand rules, the look's rules and the play rules, and then it plays
+   the game through: a simulated hand does what the `play` block says, at 72 and at 30 frames a second, again after
+   Try again, and once with no hand at all. A `Play:` line means a player would be stuck in the same place: a move
+   that does not register, a round that never ends or has no result, a result that changes with the frame rate, a
+   round won without the hand (`references/play.md` says what each one means). Fix every `FIX` line, read every
+   `NOTE`, and run it again until it prints `game ok`; its `played through:` line shows the stars and the result
+   your own gestures earned. Then read `references/mistakes.md` once and make sure none of those happened.
 
 6. **Play-test it, then finish.** Follow the playtest skill (`/skills/play/playtest/SKILL.md`): open the game in the
    real headset app, look at the screenshot, apply the 5-second test, try the main action with an emulated hand, and
@@ -130,7 +138,8 @@ when the real look of the thing matters (a microscope, a guitar).
   world around the player instead of a toy on the desk (references/world.md).
 - `scripts/build-module.mjs` - builds /work/module.js from kits.js and game.js (the check and the play-test run it).
 - `scripts/assemble.mjs` - joins the game's parts (`/work/parts`) into game.js's parts block; the check runs it first.
-- `scripts/check.mjs` - step 5. Runs `/skills/looks/shared/scripts/check.mjs` (gate, hands, look rules) and the play rules.
+- `scripts/check.mjs` - step 5. Runs `/skills/looks/shared/scripts/check.mjs` (gate, hands, look rules), the play rules
+  and the play-through.
 - `assets/play-starter.js` - the starter game (game.js, written by step 1).
 - `assets/play-kit.js` - stars, bursts and pops, self-lit so they suit every look (in kits.js, by step 1).
 - `assets/plain.js` - the plain look: a desk mat and kit materials.
@@ -138,5 +147,7 @@ when the real look of the thing matters (a microscope, a guitar).
 - `references/feel.md` - step 4: making every action answered, the scene alive and the reward land.
 - `references/mistakes.md` - step 5: failures seen in generated games and lessons.
 - `references/parts.md` - the plan's format and the parts' format (identity.js, sounds.js).
+- `references/play.md` - steps 4 and 5: the `play` block (gestures, places, the hand's pose, state) and what each
+  `Play:` finding means.
 - `references/world.md` - when the plan says mode: world: a place around the player, built in desk units and shown
   12 times bigger (`new-game.mjs --world`).

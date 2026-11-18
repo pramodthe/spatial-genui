@@ -4,20 +4,27 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from typing import Any
 
 from app.core.config import REPO_ROOT
 
 TSX = REPO_ROOT / "gate" / "node_modules" / ".bin" / "tsx"
 GATE = REPO_ROOT / "gate" / "gate.ts"
-# The child is killed at 15s; the first call also bundles it.
-GATE_TIMEOUT_S = 60
+# The child is killed at 15s, or at 90s when it plays the game through (gate/src/sandbox.ts); the first call also bundles it.
+GATE_TIMEOUT_S = 120
+
+
+def play_enabled() -> bool:
+    """The play-through (gate/src/play.ts): a simulated hand plays a game by its own `play` block. CODER_PLAY_CHECK=0
+    turns it off, in the coder's check and in the host gate (to compare runs with and without it)."""
+    return os.environ.get("CODER_PLAY_CHECK", "1") != "0"
 
 
 async def check_module(code: str, known_assets: list[str] | None = None, *, short: bool = False) -> dict[str, Any]:
     if not TSX.exists():
         return {"ok": False, "stage": "dry-run", "error": f"Gate runner missing ({TSX}). Run npm install in gate."}
-    payload = {"code": code, "knownAssets": known_assets or [], "short": short}
+    payload = {"code": code, "knownAssets": known_assets or [], "short": short, "play": play_enabled()}
     try:
         proc = await asyncio.create_subprocess_exec(
             str(TSX), str(GATE),

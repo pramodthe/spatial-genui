@@ -7,7 +7,8 @@ const code = readFileSync(file, 'utf8');
 const tsx = process.env.GATE_TSX || 'tsx';
 const gate = process.env.GATE_ENTRY || '/opt/gate/gate.ts';
 const child = spawnSync(tsx, [gate], {
-  input: JSON.stringify({ code, short: true }),
+  // PLAY_CHECK=0: without the play-through (the learning-game check's switch).
+  input: JSON.stringify({ code, short: true, play: process.env.PLAY_CHECK !== '0' }),
   encoding: 'utf8',
 });
 // The gate did not start at all (no tsx, or no gate at GATE_ENTRY): say so rather than exit 1 in silence.

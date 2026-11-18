@@ -48,6 +48,8 @@ export default function build({ THREE, kit, traits, ui, isGrabbed, hands, sound 
   let shown = 0;
   let nudge = 0;
   let best = null;
+  let lastResult = null;
+  let lastStars = null;
   const touched = new Set();
 
   // The panel stands to the right of the game, in reach (the host scales the 3D so its largest size is 0.5 m and the
@@ -161,6 +163,8 @@ export default function build({ THREE, kit, traits, ui, isGrabbed, hands, sound 
     const result = clock;
     best = best === null ? result : CHALLENGE.lowerIsBetter ? Math.min(best, result) : Math.max(best, result);
     const k = playStarsFor(result, CHALLENGE.stars, CHALLENGE.lowerIsBetter);
+    lastResult = result;
+    lastStars = k;
     stars.userData.show(k);
     sfx.stop('music');
     sfx.fire(k > 0 ? 'win' : 'miss');
@@ -201,10 +205,20 @@ export default function build({ THREE, kit, traits, ui, isGrabbed, hands, sound 
     );
   }
 
+  // How a hand plays this game, for the check's play-through (references/play.md): one gesture for each move, in
+  // order, then the gestures of one round. The check does them with a simulated hand and fails when a move does not
+  // register, the round gives no result, or it scores without the hand. REPLACE the gestures with the game's own.
+  const touchOf = (i) => (targets[i].grab ? { grab: targets[i].object } : { press: targets[i].object });
+
   return {
     root,
     // A world's sky (day, dawn, dusk, night, overcast) and ground (grass, sand, snow, rock): references/world.md.
     ...(WORLD ? { mode: 'world', sky: 'day', ground: 'grass' } : {}),
+    play: {
+      learn: MOVES.map((m) => touchOf(m.target ?? 0)),
+      challenge: targets.map((_, i) => touchOf(i)),
+      state: () => ({ phase, move, result: phase === 'done' ? lastResult : null, stars: phase === 'done' ? lastStars : null }),
+    },
     update(time, delta) {
       const dt = Math.min(delta, 0.05);
       if (look.update) look.update(time);

@@ -67,7 +67,11 @@ with six steps from catching to a Serve button. Nobody could tell how to play th
      look's skill, `assets/play-kit.js` notes, `/skills/common/ecs`, `/skills/game/motion` and `/skills/game/hands`.
    - **/work/module.js** - built from the two by the check and the play-test; what the headset gets. Never edit it.
 
-2. **Plan before any geometry.** Write /work/plan.md (the format is in `references/parts.md`), using `references/design.md`:
+2. **Plan before any geometry.** When the game has a design document, /work/design.md (the app's designer wrote
+   it before you started), it is the plan: build what it says, write no plan.md, turn each emulator check of its
+   Controls table and each hand check of its Checks section into a gesture of the play block, and each value they name
+   into a field of `state()`. Its scene plan is already in /work/parts/scene.js. Otherwise write /work/plan.md (the
+   format is in `references/parts.md`), using `references/design.md`:
    - the one idea, as a sentence a player could repeat ("a wing that pushes air down gets pushed up");
    - the goal, in the player's words ("make a plane that flies far");
    - the hero: the one thing the hands work on (the sheet, the boat, the bridge), big and in front;

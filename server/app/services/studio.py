@@ -191,7 +191,7 @@ def read_run(run_id: str) -> dict[str, Any] | None:
     events = _read_json(folder / "events.json", [])
     files = sorted(str(p.relative_to(folder / "files")) for p in (folder / "files").rglob("*") if p.is_file())
     texts = {}
-    for name in ("plan.md", "parts/identity.js", "parts/sounds.js"):
+    for name in ("design.md", "plan.md", "parts/identity.js", "parts/sounds.js"):
         path = folder / "files" / name
         if path.exists():
             texts[name] = path.read_text(errors="replace")[:20000]

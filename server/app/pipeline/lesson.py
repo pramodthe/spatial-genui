@@ -76,6 +76,9 @@ class LessonState(TypedDict, total=False):
     run_id: str
     # The plan's reference pictures for the coder (game.py PLAN_PICTURES), put in the sandbox as /work/plan/<name>.
     plan_pictures: list[dict[str, Any]] | None
+    # The design document (design.py design_doc), put in the sandbox as /work/design.md, its scene plan as
+    # /work/parts/scene.js.
+    design: dict[str, Any] | None
     model: str
     provider: str
     started: float
@@ -413,6 +416,7 @@ async def run_lesson(
     thread_id: str | None = None,
     run_id: str | None = None,
     plan_pictures: list[dict[str, Any]] | None = None,
+    design: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     chosen = target or llm.default_target()
     game = kind == "game"
@@ -432,6 +436,7 @@ async def run_lesson(
         # merges this input into the old state, so every per-run field is set here, not left from last time.
         "run_id": run_id or _new_id(),
         "plan_pictures": plan_pictures,
+        "design": design,
         "started": time.time(),
         "messages": [],
         "attempts": [],

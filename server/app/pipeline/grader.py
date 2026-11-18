@@ -71,14 +71,29 @@ should have moved where the game says, and the values in `game` should change as
 does nothing when a hand does it fails, however it looks. A game whose `game` is null has no `play` block: say so."""
 
 
-def rubric_for(request: str) -> str:
-    """The rubric for one lesson or game: the learning-game loop, about this request's idea."""
+# A game with a design document (design.py design_doc) is checked against it too.
+DESIGNED = """
+- The game is the one /work/design.md describes (read_design): its moves in its order, each with its hand action and done() condition; its levels with their star thresholds; its look and palette; and every emulator check of its Controls table and hand check of its Checks section is a gesture in the play block that the check plays through."""
+
+
+def rubric_for(request: str, *, designed: bool = False) -> str:
+    """The rubric for one lesson or game: the learning-game loop, about this request's idea, and, for a game with a
+    design document, that the game is the design."""
     first = " ".join(str(request or "").split())[:300]
-    return RUBRIC.format(request=first or "the request")
+    return RUBRIC.format(request=first or "the request") + (DESIGNED if designed else "")
 
 
-def grader_tools(backend: Any, kind: str = "lesson") -> list[Any]:
-    """Tools that look at the module in the run's sandbox (the coder's backend)."""
+def grader_tools(backend: Any, kind: str = "lesson", *, designed: bool = False) -> list[Any]:
+    """Tools that look at the module in the run's sandbox (the coder's backend), and its design document when it has
+    one."""
+
+    @tool
+    async def read_design(offset: int = 0) -> str:
+        """Read the game's design document, /work/design.md (the designer wrote it before any code): 400 lines from
+        line `offset`. The game is checked against it: its moves, controls and checks, levels, look and assets."""
+        start = max(0, int(offset)) + 1
+        result = await backend.aexecute(f"sed -n '{start},{start + 399}p' /work/design.md", timeout=60)
+        return (result.output or "no design document")[:40000]
 
     @tool
     async def playtest() -> list[dict[str, Any]]:
@@ -171,7 +186,8 @@ def grader_tools(backend: Any, kind: str = "lesson") -> list[Any]:
         result = await backend.aexecute(PLAYTEST + (" --game" if kind == "game" else "") + " --play", timeout=420)
         return (result.output or "no output")[-4000:]
 
-    return [playtest, run_play_check, read_game_code, plan_pictures, iwsdk, game_state, play_in_app]
+    tools = [playtest, run_play_check, read_game_code, plan_pictures, iwsdk, game_state, play_in_app]
+    return [read_design, *tools] if designed else tools
 
 
 def enabled() -> bool:
@@ -196,13 +212,13 @@ class BudgetAwareRubric(RubricMiddleware):
         return None if self._spent(state) else await super().aafter_agent(state, runtime)
 
 
-def rubric_middleware(model: Any, backend: Any, kind: str = "lesson", on_evaluation: Callable[[dict[str, Any]], None] | None = None, *, budget_usd: float) -> RubricMiddleware:
+def rubric_middleware(model: Any, backend: Any, kind: str = "lesson", on_evaluation: Callable[[dict[str, Any]], None] | None = None, *, budget_usd: float, designed: bool = False) -> RubricMiddleware:
     model_id = getattr(model, "model_name", None) or "unknown"
     return BudgetAwareRubric(
         budget_usd=budget_usd,
         model=model,
         system_prompt=GRADER_PROMPT,
-        tools=grader_tools(backend, kind),
+        tools=grader_tools(backend, kind, designed=designed),
         grader_middleware=[
             ToolImagesAsUserMessage(),
             ModelCallLimitMiddleware(run_limit=GRADER_CALLS),

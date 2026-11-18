@@ -78,7 +78,7 @@ class _Sandbox:
 def _install(monkeypatch: pytest.MonkeyPatch, agent_factory):
     monkeypatch.setattr(coder, "agent_model", lambda: _Model("gpt-6.1-sol", "https://api.openai.com/v1"))
     monkeypatch.setattr(model_maker, "agent_model", lambda: _Model("gpt-6.1-sol", "https://api.openai.com/v1"))
-    monkeypatch.setattr(coder, "_open_sandbox", lambda _run_id: _Sandbox())
+    monkeypatch.setattr(coder, "_open_sandbox", lambda _run_id, **_options: _Sandbox())
     monkeypatch.setattr(coder, "ModalSandbox", _Backend)
     monkeypatch.setattr(coder, "create_deep_agent", agent_factory)
 
@@ -497,3 +497,46 @@ async def test_agent_keeps_a_lesson_the_reviewer_accepts(monkeypatch: pytest.Mon
     )
     assert result["ok"] is True
     assert result["code"] == EXAMPLE_MODULE
+
+
+@pytest.mark.asyncio
+async def test_a_designed_game_gets_its_document_and_placed_scene_plan_before_the_coder(monkeypatch: pytest.MonkeyPatch) -> None:
+    """design.md and its scene plan go into the sandbox, the solver places the plan, the scene plan is on, and the
+    coder's task and the grader's rubric are about the design (task 11)."""
+    from app.pipeline import design
+
+    seen: dict[str, object] = {}
+    backend_box: dict[str, _Backend] = {}
+    opened: dict[str, object] = {}
+
+    class Agent:
+        async def astream_events(self, payload, *, context, config, version):
+            seen["payload"] = payload
+            seen["commands_before"] = list(backend_box["backend"].commands)
+            backend_box["backend"].files["/work/module.js"] = b"export default function build(){}"
+            yield {"event": "on_tool_start", "name": "write_file"}
+
+    def factory(**kwargs):
+        backend_box["backend"] = kwargs["backend"]
+        return Agent()
+
+    def open_sandbox(run_id: str, **options) -> _Sandbox:
+        opened.update(options)
+        return _Sandbox()
+
+    _install(monkeypatch, factory)
+    monkeypatch.setattr(coder, "_open_sandbox", open_sandbox)
+    coder.set_checkpointer(None)
+    scene = {"mode": "desk", "things": {"bowl": {"role": "hero", "size": [0.14, 0.07, 0.14]}}, "relations": []}
+    made = {"design_md": "# Rise and Bake - Design\n", "mode": "desk", "title": "Rise and Bake", "pitch": "Bake.", "scene": scene}
+    await coder.write_with_agent({"run_id": "designed-1", "kind": "game", "request": "bake a cake", "design": made})
+    backend = backend_box["backend"]
+    assert opened == {"scene_plan": True}
+    assert backend.files["/work/design.md"].startswith(b"# Rise and Bake")
+    assert backend.files["/work/parts/scene.js"] == design.scene_part(scene).encode()
+    assert any(command.startswith(f"node {coder.LAYOUT} ") for command in seen["commands_before"])
+    task = seen["payload"]["messages"][0]["content"]
+    assert "/work/design.md" in task and "write no /work/plan.md" in task
+    if coder.grader.enabled():
+        assert "read_design" in seen["payload"]["rubric"]
+    await asyncio.gather(*list(background._tasks))

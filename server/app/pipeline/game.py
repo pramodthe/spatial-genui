@@ -1,5 +1,6 @@
-"""A game: design (design.py), then write (lesson.py: the coder agent, the gate, repairs). Each stage stays in the
-checkpoint, and the whole run is one Studio record (services/studio.py)."""
+"""A game: design (design.py: the design document, design.md; DESIGN_MODE=json for the earlier JSON design), then
+write (lesson.py: the coder agent, the gate, repairs). Each stage stays in the checkpoint, and the whole run is one
+Studio record (services/studio.py)."""
 
 from __future__ import annotations
 
@@ -20,23 +21,37 @@ class GameState(TypedDict, total=False):
     request: str
     run_id: str
     brief: str
+    # The design: a design document ({design_md, mode, look, title, pitch, scene, problems}) or, with
+    # DESIGN_MODE=json, the JSON design (DESIGN_KEYS).
     design: dict[str, Any] | None
     # PLAN_PICTURES: the plan's reference pictures for the coder ([{name, file, prompt, id}]) and the look they use.
     plan_pictures: list[dict[str, Any]] | None
     result: dict[str, Any]
 
 
+def _writer() -> str:
+    # A learning game needs the skills only the agent writer has; GAME_MODE=classic keeps the one-call writer.
+    return "classic" if os.environ.get("GAME_MODE") == "classic" else "agent"
+
+
 async def plan(state: GameState) -> dict[str, Any]:
-    """Stage 1 (design.py), kept in the Studio record: the design, where the game plays, and its reference pictures."""
+    """Stage 1 (design.py), kept in the Studio record: the design document, where the game plays, and its reference
+    pictures. When the document cannot be written (the call fails), the earlier JSON design stands in."""
     request = state["request"]
-    kept = await design.design(request)
+    doc = await design.design_doc(request) if design.design_mode() == "doc" else None
+    kept = doc or await design.design(request)
     run_id = state.get("run_id") or _new_id()
     studio = _studio({**state, "run_id": run_id})
-    if studio is not None and kept:
+    if studio is not None and doc:
+        studio.save("design.md", doc["design_md"].encode())
+        left = f" Still missing after a second try: {' '.join(doc['problems'])}" if doc["problems"] else ""
+        studio.event("designer", f"design ({doc['mode']})", f"{doc['title']}: {doc['pitch']}{left}", file="design.md")
+    elif studio is not None and kept:
         studio.save("design.json", json.dumps(kept, ensure_ascii=False, indent=1).encode())
         studio.event("designer", f"design ({kept['mode']})", f"{kept.get('title', '')}: {kept.get('pitch', '')}", file="design.json")
     pictures = await design.plan_pictures(request, kept, run_id, studio) if kept and design.pictures_enabled() else None
-    return {"design": kept, "brief": design.brief(request, kept), "run_id": run_id, "plan_pictures": pictures}
+    brief = design.doc_brief(request, doc, inline=_writer() == "classic") if doc else design.brief(request, kept)
+    return {"design": kept, "brief": brief, "run_id": run_id, "plan_pictures": pictures}
 
 
 def _studio(state: GameState) -> StudioRun | None:
@@ -47,11 +62,12 @@ def _studio(state: GameState) -> StudioRun | None:
 
 
 async def write(state: GameState) -> dict[str, Any]:
-    # A learning game needs the skills only the agent writer has; GAME_MODE=classic keeps the one-call writer.
-    mode = "classic" if os.environ.get("GAME_MODE") == "classic" else "agent"
+    mode = _writer()
     request = state.get("brief") or state["request"]
+    # A design document goes into the coder's sandbox as /work/design.md; the one-call writer has it in its request.
+    designed = state.get("design") if (state.get("design") or {}).get("design_md") else None
     result = await run_lesson(request, kind="game", mode=mode, thread_id=None, run_id=state.get("run_id"),
-                              plan_pictures=state.get("plan_pictures"))
+                              plan_pictures=state.get("plan_pictures"), design=designed)
     return {"result": result}
 
 

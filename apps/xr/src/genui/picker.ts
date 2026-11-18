@@ -91,6 +91,17 @@ const PHASE_DOTS: Record<LessonStatus['phase'], string> = {
   idle: COLORS.green, building: COLORS.orange, fixing: COLORS.orange, ready: COLORS.green, failed: COLORS.pink, broken: COLORS.pink,
 };
 const FAILED_CARD = '#e9e7f5';
+// The height of a card's picture block (lesson-picker.uikitml .card-block): a card being made fills it from the bottom,
+// at most to below the block's rounded top corners (the fill's own corners are square on top).
+const FILL_PX = 162;
+const FILL_MAX_PX = FILL_PX - 18;
+// Card pictures drawn in the start page's style (scripts/render-card-art.mjs): a letter or digit, and the wave on
+// top of a card's colour, named in CARD_COLORS order. The wave rolls one period every WAVE_MS.
+const CARD_ART = 'ui/cards/';
+const ART_MARK = /^[A-Z0-9]$/;
+const WAVES = ['green', 'pink', 'orange', 'aqua'] as const;
+const WAVE_PERIOD_PX = 64;
+const WAVE_MS = 2600;
 type Shelf = 'mine' | 'ready';
 
 let handlers: PickerHandlers | null = null;
@@ -161,7 +172,9 @@ class LessonPickerSystem extends createSystem({
   private readonly museAt = new Vector3();
   private poll = 0;
   /** What each panel element was last given (a picture, a colour): set again only when it changes. */
-  private readonly shown = new Map<string, string>();
+  private readonly shown = new Map<string, string | number>();
+  /** The cards being made, whose waves roll every frame. */
+  private waves: string[] = [];
   /** Names of what was opened here, by request, for the bar and the status line. */
   private readonly titles = new Map<string, string>();
   private readonly head = new Vector3();
@@ -226,6 +239,11 @@ class LessonPickerSystem extends createSystem({
     this.frame.tick(this.eye, floorHeight(this.eye));
     this.placeMuse();
     if (this.muse.object.visible) this.muse.update(delta, this.museMood(), this.eye);
+    // The waves on cards being made roll: one whole period loops with no seam.
+    if (this.waves.length) {
+      const left = -(((performance.now() / WAVE_MS) * WAVE_PERIOD_PX) % WAVE_PERIOD_PX);
+      for (const id of this.waves) this.put(`${id}-wave`, 'positionLeft', Math.round(left * 2) / 2);
+    }
   }
 
   /** Muse stands on the bottom of its place in the panel, a little in front, as tall as that place. */
@@ -492,7 +510,7 @@ class LessonPickerSystem extends createSystem({
   }
 
   /** Give a panel element a property, only when it has changed (a picture is not loaded twice). */
-  private put(id: string, key: string, value: string) {
+  private put(id: string, key: string, value: string | number) {
     const slot = `${id}.${key}`;
     if (this.shown.get(slot) === value) return;
     this.shown.set(slot, value);
@@ -501,8 +519,7 @@ class LessonPickerSystem extends createSystem({
 
   private renderCards() {
     if (!this.document) return;
-    // Cards being made blink between their colour and white, once a second, under their Being made tag.
-    const blink = Math.floor(performance.now() / 1000) % 2 === 0;
+    const waves: string[] = [];
     for (const shelf of ['mine', 'ready'] as const) {
       const cards = this.cards[shelf];
       for (let index = 0; index < SLOTS[shelf]; index++) {
@@ -515,16 +532,34 @@ class LessonPickerSystem extends createSystem({
         const pictured = card.state === 'ready' && Boolean(card.picture);
         this.put(`${id}-pic`, 'display', pictured ? 'flex' : 'none');
         this.put(`${id}-block`, 'display', pictured ? 'none' : 'flex');
-        this.put(`${id}-chip`, 'display', card.state === 'making' ? 'flex' : 'none');
+        const making = card.state === 'making' ? card.making : undefined;
+        this.put(`${id}-chip`, 'display', making ? 'flex' : 'none');
+        if (making) this.put(`${id}-chip-label`, 'text', making.left);
         if (pictured) this.put(`${id}-pic`, 'src', card.picture!);
         else {
           const colour = CARD_COLORS[index % CARD_COLORS.length];
-          this.put(`${id}-mark`, 'text', card.state === 'making' ? '' : card.mark);
-          // Blinks with white, not yellow: its Being made tag is yellow.
-          this.put(`${id}-block`, 'backgroundColor', card.state === 'failed' ? FAILED_CARD : card.state === 'making' && blink ? COLORS.paper : colour);
+          // The letter as a picture in the start page's font, or as text when there is none (a two-digit level).
+          const art = ART_MARK.test(card.mark);
+          this.put(`${id}-letter`, 'display', art ? 'flex' : 'none');
+          this.put(`${id}-mark`, 'display', art ? 'none' : 'flex');
+          if (art) this.put(`${id}-letter`, 'src', `${CARD_ART}mark-${card.mark}.png`);
+          else this.put(`${id}-mark`, 'text', card.mark);
+          // Being made, it sits a little low, clear of the tag.
+          this.put(`${id}-${art ? 'letter' : 'mark'}`, 'marginTop', making ? 20 : 0);
+          this.put(`${id}-dots`, 'display', making ? 'flex' : 'none');
+          // Being made: white, filling with the card's colour from the bottom; full, it is the finished card.
+          this.put(`${id}-block`, 'backgroundColor', card.state === 'failed' ? FAILED_CARD : making ? COLORS.paper : colour);
+          this.put(`${id}-fill`, 'display', making ? 'flex' : 'none');
+          if (making) {
+            this.put(`${id}-fill`, 'backgroundColor', colour);
+            this.put(`${id}-fill`, 'height', Math.min(FILL_MAX_PX, Math.round(FILL_PX * making.fill)));
+            this.put(`${id}-wave`, 'src', `${CARD_ART}wave-${WAVES[index % WAVES.length]}.png`);
+            waves.push(id);
+          }
         }
       }
     }
+    this.waves = waves;
     const none = this.cards.mine.length === 0;
     this.put('mine-cards', 'display', none ? 'none' : 'flex');
     this.put('mine-empty', 'display', none ? 'flex' : 'none');

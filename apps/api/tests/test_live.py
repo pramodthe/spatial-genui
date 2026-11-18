@@ -97,3 +97,30 @@ async def test_a_streamed_completion_matches_a_plain_one(monkeypatch: pytest.Mon
     assert (done.finish_reason, done.prompt_tokens, done.completion_tokens, done.cached_tokens) == ("stop", 7, 9, 2)
     assert seen == ["```js\nexport", "```js\nexport default 1\n```"]
     assert sent[0]["stream"] is True and sent[0]["stream_options"] == {"include_usage": True}
+
+
+def test_a_card_being_made_only_steps_forward() -> None:
+    with live.watching("game-steps") as watcher:
+        assert watcher.shelf()["step"] == 0
+        watcher.set_stage("designing")
+        watcher.set_stage("building")
+        watcher.set_stage("testing")
+        watcher.set_stage("building")  # the coder goes back to building after trying its game
+        shelf = watcher.shelf()
+        assert shelf["stage"] == "building" and shelf["step"] == 2
+        assert shelf["line"].startswith("Building") and shelf["seconds"] >= 0 and shelf["key"] == "game-steps"
+        watcher.set_stage("grading")
+        assert watcher.shelf()["step"] == 3
+
+
+def test_the_coders_tools_move_the_card() -> None:
+    from app.pipeline.coder import agent
+
+    with live.watching("game-follow") as watcher:
+        watcher.set_stage("designing")
+        agent._follow({"event": "on_tool_start", "name": "write_file", "data": {"input": {"file_path": "/work/game.js"}}})
+        assert (watcher.stage, watcher.step) == ("building", 1)
+        agent._follow({"event": "on_tool_start", "name": "execute", "data": {"input": {"command": "node /skills/play/learning-game/scripts/check.mjs"}}})
+        assert (watcher.stage, watcher.step) == ("testing", 2)
+        agent._follow({"event": "on_tool_start", "name": "execute", "data": {"input": {"command": "ls /work"}}})
+        assert watcher.stage == "testing"

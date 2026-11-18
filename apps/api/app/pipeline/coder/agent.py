@@ -34,7 +34,7 @@ from app.pipeline.coder.model_maker import model_maker_spec
 from app.pipeline.coder.sound_tools import SOUND_TOOLS
 from app.pipeline.coder.state import CoderState, RunContext
 from app.pipeline.coder.tools import library_lookup, real_size
-from app.services import media
+from app.services import live, media
 from app.services.studio import StudioRun
 from sandbox.image import coder_image
 
@@ -350,6 +350,7 @@ async def _write_with_agent(state: dict[str, Any], studio: StudioRun | None) -> 
             async for event in coder.astream_events(payload, context=context, config=config, version="v2"):
                 if event.get("event") == "on_tool_start":
                     _progress(str(event.get("name") or "tool"))
+                _follow(event)
                 if studio is not None:
                     _record(studio, event)
 
@@ -427,7 +428,28 @@ def _record(studio: StudioRun, event: dict[str, Any]) -> None:
         studio.event(who, "edit" if name == "edit_file" else "write", str(args.get("file_path") or ""))
 
 
+def _follow(event: dict[str, Any]) -> None:
+    """The card being made on the shelves follows the coder (services/live.py): writing the game is building it,
+    running its checks or play-test is trying it out."""
+    if event.get("event") != "on_tool_start":
+        return
+    name = str(event.get("name") or "")
+    data = event.get("data") or {}
+    args = data.get("input") if isinstance(data.get("input"), dict) else {}
+    if name in ("write_file", "edit_file"):
+        _stage("building")
+    elif name == "execute" and any(k in str(args.get("command") or "") for k in ("check.mjs", "playtest.mjs", "iwsdk xr")):
+        _stage("testing")
+
+
+def _stage(stage: str) -> None:
+    watcher = live.current()
+    if watcher is not None and watcher.stage != stage:
+        watcher.set_stage(stage)
+
+
 def _on_evaluation(evaluation: dict[str, Any]) -> None:
+    _stage("grading")
     studio = scope.studio.get()
     if studio is not None:
         studio.event("grader", str(evaluation.get("result") or ""), str(evaluation.get("explanation") or "")[:800],

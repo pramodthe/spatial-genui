@@ -86,12 +86,19 @@ const STYLE = `
 .sp-pic img { display: block; width: 100%; height: 100%; object-fit: cover; }
 /* No picture yet: the game's first letter (or a level's number), like a toy block. */
 .sp-mark { font-family: var(--display); font-size: 92px; line-height: 1; color: var(--paper); -webkit-text-stroke: 4px var(--ink); paint-order: stroke fill; }
-/* Being made: stripes that keep moving until the game is ready. */
-.sp-card[data-state="making"] .sp-pic { background: var(--paper); }
-/* The stripes are a wider layer that slides by exactly one stripe pair (44px across a 45 degree slope), so they loop with no seam. */
-.sp-card[data-state="making"] .sp-pic::before { content: ''; position: absolute; inset: 0 0 0 -64px; background: repeating-linear-gradient(-45deg, var(--card) 0 22px, var(--paper) 22px 44px); animation: sp-making 1.6s linear infinite; }
+/* Being made: grid paper that fills with the card's colour from the bottom as the game is made (--fill, 0 to 1),
+   under a rolling wave with an ink edge. Full, it is the finished card: a colour block with the game's letter. */
+.sp-card[data-state="making"] .sp-pic { background: var(--paper) radial-gradient(rgba(18, 6, 59, 0.16) 2px, transparent 2.5px) 0 0 / 20px 20px; }
+.sp-fill { position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--fill, 0) * 100%); background: var(--card); transition: height 1.2s ease; }
+/* The wave: one period is 56px, so sliding the masks by 56px loops with no seam. Its body is the card's colour, its edge ink. */
+.sp-fill::before, .sp-fill::after { content: ''; position: absolute; left: 0; right: 0; bottom: calc(100% - 1px); height: 14px;
+  -webkit-mask: var(--wave) 0 0 / 56px 14px repeat-x; mask: var(--wave) 0 0 / 56px 14px repeat-x; animation: sp-wave 2.6s linear infinite; animation-delay: inherit; }
+.sp-fill::before { --wave: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='14'%3E%3Cpath d='M0 7Q14 1 28 7T56 7V14H0Z'/%3E%3C/svg%3E"); background: var(--card); }
+.sp-fill::after { --wave: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='14'%3E%3Cpath d='M0 7Q14 1 28 7T56 7' fill='none' stroke='black' stroke-width='3.5'/%3E%3C/svg%3E"); background: var(--ink); }
+@keyframes sp-wave { to { -webkit-mask-position: 56px 0; mask-position: 56px 0; } }
+/* Its letter sits a little low, clear of the tag. */
+.sp-card[data-state="making"] .sp-mark { position: relative; top: 12px; }
 .sp-card[data-state="failed"] .sp-pic { background: #e9e7f5; }
-@keyframes sp-making { from { transform: translateX(0); } to { transform: translateX(62.2254px); } }
 .sp-chip { position: absolute; left: 10px; top: 10px; padding: 4px 12px; border: 3px solid var(--ink); border-radius: 999px; background: var(--sun);
   font-family: var(--display); font-size: 17px; line-height: 1.2; color: var(--ink); }
 .sp-card-title { margin: 10px 6px 0; font-family: var(--display); font-size: 25px; line-height: 1.05; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
@@ -101,7 +108,7 @@ const STYLE = `
 .sp-cards.sp-arrive .sp-card:nth-child(2) { animation-delay: 0.06s; }
 .sp-cards.sp-arrive .sp-card:nth-child(3) { animation-delay: 0.12s; }
 .sp-cards.sp-arrive .sp-card:nth-child(4) { animation-delay: 0.18s; }
-@media (prefers-reduced-motion: reduce) { .sp-cards.sp-arrive .sp-card, .sp-card[data-state="making"] .sp-pic::before { animation: none; } .sp-card, .sp-btn { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .sp-cards.sp-arrive .sp-card, .sp-fill::before, .sp-fill::after { animation: none; } .sp-card, .sp-btn, .sp-fill { transition: none; } }
 .sp-empty { padding: 20px 22px; border: 4px dashed rgba(18, 6, 59, 0.5); border-radius: 22px; background: rgba(255, 255, 255, 0.55); font-size: 18px; max-width: 760px; }
 
 .sp-dev { margin-top: 56px; color: rgba(18, 6, 59, 0.75); }
@@ -155,8 +162,13 @@ function card(item: Card, index: number, open: (item: Card) => void): HTMLButton
   node.style.setProperty('--card', CARD_COLORS[index % CARD_COLORS.length]);
   const pic = el('span', 'sp-pic');
   const mark = () => pic.replaceChildren(el('span', 'sp-mark', item.mark));
-  if (item.state === 'making') pic.appendChild(el('span', 'sp-chip', 'Being made'));
-  else if (item.picture) {
+  if (item.state === 'making') {
+    // The cards are drawn again on every refresh: start the wave where the last one was, so it never jumps.
+    const fill = el('span', 'sp-fill');
+    fill.style.animationDelay = `${-(performance.now() % 2600)}ms`;
+    node.style.setProperty('--fill', String(item.making?.fill ?? 0.04));
+    pic.append(fill, el('span', 'sp-mark', item.mark), el('span', 'sp-chip', item.making?.left ?? 'Being made'));
+  } else if (item.picture) {
     const img = el('img');
     img.alt = '';
     img.loading = 'lazy';

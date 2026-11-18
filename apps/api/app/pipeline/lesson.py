@@ -200,6 +200,8 @@ async def write(state: LessonState) -> dict[str, Any]:
     if watcher is not None:
         watcher.known_assets = list(library.library_catalog()) if state.get("use_library") else []
     if state.get("mode") == "agent":
+        if watcher is not None:
+            watcher.set_stage("building")
         return await write_with_agent(state)
     if watcher is not None:
         watcher.begin_attempt()

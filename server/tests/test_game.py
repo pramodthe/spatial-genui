@@ -1,5 +1,5 @@
-"""The game pipeline with the model calls stubbed: the design stage (and where the game plays), and the design's
-reference pictures handed to the coder."""
+"""The game pipeline with the model calls stubbed: the JSON design stage (DESIGN_MODE=json; where the game plays), and
+the design's reference pictures handed to the coder. The design document (the default) is in test_design_doc.py."""
 
 from __future__ import annotations
 
@@ -10,9 +10,10 @@ from app.pipeline import design, game
 from app.services import studio
 
 
-def test_default_plan_is_one_call_and_picks_where_it_plays(monkeypatch) -> None:
+def test_json_plan_is_one_call_and_picks_where_it_plays(monkeypatch) -> None:
     from app.core import llm
 
+    monkeypatch.setenv("DESIGN_MODE", "json")
     replies = []
 
     async def fake_complete(messages, target=None, **kw):
@@ -44,6 +45,7 @@ def test_plan_pictures_are_drawn_for_the_coder(monkeypatch, tmp_path) -> None:
     from app.services import media
     from app.pipeline.coder import agent as coder
 
+    monkeypatch.setenv("DESIGN_MODE", "json")
     calls = []
 
     async def fake_complete(messages, target=None, **kw):

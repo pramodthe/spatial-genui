@@ -170,7 +170,8 @@ function render(run) {
   }
   $('timelineBox').scrollTop = $('timelineBox').scrollHeight; // the newest step, without moving the page
 
-  $('plan').textContent = run.texts?.['plan.md'] || 'The coder has not written the plan yet.';
+  // The designer's design.md when the game has one, else the coder's own plan.md.
+  $('plan').textContent = run.texts?.['design.md'] || run.texts?.['plan.md'] || 'The design is not written yet.';
 
   const id = run.identity || {};
   const box = $('identity');

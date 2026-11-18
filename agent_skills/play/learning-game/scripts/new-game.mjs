@@ -71,7 +71,9 @@ console.log(`${gameFile}: a learning game in the ${look} look${process.argv.incl
 console.log(`- edit ${gameFile} only: it is the game. ${kitsFile} holds the kits (all in scope; do not read or edit it). The check and`);
 console.log(`  the play-test build ${out} from the two, so never edit ${out}`);
 console.log(`- the game's identity and sounds are parts: ${parts}/identity.js and sounds.js (references/parts.md)`);
-console.log('- plan it first in /work/plan.md (references/design.md): goal, the moves and their whys, the challenge');
+console.log(existsSync(join(dirname(out), 'design.md'))
+  ? `- build what ${join(dirname(out), 'design.md')} says: it is the plan (write no plan.md); its checks become play gestures`
+  : '- plan it first in /work/plan.md (references/design.md): goal, the moves and their whys, the challenge');
 console.log(`- replace look.demo(subject) with the game's pieces${look === 'plain' ? ' (kit materials, /skills/common/kit)' : `, built with the ${look} skill's builders (/skills/looks/${look})`}`);
 console.log('- replace MOVES and CHALLENGE, and make the scene answer every hand action (references/feel.md)');
 console.log(`- check: node ${join(here, 'scripts', 'check.mjs')} ${out}`);

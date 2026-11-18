@@ -28,7 +28,7 @@ from langgraph.config import get_stream_writer
 from app.core.background import track
 from app.core.config import SKILLS_DIR, config
 from app.core.llm import agent_model
-from app.pipeline import grader
+from app.pipeline import design as designer, grader
 from app.pipeline.coder import scope
 from app.pipeline.coder.middleware import CostMeterMiddleware, TimeLeftMiddleware, ToolImagesAsUserMessage
 from app.pipeline.coder.model_maker import model_maker_spec
@@ -62,6 +62,8 @@ APP_NAME = "genui-coder"
 # Builds /work/module.js from /work/kits.js and /work/game.js (the learning-game skill), or splits it back with --split.
 BUILD_MODULE = "/skills/play/learning-game/scripts/build-module.mjs"
 PLAYTEST = "/skills/play/playtest/scripts/playtest.mjs"
+# Places the scene plan in /work/parts/scene.js (the learning-game skill's references/scene.md).
+LAYOUT = "/skills/play/learning-game/scripts/layout.mjs"
 
 # Every lesson and game is a learning game (agent_skills/play/learning-game), so both start with that skill in context.
 _LESSON_SKILLS = ["kit", "panels", "learning-game", "dry-run"]
@@ -183,7 +185,7 @@ def coder_middleware(model: Any) -> list[Any]:
     return middleware
 
 
-def _open_sandbox(run_id: str) -> modal.Sandbox:
+def _open_sandbox(run_id: str, *, scene_plan: bool = False) -> modal.Sandbox:
     app = modal.App.lookup(APP_NAME, create_if_missing=True)
     # The whole id: two runs started in the same millisecond differ only in its last letters.
     safe = "".join(ch if ch.isalnum() or ch == "-" else "-" for ch in run_id)[:48] or "run"
@@ -198,11 +200,11 @@ def _open_sandbox(run_id: str) -> modal.Sandbox:
         block_network=True,
         # The game check's layout rules (gate layout.ts) and its play-through (gate play.ts); CODER_LAYOUT_CHECK=0 and
         # CODER_PLAY_CHECK=0 run without them, for side-by-sides. CODER_SCENE_PLAN=1 starts the game with a scene plan
-        # (gate place.ts).
+        # (gate place.ts); a game whose design has one has it on (`scene_plan`).
         env={
             "LAYOUT_CHECK": os.environ.get("CODER_LAYOUT_CHECK", "1"),
             "PLAY_CHECK": os.environ.get("CODER_PLAY_CHECK", "1"),
-            "SCENE_PLAN": os.environ.get("CODER_SCENE_PLAN", "0"),
+            "SCENE_PLAN": "1" if scene_plan else os.environ.get("CODER_SCENE_PLAN", "0"),
         },
     )
 
@@ -295,8 +297,59 @@ def _picture_files(state: dict[str, Any]) -> list[tuple[str, bytes]]:
     return files
 
 
+def _designed(state: dict[str, Any]) -> dict[str, Any] | None:
+    """The run's design document (design.py design_doc), when it has one."""
+    design = state.get("design") or {}
+    return design if isinstance(design.get("design_md"), str) and design["design_md"].strip() else None
+
+
+def _later(state: dict[str, Any]) -> bool:
+    """A repair or a look-and-fix: not the first run of this game."""
+    return bool(state.get("attempts")) or bool(state.get("pictures")) or bool(state.get("critique"))
+
+
+def _design_files(state: dict[str, Any]) -> list[tuple[str, bytes]]:
+    """The design document, and for a new game its scene plan as the game's scene part. A later run's module already
+    carries its plan and places in its parts block, and a lone parts/scene.js would replace that whole block."""
+    design = _designed(state)
+    if design is None:
+        return []
+    files = [("/work/design.md", design["design_md"].encode())]
+    if design.get("scene") and not _later(state):
+        files.append(("/work/parts/scene.js", designer.scene_part(design["scene"]).encode()))
+    return files
+
+
+def _design_text(state: dict[str, Any]) -> str:
+    design = _designed(state)
+    if design is None:
+        return ""
+    text = (
+        "This game has a design document, /work/design.md, written for you before any code. Read it first and build "
+        "what it says: its moves in its order, each with its hand action, feedback and done() condition; its controls; "
+        "its levels (LEVELS) with their star thresholds; its mistakes and Try again; its facts; its look, palette, panel "
+        "voice and sounds; its assets. It is the plan: write no /work/plan.md. Write each emulator check of its Controls "
+        "table and each hand check of its Checks section as a gesture of the game's play block (the learning-game "
+        "skill's references/play.md), and each value a check names (bowlGrams, ovenC) as a field of play.state(), so "
+        "the check plays the design's own checks."
+    )
+    if design.get("scene") and not _later(state):
+        text += (
+            " Its scene plan (section 5) is already copied into /work/parts/scene.js and placed by the solver: stand "
+            "each thing where the plan put it with sceneAt (the learning-game skill's references/scene.md). When a "
+            "thing is built at another size, write its real size in SCENE and run "
+            f"`node {LAYOUT} /work/module.js` again; never give coordinates."
+        )
+    elif not _later(state):
+        text += (
+            " It has no scene plan the solver can read: write one in /work/parts/scene.js from its section 5 and place "
+            f"it with `node {LAYOUT} /work/module.js` (references/scene.md)."
+        )
+    return text
+
+
 def _task_text(state: dict[str, Any]) -> str:
-    parts = [str(state.get("request") or "")]
+    parts = [str(state.get("request") or ""), _design_text(state)]
     pictures = _picture_paths(state)
     if pictures:
         look = (state.get("plan_pictures") or [{}])[0].get("look") or "plain"
@@ -321,8 +374,7 @@ def _task_text(state: dict[str, Any]) -> str:
 
 def _module_to_upload(state: dict[str, Any]) -> bytes | None:
     """A later run (repair or look-and-fix) starts from the module the host already has."""
-    later = bool(state.get("attempts")) or bool(state.get("pictures")) or bool(state.get("critique"))
-    if not later:
+    if not _later(state):
         return None
     code = state.get("code") or state.get("previous_code")
     if not code:
@@ -362,7 +414,8 @@ async def _write_with_agent(state: dict[str, Any], studio: StudioRun | None) -> 
     deadline = time.monotonic() + WALL_S - 20
     # A repair: the last attempt's sandbox holds this run's sandbox name until it is closed.
     await _close_last_attempt(run_id)
-    sandbox = await asyncio.to_thread(_open_sandbox, run_id)
+    design = _designed(state)
+    sandbox = await asyncio.to_thread(_open_sandbox, run_id, scene_plan=bool(design and design.get("scene")))
     backend = ModalSandbox(sandbox=sandbox)
     backend_token = scope.backend.set(backend)
     syncing = asyncio.get_running_loop().create_task(studio.sync_loop(backend)) if studio is not None else None
@@ -378,13 +431,25 @@ async def _write_with_agent(state: dict[str, Any], studio: StudioRun | None) -> 
         if pictures:
             await backend.aexecute("mkdir -p /work/plan")
             await backend.aupload_files(pictures)
+        design_files = _design_files(state)
+        if design_files:
+            await backend.aexecute("mkdir -p /work/parts")
+            await backend.aupload_files(design_files)
+            if any(path == "/work/parts/scene.js" for path, _ in design_files):
+                # The plan's places, written under it before the coder starts (new-game.mjs keeps a scene part it finds).
+                await backend.aexecute(f"node {LAYOUT} /work/module.js")
+            # A course level or an /api/generate game has no design stage of its own in the Studio: its document is
+            # kept here.
+            if studio is not None and design is not None and studio.saved("design.md") is None:
+                studio.save("design.md", design["design_md"].encode())
+                studio.event("designer", f"design ({design.get('mode') or 'desk'})", f"{design.get('title', '')}: {design.get('pitch', '')}", file="design.md")
         coder = create_deep_agent(
             model=model,
             backend=backend,
             skills=_skills(kind),
             subagents=[model_maker_spec()],
             # The grading loop sits after the coder's own middleware: it runs when the coder would finish.
-            middleware=[*coder_middleware(model), TimeLeftMiddleware(deadline, WALL_S), *([grader.rubric_middleware(agent_model(), backend, kind, _on_evaluation, budget_usd=RUN_BUDGET_USD)] if grader.enabled() else [])],
+            middleware=[*coder_middleware(model), TimeLeftMiddleware(deadline, WALL_S), *([grader.rubric_middleware(agent_model(), backend, kind, _on_evaluation, budget_usd=RUN_BUDGET_USD, designed=design is not None)] if grader.enabled() else [])],
             tools=[*_HOST_TOOLS, *(SOUND_TOOLS if media.sounds_enabled() else [])],
             system_prompt=_prompt(kind),
             context_schema=RunContext,
@@ -420,7 +485,7 @@ async def _write_with_agent(state: dict[str, Any], studio: StudioRun | None) -> 
         if not continuing:
             payload["pinned_skills"] = pinned
         if grader.enabled():
-            payload["rubric"] = grader.rubric_for(str(state.get("request") or ""))
+            payload["rubric"] = grader.rubric_for(str(state.get("request") or ""), designed=design is not None)
         if values.get("skills_fingerprint") not in (None, stamp):
             payload["skills_metadata"] = None
         context = RunContext(visitor_id="agent", run_id=run_id, kind=kind, budget_usd=RUN_BUDGET_USD)

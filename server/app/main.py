@@ -20,6 +20,7 @@ from app.core.clock import mtime_ms
 from app.core.config import REPO_ROOT
 from app.core.db import close_db, open_db
 from app.library.real_size import known_real_size, real_size_of
+from app.pipeline import design
 from app.pipeline.coder.agent import set_checkpointer as set_coder_checkpointer
 from app.pipeline.lesson import run_lesson, set_checkpointer
 from app.pipeline.prompts import EXAMPLE_MODULE
@@ -180,11 +181,17 @@ async def generate(request: Request) -> JSONResponse:
     refusal = await guard.admit(_visitor(request), prompt)
     if refusal:
         return JSONResponse({"ok": False, "error": refusal["error"], "reason": refusal["reason"]}, status_code=refusal["status"])
+    previous_code = body.get("previousCode") if isinstance(body.get("previousCode"), str) else None
+    game = body.get("kind") == "game"
+    # A new game is designed first (design.py design_doc), as one from Your games is; this one-call writer gets the
+    # document in its request. A change to an existing module is not designed again.
+    designed = await design.design_doc(prompt) if game and previous_code is None and design.design_mode() == "doc" else None
     result = await run_lesson(
-        prompt,
-        previous_code=body.get("previousCode") if isinstance(body.get("previousCode"), str) else None,
+        design.doc_brief(prompt, designed, inline=True) if designed else prompt,
+        previous_code=previous_code,
         client_error=body.get("clientError") if isinstance(body.get("clientError"), str) else None,
-        kind="game" if body.get("kind") == "game" else "lesson",
+        kind="game" if game else "lesson",
+        design=designed,
     )
     await _spend(result)
     if result.get("refused"):

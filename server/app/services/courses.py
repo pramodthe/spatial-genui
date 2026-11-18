@@ -16,6 +16,7 @@ from app.core.clock import js_round, now_iso
 from app.core.db import count_courses, load_courses, save_course
 from app.core.guard import attempt_calls, record_spend
 from app.core.json_reply import extract_json
+from app.pipeline import design
 from app.pipeline.lesson import run_lesson
 from app.services import live, studio
 
@@ -288,10 +289,14 @@ async def build_lesson(course: dict[str, Any], lesson: dict[str, Any]) -> None:
         styled = "/skills/looks/" in lesson["prompt"] or "/skills/play/" in lesson["prompt"]
         mode = "classic" if os.environ.get("LESSON_MODE") == "classic" and not styled else "agent"
         with live.watching(live.lesson_key(course["id"], index)):
+            # A level is designed first, as a game is (design.py design_doc, from the level's prompt); DESIGN_MODE=json
+            # builds it from its prompt alone, as before.
+            designed = await design.design_doc(lesson["prompt"]) if design.design_mode() == "doc" else None
             result = await run_lesson(
-                lesson["prompt"],
+                design.doc_brief(lesson["prompt"], designed, inline=mode == "classic") if designed else lesson["prompt"],
                 thread_id=f"{course['id']}:lesson:{index}",
                 mode=mode,
+                design=designed,
             )
         await record_spend(attempt_calls(result))
         if not result.get("ok") or not result.get("code"):

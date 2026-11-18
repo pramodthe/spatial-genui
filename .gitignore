@@ -2,7 +2,7 @@
 node_modules/
 dist/
 .venv/
-apps/gate/.cache/
+gate/.cache/
 .DS_Store
 
 # AI coding tools' local folders (agents, Cursor, Claude Code): personal and large, never pushed
@@ -12,22 +12,20 @@ apps/gate/.cache/
 skills-lock.json
 
 # Benchmark: keep results (jsonl, summaries) but not screenshots or scratch runs
-bench/results/*/shots/
-bench/results/_*/
-bench/results/_*.flag
-bench/results/*.log
+benchmark/results/*/shots/
+benchmark/results/_*/
+benchmark/results/_*.flag
+benchmark/results/*.log
 # Phase 3: per-job code, GLBs and renders, and full-size reference images
-bench/results/*/jobs/
-bench/results/*/refs/
+benchmark/results/*/jobs/
+benchmark/results/*/refs/
 
-# Downloaded datasets, work files, saved courses and the database (never in git)
-/data/*
-# ...except the model and sound library, so a fresh clone or a hosted copy has them
-!/data/library/
+# The server's runtime files: the database, checkpoints, saved courses, Studio runs and generated media (never in git)
+server/data/
 
 # Python API: generation run logs (JSONL, the benchmark's raw material) and a local server log
-apps/api/runs/
-apps/api/server.log
+server/runs/
+server/server.log
 
 # Python caches
 __pycache__/

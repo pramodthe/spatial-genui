@@ -38,14 +38,17 @@ RUBRIC = """- run_play_check prints "game ok" for /work/module.js.
 - Nothing scores, counts down or hurts before Start, and a wrong try costs nothing while learning.
 - In the playtest screenshot, a first-time player knows within five seconds what to do: the panel's first line says the whole game in one sentence, there is one main action with one hand (at most two controls, no modes or bonus rules), and the scene itself shows the first move before the player tries.
 - The game has its own look in the playtest screenshot: the panel wears a skin in colours that suit this game (kit.panel skin). The app shows the game's name as a title card when it opens, so no title sign stays in the scene.
-- The panel stands beside the scene in reach, with at most about 8 parts and no text over two short sentences."""
+- The panel stands beside the scene in reach, with at most about 8 parts and no text over two short sentences.
+- The play block is honest: each gesture is what a first-time player's hand would do for that move or for the round (the same object, the same direction, about the same distance), none exists only to satisfy a counter, and no place, until or pose function changes the game."""
 
 GRADER_PROMPT = GRADER_SYSTEM_PROMPT + """
 
 You are grading a mixed-reality learning game the coder wrote at /work/module.js. Gather evidence with your tools
 before you decide: playtest to see the game as a first-time player sees it in the real headset app (judge the
-five-second criterion on that picture, not on the code), run_play_check for the gate, the dry run and the play rules,
-and read_game_code for what the game does (moves, whys, challenge, panel, hand wiring). When the plan was drawn
+five-second criterion on that picture, not on the code), run_play_check for the gate, the dry run, the play rules
+and the play-through (a simulated hand plays the game by its own play block: its "played through:" line gives the stars
+and the result that play earned, and a "Play:" line says where a player would be stuck), and read_game_code for what
+the game does (moves, whys, challenge, panel, hand wiring, the play block). When the plan was drawn
 (plan_pictures returns pictures), put the playtest screenshot beside the first view and the built main thing beside
 the sheet, and name what is missing or different. For every failed criterion, name the exact code (a line or a value)
 and say what to change, so the coder can fix it in one pass."""
@@ -81,8 +84,8 @@ def grader_tools(backend: Any, kind: str = "lesson") -> list[Any]:
 
     @tool
     async def run_play_check() -> str:
-        """Run the learning-game check on /work/module.js: the app's gate and dry run, the hand and look rules and the
-        play rules. Prints FIX lines (must change), NOTE lines, and "game ok" when it passes."""
+        """Run the learning-game check on /work/module.js: the app's gate and dry run, the hand and look rules, the
+        play rules and the play-through. Prints FIX lines (must change), NOTE lines, and "game ok" when it passes."""
         result = await backend.aexecute(CHECK, timeout=120)
         return (result.output or "no output")[-4000:]
 

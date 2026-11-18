@@ -62,7 +62,8 @@ export default function build(api) {
 - **Systems talk through components**, not by calling each other: `Catch` adds `Caught`; `Score` counts the
   entities that have `Caught`; `Feedback` shows a burst for the ones that just got it.
 - **The round is an entity too**: `Round { phase: 'text', time: 'number', best: 'number' }`, so Start, Try again
-  and the stars are systems over it, not flags scattered through the code.
+  and the stars are systems over it, not flags scattered through the code. The game's `play` block reads it in
+  `state()` (`/skills/play/learning-game/references/play.md`): keep the result and the stars on it too.
 - **The hands**: `game.Grabbable` and `game.Pressable` on things spawned in `build()`; read `game.Held` and
   `game.Pressed` (true for the one frame of a press) in systems.
 - **Nothing allocates in a system.** Make vectors and materials in `build()` and reuse them.

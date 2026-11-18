@@ -39,6 +39,13 @@ HAND_MADE_PANEL = (
     "from the parts listed under \"Panels\" (text, note, stat, status, progress, buttons, choices, segmented, "
     "list, toggle, slider) and change them with panel.set(id, value); do not write markup, CSS or panel.on()."
 )
+# A learning game (its first line, written by new-game.mjs) is played through by the gate: a simulated hand does what
+# the game's own `play` block says (gate/src/play.ts; agent_skills/play/learning-game/references/play.md).
+LEARNING_GAME = re.compile(r"\A// learning-game look:")
+NO_PLAY_BLOCK = (
+    "build() returns no `play` block, so the game cannot be played through. Return play: { learn, challenge, state } "
+    "beside root and update (references/play.md), then run the check again."
+)
 _FENCE = re.compile(r"```(?:js|javascript|ts|typescript)?\s*\n([\s\S]*?)```")
 _checkpointer: Any = None
 # The active model for this task. Kept off the checkpoint so an API key is not written to disk.
@@ -239,6 +246,20 @@ async def write(state: LessonState) -> dict[str, Any]:
     return update
 
 
+def play_failure(code: str, stats: dict[str, Any]) -> str | None:
+    """Why the play-through fails this module, for the repair; None when it passes, is off, or does not apply (a module
+    that is not a learning game and declares no play). A play-through cut short by its computing budget is not a failure."""
+    if not gate.play_enabled():
+        return None
+    play = stats.get("play")
+    if play is None:
+        return NO_PLAY_BLOCK if LEARNING_GAME.match(code) else None
+    fixes = [str(finding.get("text") or "") for finding in play.get("findings") or [] if finding.get("level") == "fix"]
+    if not fixes:
+        return None
+    return "The game cannot be played through by its own play block (references/play.md):\n" + "\n".join(f"- {text}" for text in fixes)
+
+
 def _after_write(state: LessonState) -> Literal["gate", "repair", "done"]:
     if state.get("refused"):
         return "done"
@@ -263,6 +284,10 @@ async def gate_node(state: LessonState) -> dict[str, Any]:
         result = {"ok": False, "stage": "dry-run", "error": HAND_MADE_PANEL}
     if result.get("ok") and UNFINISHED_STARTER.search(state.get("code") or ""):
         result = {"ok": False, "stage": "dry-run", "error": STARTER_LEFT}
+    if result.get("ok"):
+        unplayable = play_failure(state.get("code") or "", result.get("stats") or {})
+        if unplayable:
+            result = {"ok": False, "stage": "play", "error": unplayable}
     if not result.get("ok"):
         attempt["stage"] = result.get("stage") or "dry-run"
         attempt["error"] = result.get("error") or ""

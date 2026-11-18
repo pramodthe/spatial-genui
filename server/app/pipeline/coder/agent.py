@@ -177,8 +177,9 @@ def _open_sandbox(run_id: str) -> modal.Sandbox:
         timeout=WALL_S + SANDBOX_GRACE_S,
         workdir="/work",
         block_network=True,
-        # The game check's layout rules (gate layout.ts); CODER_LAYOUT_CHECK=0 runs without them, for side-by-sides.
-        env={"LAYOUT_CHECK": os.environ.get("CODER_LAYOUT_CHECK", "1")},
+        # The game check's layout rules (gate layout.ts) and its play-through (gate play.ts); CODER_LAYOUT_CHECK=0 and
+        # CODER_PLAY_CHECK=0 run without them, for side-by-sides.
+        env={"LAYOUT_CHECK": os.environ.get("CODER_LAYOUT_CHECK", "1"), "PLAY_CHECK": os.environ.get("CODER_PLAY_CHECK", "1")},
     )
 
 

@@ -94,7 +94,7 @@ headset browser, accepting the local certificate. On the start page, tap **Turn 
 | Design | [`pipeline/design.py`](server/app/pipeline/design.py) | One model call designs the game: one idea, one main action, a goal, desk or world. Two planning pictures (the first view and a front/side/top sheet of the main object) guide the coder and are never shown in the game. |
 | Code | [`pipeline/coder/`](server/app/pipeline/coder) | A Deep Agent in a Modal sandbox (one per run, network blocked, no secrets) writes the game with the [skills](agent_skills), runs the checks, and play-tests it in the real headset app run headless, with an emulated hand. |
 | Grade | [`pipeline/grader.py`](server/app/pipeline/grader.py) | Grades the game against a rubric made for the request and the planning pictures, and can send it back once. |
-| Gate | [`gate`](gate) | Static validation, a dry run with the headset's own three.js and kit, and a layout check: nothing hidden, out of reach, or in the player's face. |
+| Gate | [`gate`](gate) | Static validation, a dry run with the headset's own three.js and kit, a layout check (nothing hidden, out of reach, or in the player's face), and a play-through: a simulated hand plays the game by its own description, and every move must register and the round must end with a result. |
 | Play | [`headset`](headset) | The headset host mounts the module, gives it a kit for hands, panels and sound, and places it on the desk or as a world. |
 
 Each flow is a LangGraph graph with checkpoints, so a restarted server resumes where it stopped. Lessons follow the

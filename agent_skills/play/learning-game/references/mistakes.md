@@ -45,3 +45,11 @@ Each of these happened in a real generated scene. Read them once before you fini
 
 13. **The starter left in.** `look.demo(subject)`, REPLACE markers or the starter's "Touch every piece" challenge
     left in the game. The check stops on all three.
+
+14. **Try again kept the last round.** A dam game reset the water and the score on Try again but left the wall
+    standing, so the next round was won by waiting. Try again puts everything back as Start found it: the pieces
+    home, the hero as it began.
+
+15. **A win without the idea.** The same dam was won with a thin wall and no base stones, the one move the lesson
+    was about, and the win text still praised "your thick base". The challenge cannot be won while the move that
+    carries the idea is skipped, and the win text says what the player really did.

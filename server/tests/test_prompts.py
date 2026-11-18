@@ -53,6 +53,7 @@ def test_the_action_rule_is_the_same_in_the_prompt_the_skill_and_the_rubric() ->
         "learning-game SKILL.md": (SKILLS_DIR / "play" / "learning-game" / "SKILL.md").read_text(),
         "references/design.md": (SKILLS_DIR / "play" / "learning-game" / "references" / "design.md").read_text(),
         "RUBRIC": grader.RUBRIC,
+        "xr-design-doc SKILL.md": (SKILLS_DIR / "design" / "xr-design-doc" / "SKILL.md").read_text(),
     }
     for name, text in texts.items():
         flat = " ".join(text.split()).lower()

@@ -21,7 +21,8 @@ a crease line appears and the panel says why" is.
    size and relations. Never coordinates: the placement solver finds the places.
 3. **Write the moves.** Each move is one real hand action from `references/controls.md`. Use only the actions listed
    there. If the subject needs an action the list does not have, map it to the closest listed action and say so
-   under "Gaps", never invent an API.
+   under "Gaps", never invent an API. One gesture per move; at most three different hand actions per game; each new
+   action gets its own learn move before the round uses it.
 4. **Choose the look, palette and UI** with `references/visual.md`. This is where the game gets its own identity:
    the theme, setting, palette, panel voice, feedback, motion and sound are yours to decide, inside the rules there.
 5. **Fill every section of `references/template.md`**, in order, with tables where the template has tables.
@@ -59,6 +60,8 @@ When the team adds an IWSDK feature to the kit (for example two-hand grabbing), 
 ## Before you finish
 
 - [ ] Every move names one action from `controls.md`, a size, a feedback and a `done()` condition.
+- [ ] One gesture per move; at most three different hand actions per game; each new action gets its own learn move
+      before the round uses it.
 - [ ] Every control row has a size or zone that meets the limits in `controls.md`.
 - [ ] Every thing is in the scene plan once, with a role and an honest size; the hands' things have the role `hero`,
       `tool`, `target` or `button`, so the solver keeps them in reach (`environment.md`).

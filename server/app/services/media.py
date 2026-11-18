@@ -19,6 +19,7 @@ import time
 import uuid
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -30,9 +31,11 @@ MEDIA_ROOT = Path(os.environ.get("MEDIA_DIR") or REPO_ROOT / "server" / "data" /
 # can use by id (agent_skills/common/sound/references/library.md). Looked up after the games' own media.
 SOUND_LIBRARY = Path(os.environ.get("SOUND_LIBRARY_DIR") or REPO_ROOT / "server" / "library" / "sounds")
 MEDIA_ID = re.compile(r"^(img|snd|mus)-[0-9a-f]{10}$")
+META_HOST = "api.meta.ai"
 KINDS = {"img": "image", "snd": "sound", "mus": "music"}
-# Defaults; MEDIA_IMAGE_MODEL, MEDIA_SOUND_MODEL and MEDIA_MUSIC_MODEL choose others from the provider's list.
-IMAGE_MODEL = "flux-2-pro"
+# Defaults; MEDIA_IMAGE_MODEL, MEDIA_SOUND_MODEL and MEDIA_MUSIC_MODEL choose others from the provider's list. Pictures
+# are Meta's Muse Image on Meta's Model API, the app's provider (MEDIA_BASE_URL=https://api.meta.ai/v1).
+IMAGE_MODEL = "muse-image-1.0"
 SOUND_MODEL = "elevenlabs-sound-effects-v2"
 MUSIC_MODEL = "ace-step-15"
 AUDIO_TYPES = {"audio/mpeg": "mp3", "audio/mp3": "mp3", "audio/wav": "wav", "audio/x-wav": "wav", "audio/flac": "flac", "audio/ogg": "ogg"}
@@ -47,7 +50,14 @@ _prices: dict[str, dict[str, Any]] = {}
 
 
 def enabled() -> bool:
+    """Generated pictures: a media provider is set (MEDIA_BASE_URL and MEDIA_API_KEY)."""
     return bool(os.environ.get("MEDIA_BASE_URL") and os.environ.get("MEDIA_API_KEY"))
+
+
+def sounds_enabled() -> bool:
+    """Generated sounds and music: a provider that makes them. Meta's Model API draws pictures only, so on it the games
+    use the sound library and no other company's sound model is called."""
+    return enabled() and urlparse(os.environ["MEDIA_BASE_URL"]).netloc != META_HOST
 
 
 def _client() -> httpx.AsyncClient:

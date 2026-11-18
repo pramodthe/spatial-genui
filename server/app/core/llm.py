@@ -1,8 +1,8 @@
 """Model calls: OpenAI-compatible chat completions for one-call steps, chat models for the agents, and the model
 list with prices (models.json).
 
-The agents' chat model uses OpenAI's Responses API on api.openai.com and Chat Completions on other
-OpenAI-compatible services.
+The app's model is Meta's Muse (Muse Ember by default, or Muse Spark contributor) on Meta's Model API, through its
+OpenAI-compatible Chat Completions; another OpenAI-compatible service can be named in .env instead.
 """
 
 from __future__ import annotations

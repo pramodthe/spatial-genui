@@ -110,7 +110,7 @@ Settings are read from `.env` at the repository root; see [`.env.example`](.env.
 | `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` | Meta, `muse-ember-1.0` | The model for design, coding and lessons: Muse Ember, or Muse Spark (`muse-spark-1.3-contributor`). Another OpenAI-compatible endpoint works too; models and prices are listed in [`server/models.json`](server/models.json). |
 | `META_API_KEY` | | Meta's Muse models (the app's model), and speech to text when there is no Deepgram key. |
 | `DEEPGRAM_API_KEY` | | The voice tutor. |
-| `MEDIA_BASE_URL`, `MEDIA_API_KEY` | | Planning pictures and generated sounds. Without them, games use the sound library and no pictures. |
+| `MEDIA_BASE_URL`, `MEDIA_API_KEY`, `MEDIA_IMAGE_MODEL` | Meta, `muse-image-1.0` | Planning pictures from Meta's Muse Image (the key is the Meta key). Meta makes no sounds, so games use the sound library. Without these, games get no pictures. |
 | `PLAN_PICTURES` | `1` | `0` turns the planning pictures off. |
 | `CODER_BUDGET_USD` | `3` | The most one coder attempt may spend. |
 | `DAILY_BUDGET_USD`, `RATE_LIMIT_PER_10_MIN` | `15`, `6` | The server's daily spending cap and the per-visitor rate limit. |

@@ -51,6 +51,7 @@
   .film { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
   .film figure { margin: 0; }
   .film img { width: 100%; border-radius: 10px; border: 1px solid var(--line); cursor: zoom-in; display: block; }
+  .timeline img.pic { margin-top: 6px; width: 100%; max-width: 280px; border-radius: 8px; border: 1px solid var(--line); cursor: zoom-in; display: block; }
   .film figcaption { color: var(--ink2); font-size: 12px; margin-top: 4px; }
   .criteria { list-style: none; padding: 0; margin: 0; }
   .criteria li { padding: 6px 0; border-top: 1px solid var(--line); font-size: 13px; }
@@ -156,6 +157,14 @@ function render(run) {
     head.append(el('span', 'what', e.what + (e.to ? ` → ${e.to}` : '')));
     body.append(head);
     if (e.detail) body.append(el('div', 'detail', e.detail));
+    // A step that made a picture (a plan picture, the final view) shows it.
+    if (/\.(png|jpe?g|webp)$/i.test(e.file || '')) {
+      const img = el('img', 'pic');
+      img.src = `/api/studio/${run.runId}/file/${e.file}`;
+      img.alt = e.file;
+      img.onclick = () => { $('zoom').querySelector('img').src = img.src; $('zoom').style.display = 'flex'; };
+      body.append(img);
+    }
     li.append(body);
     tl.append(li);
   }

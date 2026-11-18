@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import time
+from dataclasses import dataclass
 from typing import Any
 
 import modal
@@ -24,6 +25,7 @@ from langchain.agents.middleware.model_refusal import ModelRefusalError
 from langchain_modal import ModalSandbox
 from langgraph.config import get_stream_writer
 
+from app.core.background import track
 from app.core.config import SKILLS_DIR, config
 from app.core.llm import agent_model
 from app.pipeline import grader
@@ -34,7 +36,7 @@ from app.pipeline.coder.sound_tools import SOUND_TOOLS
 from app.pipeline.coder.state import CoderState, RunContext
 from app.pipeline.coder.tools import library_lookup, real_size
 from app.services import live, media
-from app.services.studio import StudioRun
+from app.services.studio import StudioRun, drop_waiting_pictures
 from sandbox.image import coder_image
 
 # Provider key "openai" matches ChatOpenAI (Muse and gpt). This build has no OpenAI prompt suffix
@@ -216,10 +218,62 @@ async def _final_view(backend: Any, studio: StudioRun, kind: str) -> None:
             found = await backend.adownload_files([path])
             data = getattr(found[0], "content", None) if found else None
             if data:
-                studio.save("final-view.png", data)
-                studio.event("play-test", "final view", "the game as it opens", file="final-view.png")
+                studio.keep_final_view(data)
     except Exception:
         return  # a record only: the game is judged by the gate, not by this picture
+
+
+@dataclass
+class _Closing:
+    """The final view a run's last attempt is still taking, the sandbox it holds, and an event set once that sandbox
+    is closed. A repair's sandbox takes the same name, so a repair closes this one first and waits for the close."""
+
+    task: asyncio.Task[Any]
+    sandbox: Any
+    closed: asyncio.Event
+
+
+_closing: dict[str, _Closing] = {}
+
+
+async def _close(sandbox: Any, closed: asyncio.Event) -> None:
+    try:
+        await asyncio.to_thread(sandbox.terminate)
+    except Exception:
+        pass
+    finally:
+        closed.set()
+
+
+async def _final_view_then_close(backend: Any, sandbox: Any, studio: StudioRun, kind: str, closed: asyncio.Event) -> None:
+    """The final view, taken after the run has returned its module (a play-test takes up to four minutes), then the
+    sandbox is closed. Runs in the background: the result never waits for it."""
+    try:
+        await _final_view(backend, studio, kind)
+    finally:
+        # Shielded: a cancel that lands while the sandbox closes must not leave the close half done (`closed` is set
+        # when it ends). Card pictures still waiting for this run's view will not get one now.
+        drop_waiting_pictures(studio.run_id)
+        await asyncio.shield(_close(sandbox, closed))
+
+
+def _forget_closed(run_id: str, closed: asyncio.Event) -> None:
+    closing = _closing.get(run_id)
+    if closing is not None and closing.closed is closed and closed.is_set():
+        _closing.pop(run_id, None)
+
+
+async def _close_last_attempt(run_id: str) -> None:
+    """Before a repair opens its sandbox: stop the run's last final view (it shows a rejected module) and wait until
+    its sandbox is closed. A view that never started, or whose close a cancel cut off, is closed here."""
+    closing = _closing.pop(run_id, None)
+    if closing is None:
+        return
+    if not closing.task.done():
+        closing.task.cancel()
+    await asyncio.gather(closing.task, return_exceptions=True)
+    if not closing.closed.is_set():
+        await _close(closing.sandbox, closing.closed)
 
 
 def _picture_paths(state: dict[str, Any]) -> dict[str, str]:
@@ -283,8 +337,8 @@ async def write_with_agent(state: dict[str, Any]) -> dict[str, Any]:
         studio: StudioRun | None = StudioRun(run_id, str(state.get("request") or ""), str(state.get("kind") or "lesson"), str(getattr(agent_model(), "model_name", "") or ""))
     except Exception:
         studio = None  # the Studio is a record; a run never fails for it
-    # The host tools (media) and the grader's callback find the run through its scope.
-    tokens = [scope.run_id.set(run_id), scope.studio.set(studio), scope.made.set({})]
+    # The host tools (media), the grader's callback and the cost meters find the run through its scope.
+    tokens = [scope.run_id.set(run_id), scope.studio.set(studio), scope.made.set({}), scope.spent.set({"usd": 0.0})]
     try:
         result = await _write_with_agent(state, studio)
     except Exception as exc:
@@ -292,7 +346,7 @@ async def write_with_agent(state: dict[str, Any]) -> dict[str, Any]:
             studio.finish("failed", error=f"{type(exc).__name__}: {str(exc)[:300]}")  # not left "writing" for ever
         raise
     finally:
-        for var, token in zip((scope.run_id, scope.studio, scope.made), tokens):
+        for var, token in zip((scope.run_id, scope.studio, scope.made, scope.spent), tokens):
             var.reset(token)
     if studio is not None:
         attempt = (result.get("attempts") or [{}])[-1]
@@ -306,10 +360,14 @@ async def _write_with_agent(state: dict[str, Any], studio: StudioRun | None) -> 
     model = agent_model()
     # The sandbox lives WALL_S from now; the run must finish inside that, file transfers included.
     deadline = time.monotonic() + WALL_S - 20
+    # A repair: the last attempt's sandbox holds this run's sandbox name until it is closed.
+    await _close_last_attempt(run_id)
     sandbox = await asyncio.to_thread(_open_sandbox, run_id)
     backend = ModalSandbox(sandbox=sandbox)
     backend_token = scope.backend.set(backend)
     syncing = asyncio.get_running_loop().create_task(studio.sync_loop(backend)) if studio is not None else None
+    # Set when the final view has taken the sandbox over: it closes the sandbox when its picture is taken.
+    handed_off = False
     try:
         existing = _module_to_upload(state)
         if existing is not None:
@@ -398,8 +456,6 @@ async def _write_with_agent(state: dict[str, Any], studio: StudioRun | None) -> 
         try:
             # The latest game.js, built into module.js (a coder that stopped after editing game.js left it stale).
             await backend.aexecute(f"node {BUILD_MODULE} /work/module.js")
-            if studio is not None:
-                await _final_view(backend, studio, kind)
             downloaded = await backend.adownload_files(["/work/module.js"])
         except Exception as exc:
             kept = studio.saved("module.js") if studio is not None else None
@@ -414,17 +470,26 @@ async def _write_with_agent(state: dict[str, Any], studio: StudioRun | None) -> 
                 return _failed(state, "The coder ran out of time.", tokens=tokens)
             return _failed(state, f"The coder did not leave /work/module.js ({detail}).", tokens=tokens)
         code = content.decode() if isinstance(content, bytes) else str(content)
-        attempt = {"stage": "ok", "ms": 0, **tokens, "finishReason": "length" if timed_out else "stop", **await _rubric_outcome(coder, config)}
+        attempt = {"stage": "ok", "ms": 0, **tokens, **_cost(), "finishReason": "length" if timed_out else "stop", **await _rubric_outcome(coder, config)}
+        if studio is not None:
+            # The Studio's picture of what was built, after the module is in hand: it never delays the result.
+            closed = asyncio.Event()
+            task = track(asyncio.get_running_loop().create_task(_final_view_then_close(backend, sandbox, studio, kind, closed)))
+            _closing[run_id] = _Closing(task, sandbox, closed)
+            # Kept until the sandbox is closed, so a repair right after a cancelled close still waits for it.
+            task.add_done_callback(lambda _: _forget_closed(run_id, closed))
+            handed_off = True
         return {"attempts": [*state.get("attempts", []), attempt], "code": code}
     finally:
         if syncing is not None:
             syncing.cancel()
             await studio.sync(backend)  # the last plan, parts and screenshots before the sandbox goes
         scope.backend.reset(backend_token)
-        try:
-            await asyncio.to_thread(sandbox.terminate)
-        except Exception:
-            pass
+        if not handed_off:
+            try:
+                await asyncio.to_thread(sandbox.terminate)
+            except Exception:
+                pass
 
 
 def _record(studio: StudioRun, event: dict[str, Any]) -> None:
@@ -506,8 +571,14 @@ async def _tokens_used(coder: Any, config: dict[str, Any]) -> dict[str, int]:
     return {"promptTokens": prompt, "completionTokens": completion}
 
 
+def _cost() -> dict[str, float]:
+    """What this attempt's model calls cost, from every cost meter (scope.spent): the daily budget charges this."""
+    spent = scope.spent.get()
+    return {"costUsd": round(float(spent.get("usd", 0.0)), 6)} if spent is not None else {}
+
+
 def _failed(state: dict[str, Any], error: str, *, refused: bool = False, tokens: dict[str, int] | None = None) -> dict[str, Any]:
-    used = tokens or {"promptTokens": 0, "completionTokens": 0}
+    used = {**(tokens or {"promptTokens": 0, "completionTokens": 0}), **_cost()}
     attempt = {"stage": "no-code", "ms": 0, "error": error, **used, "finishReason": "stop"}
     update: dict[str, Any] = {"attempts": [*state.get("attempts", []), attempt], "code": None, "ok": False, "error": error}
     if refused:

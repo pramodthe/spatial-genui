@@ -2,17 +2,24 @@
 
 from __future__ import annotations
 
+import asyncio
+import time
+from types import SimpleNamespace
 
 import pytest
 from deepagents.profiles.harness.harness_profiles import _harness_profile_for_model
 from langchain.agents.middleware import ModelCallLimitMiddleware, ModelFallbackMiddleware, ModelRetryMiddleware, ToolCallLimitMiddleware
 from langchain_openai import ChatOpenAI
 from langchain.agents.middleware.model_refusal import ModelRefusalError
+from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import MemorySaver
 
+from app.core import background
 from app.core.llm import Completion
 from app.pipeline import lesson
 from app.pipeline.coder import agent as coder, model_maker
+from app.pipeline.coder.middleware import CostMeterMiddleware
+from app.services import studio as studio_records
 from app.pipeline.prompts import EXAMPLE_MODULE
 from sandbox.image import GATE_ENTRY, GATE_ROOT, SKILLS_ROOT, WORK_ROOT, image_layout
 from app.core.config import SKILLS_DIR
@@ -108,9 +115,162 @@ async def test_first_run_pins_skills_and_returns_the_module(monkeypatch: pytest.
     assert seen["skills"] == ["/skills/common/", "/skills/play/", "/skills/looks/", "/skills/game/", "/skills/lesson/"]
     assert seen["thread"] == "coder-run/1"
     assert "/work/module.js" not in backend.files or backend.files["/work/module.js"] == b"export default function build(){}"
+    # The final view closes the sandbox once its picture is taken, after the result.
+    await asyncio.gather(*list(background._tasks))
     assert backend.sandbox.terminated is True
     assert any(isinstance(item, ModelCallLimitMiddleware) for item in seen["middleware"])
     assert any(isinstance(item, ToolCallLimitMiddleware) for item in seen["middleware"])
+
+
+@pytest.mark.asyncio
+async def test_the_module_comes_back_before_the_final_view_with_its_cost(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The final view (a play-test of up to four minutes) is taken after the module is downloaded and never delays the
+    result; the sandbox closes when its picture is taken. The attempt carries what its cost meters counted."""
+    order: list[str] = []
+    release = asyncio.Event()
+    box: dict[str, object] = {}
+
+    class SlowPlaytest(_Backend):
+        async def aexecute(self, command: str, timeout: int | None = None) -> object:
+            self.commands.append(command)
+            if "playtest.mjs" in command:
+                order.append("final view")
+                await release.wait()
+                return SimpleNamespace(output='{"screenshot": "/work/playtest/view-1.png"}')
+            return SimpleNamespace(output="")
+
+        async def adownload_files(self, paths: list[str]) -> list[_File]:
+            order.extend(f"download {path}" for path in paths)
+            return self.download_files(paths)
+
+    class Agent:
+        async def astream_events(self, payload, *, context, config, version):
+            files = box["backend"].files
+            files["/work/module.js"] = b"export default function build(){}"
+            files["/work/playtest/view-1.png"] = b"png"
+            # One model call through the coder's cost meter: 100k in (95k of them cached), 1k out.
+            usage = {"input_tokens": 100_000, "output_tokens": 1_000, "total_tokens": 101_000, "input_token_details": {"cache_read": 95_000}}
+            CostMeterMiddleware(budget_usd=3.0, model_id="gpt-6.1-sol").after_model({"messages": [AIMessage(content="", usage_metadata=usage)]}, None)
+            yield {"event": "on_tool_start", "name": "write_file"}
+
+    def factory(**kwargs):
+        box["backend"] = kwargs["backend"]
+        return Agent()
+
+    _install(monkeypatch, factory)
+    monkeypatch.setattr(coder, "ModalSandbox", SlowPlaytest)
+    coder.set_checkpointer(None)
+    result = await asyncio.wait_for(coder.write_with_agent({"run_id": "final-view-1", "kind": "game", "request": "a kite"}), 10)
+    backend = box["backend"]
+    assert result["code"] == "export default function build(){}"
+    assert result["attempts"][-1]["costUsd"] == pytest.approx(0.0295)
+    # A card picture asked for now, before the view exists, is kept when it lands.
+    assert studio_records.keep_picture("game-final1", "final-view-1") is False
+    await asyncio.sleep(0.05)
+    assert "final view" in order and order.index("download /work/module.js") < order.index("final view")
+    assert backend.sandbox.terminated is False  # still taking its picture
+    release.set()
+    await asyncio.gather(*list(background._tasks))
+    assert backend.sandbox.terminated is True
+    run = studio_records.read_run("final-view-1")
+    assert "final-view.png" in run["files"] and any(e["what"] == "final view" and e.get("file") == "final-view.png" for e in run["events"])
+    assert studio_records.picture("game-final1") is not None
+
+
+@pytest.mark.asyncio
+async def test_a_repair_closes_the_last_attempts_final_view_before_its_sandbox_opens(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A repair's sandbox takes the run's sandbox name, which the last attempt's sandbox holds while it takes its
+    final view (Nov 18: AlreadyExistsError on a repair). That view is of a rejected module: it is closed first."""
+    order: list[str] = []
+    sandboxes: list[_Sandbox] = []
+
+    class NeverDone(_Backend):
+        async def aexecute(self, command: str, timeout: int | None = None) -> object:
+            self.commands.append(command)
+            if "playtest.mjs" in command:
+                await asyncio.Event().wait()  # a final view that would take minutes
+            return SimpleNamespace(output="")
+
+    class Agent:
+        def __init__(self, backend: _Backend) -> None:
+            self.backend = backend
+
+        async def astream_events(self, payload, *, context, config, version):
+            self.backend.files["/work/module.js"] = b"export default function build(){}"
+            yield {"event": "on_tool_start", "name": "write_file"}
+
+    class Tracked(_Sandbox):
+        def terminate(self) -> None:
+            order.append(f"close {sandboxes.index(self) + 1}")
+            super().terminate()
+
+    def open_sandbox(run_id: str, **_options) -> Tracked:
+        sandboxes.append(Tracked())
+        order.append(f"open {len(sandboxes)}")
+        return sandboxes[-1]
+
+    _install(monkeypatch, lambda **kwargs: Agent(kwargs["backend"]))
+    monkeypatch.setattr(coder, "ModalSandbox", NeverDone)
+    monkeypatch.setattr(coder, "_open_sandbox", open_sandbox)
+    coder.set_checkpointer(None)
+    first = await coder.write_with_agent({"run_id": "repair-view", "kind": "game", "request": "a kite"})
+    await asyncio.sleep(0.05)
+    assert first["code"] and order == ["open 1"]  # its final view still holds sandbox 1
+    await coder.write_with_agent({"run_id": "repair-view", "kind": "game", "request": "a kite",
+                                  "attempts": first["attempts"], "code": first["code"]})
+    assert order[:3] == ["open 1", "close 1", "open 2"]
+    await asyncio.sleep(0.05)  # the second final view starts (in the app the gate check runs first)
+    for task in list(background._tasks):
+        task.cancel()
+    await asyncio.gather(*list(background._tasks), return_exceptions=True)
+    assert sandboxes[1].terminated is True
+
+
+@pytest.mark.asyncio
+async def test_a_repair_waits_for_a_close_that_a_cancel_cut_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review of PR #31: a cancel that lands while the last attempt's sandbox is closing must not let the repair open
+    a sandbox of the same name before the close has ended."""
+    order: list[str] = []
+    sandboxes: list[_Sandbox] = []
+
+    class SlowClose(_Sandbox):
+        def terminate(self) -> None:
+            number = sandboxes.index(self) + 1
+            order.append(f"closing {number}")
+            time.sleep(0.3)  # Modal's terminate is a blocking call, run in a thread
+            order.append(f"closed {number}")
+            super().terminate()
+
+    class QuickView(_Backend):
+        async def aexecute(self, command: str, timeout: int | None = None) -> object:
+            self.commands.append(command)
+            return SimpleNamespace(output="")  # no picture: the view ends at once and the close begins
+
+    class Agent:
+        def __init__(self, backend: _Backend) -> None:
+            self.backend = backend
+
+        async def astream_events(self, payload, *, context, config, version):
+            self.backend.files["/work/module.js"] = b"export default function build(){}"
+            yield {"event": "on_tool_start", "name": "write_file"}
+
+    def open_sandbox(run_id: str, **_options) -> SlowClose:
+        sandboxes.append(SlowClose())
+        order.append(f"open {len(sandboxes)}")
+        return sandboxes[-1]
+
+    _install(monkeypatch, lambda **kwargs: Agent(kwargs["backend"]))
+    monkeypatch.setattr(coder, "ModalSandbox", QuickView)
+    monkeypatch.setattr(coder, "_open_sandbox", open_sandbox)
+    coder.set_checkpointer(None)
+    first = await coder.write_with_agent({"run_id": "repair-race", "kind": "game", "request": "a kite"})
+    await asyncio.sleep(0.05)
+    assert order == ["open 1", "closing 1"]  # the close is under way when the repair comes
+    await coder.write_with_agent({"run_id": "repair-race", "kind": "game", "request": "a kite",
+                                  "attempts": first["attempts"], "code": first["code"]})
+    assert order.index("closed 1") < order.index("open 2")
+    await asyncio.gather(*list(background._tasks), return_exceptions=True)
+    assert all(sandbox.terminated for sandbox in sandboxes)
 
 
 @pytest.mark.asyncio

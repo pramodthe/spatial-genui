@@ -118,16 +118,7 @@ def _prompt(body: dict[str, Any]) -> str:
 
 
 async def _spend(result: dict[str, Any]) -> None:
-    calls = []
-    for attempt in result.get("attempts") or []:
-        model = result.get("model")
-        if not model:
-            continue
-        calls.append({
-            "model": model,
-            "promptTokens": attempt.get("promptTokens") or 0,
-            "completionTokens": attempt.get("completionTokens") or 0,
-        })
+    calls = guard.attempt_calls(result)
     if calls:
         await guard.record_spend(calls)
 

@@ -1,0 +1,63 @@
+# The checks every PR runs (CLAUDE.md, Commands): the gate's tests and typecheck, the headset's typecheck, and the
+# server's tests. No secrets: the server's tests call no model, no Modal and no media provider (tests/conftest.py).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gate
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: gate/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
+
+  headset:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: headset
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: headset/package-lock.json
+      # The typecheck needs no install scripts, and one of them fails on Linux runners: onnxruntime-node (from
+      # @iwsdk/reference, through @huggingface/transformers) downloads a CUDA build at install time, and that download
+      # answers 404.
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The server runs the gate as a subprocess (gate/node_modules/.bin/tsx), and its tests run the skills' scripts.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: gate/package-lock.json
+      - run: npm ci
+        working-directory: gate
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked
+        working-directory: server
+      - run: uv run pytest
+        working-directory: server

@@ -6,6 +6,7 @@ from langchain.agents.middleware import ModelCallLimitMiddleware, TodoListMiddle
 from langchain.agents.structured_output import ProviderStrategy
 from pydantic import BaseModel
 
+from app.core.config import is_meta
 from app.core.llm import agent_model
 from app.pipeline.coder.middleware import CostMeterMiddleware
 from app.pipeline.coder.tools import library_lookup, real_size
@@ -23,7 +24,7 @@ class ModelMade(BaseModel):
 
 def _is_muse(model: object) -> bool:
     name = str(getattr(model, "model_name", "") or "")
-    return name.startswith("muse") or "api.meta.ai" in str(getattr(model, "openai_api_base", "") or "")
+    return name.startswith("muse") or is_meta(getattr(model, "openai_api_base", None))
 
 
 def model_maker_spec() -> dict:

@@ -118,3 +118,21 @@ def test_another_service_in_env_gets_the_agents_whatever_the_model_is_called(mon
     agent = llm.agent_model()
     assert str(agent.openai_api_base) == "https://llm.example/v1"
     assert agent.openai_api_key.get_secret_value() == "other-key"
+
+
+def test_meta_is_known_by_its_exact_host_and_only_it_gets_metas_key(monkeypatch) -> None:
+    """A URL that only contains api.meta.ai (another host, or a proxy path) is not Meta's: its agents go to it, and it
+    is never given META_API_KEY."""
+    from app.core import config as config_mod
+
+    assert config_mod.is_meta("https://api.meta.ai/v1") and config_mod.is_meta("https://API.meta.ai:443/v1")
+    for url in ("https://api.meta.ai.example.com/v1", "https://proxy.internal/api.meta.ai/v1", "", None):
+        assert not config_mod.is_meta(url)
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.delenv("LLM_MODEL", raising=False)
+    monkeypatch.setenv("META_API_KEY", "meta-test-key")
+    monkeypatch.setenv("LLM_BASE_URL", "https://api.meta.ai.example.com/v1")
+    lookalike = config_mod.load_config()
+    assert lookalike.api_key == ""
+    monkeypatch.setattr(llm, "config", lookalike)
+    assert str(llm.agent_model().openai_api_base) == "https://api.meta.ai.example.com/v1"

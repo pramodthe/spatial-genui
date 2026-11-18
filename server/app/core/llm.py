@@ -21,7 +21,7 @@ from urllib.parse import urlparse
 import httpx
 from langchain_openai import ChatOpenAI
 
-from app.core.config import config, MODELS_FILE
+from app.core.config import config, is_meta, MODELS_FILE
 
 REQUEST_TIMEOUT_S = 30 * 60
 MAX_RETRIES = 3
@@ -326,7 +326,7 @@ def agent_model():
     .env names instead. The service is LLM_BASE_URL's, whatever the model is called: a model named muse on another
     service is sent there, never to Meta with Meta's key."""
     refuse_anthropic(config.model, config.base_url)
-    if "api.meta.ai" in config.base_url:
+    if is_meta(config.base_url):
         effort = None
         try:
             entry = load_model(config.model)

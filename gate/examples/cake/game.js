@@ -240,6 +240,7 @@ export default function build({ THREE, kit, traits, ui, isGrabbed, sound }) {
     phase = 'play';
     flourPour.reset();
     fold.reset();
+    turnsHeard = 0;
     baking = false;
     bakeClock = 0;
     oven.value = 20;
@@ -297,18 +298,32 @@ export default function build({ THREE, kit, traits, ui, isGrabbed, sound }) {
     panel.show('again', true);
   }
 
-  // The frame a hand lets go of a piece.
+  // The frame a hand lets go of a piece (and a click on the frame it takes one).
   const was = new Map();
   const letGo = (o) => {
     const now = Boolean(isGrabbed(o));
     const before = was.get(o) ?? false;
     was.set(o, now);
+    if (now && !before) sfx.fire('touch');
     return before && !now;
+  };
+  // Sounds while the hands work: a pour while a jug flows, a tick at each whole turn of the whisk.
+  let pourSound = 0;
+  let turnsHeard = 0;
+  const hear = (dt, pour, stir) => {
+    pourSound -= dt;
+    if (pour.flowing && pourSound <= 0) {
+      pourSound = 0.4;
+      sfx.fire('pour');
+    }
+    if (Math.floor(stir.turns) > turnsHeard) sfx.fire('whisk');
+    turnsHeard = Math.floor(stir.turns);
   };
 
   function learnStep(dt, put) {
     sugarPour.update(dt);
     cream.update(dt);
+    hear(dt, sugarPour, cream);
     if (put.butter) {
       if (!butterIn && near(butter, bowl, 0.06)) {
         butterIn = true;
@@ -319,6 +334,12 @@ export default function build({ THREE, kit, traits, ui, isGrabbed, sound }) {
     }
     if (put.sugarJug) {
       goHome(sugarJug);
+      // While learning nothing is lost: too much sugar is scooped back out to the card's 100 g.
+      if (sugarPour.poured > 110) {
+        sugarPour.left += sugarPour.poured - 100;
+        sugarPour.poured = 100;
+        panel.set('why', 'Too much sugar: the extra is scooped out. Weigh 100 g, like the card.');
+      }
       if (butterIn && sugarPour.poured >= 90) {
         sugarDone = true;
         tint('mustard', 1.6);
@@ -340,6 +361,7 @@ export default function build({ THREE, kit, traits, ui, isGrabbed, sound }) {
     if (!baking) {
       flourPour.update(dt);
       fold.update(dt);
+      hear(dt, flourPour, fold);
       if (flourPour.flowing) tint('white', 2 + Math.min(1, flourPour.poured / 100) * 0.6);
     }
     if (put.flourJug) goHome(flourJug);

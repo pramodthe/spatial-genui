@@ -36,7 +36,10 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: headset/package-lock.json
-      - run: npm ci
+      # The typecheck needs no install scripts, and one of them fails on Linux runners: onnxruntime-node (from
+      # @iwsdk/reference, through @huggingface/transformers) downloads a CUDA build at install time, and that download
+      # answers 404.
+      - run: npm ci --ignore-scripts
       - run: npm run typecheck
 
   server:

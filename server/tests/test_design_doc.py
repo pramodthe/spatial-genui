@@ -238,3 +238,24 @@ def test_the_grader_checks_a_designed_game_against_its_design() -> None:
     assert grader.DESIGNED.strip() not in grader.rubric_for("bake")
     names = [t.name for t in grader.grader_tools(object(), "game", designed=True)]
     assert names[0] == "read_design" and "read_design" not in [t.name for t in grader.grader_tools(object(), "game")]
+
+
+def test_the_worked_example_passes_the_design_checks_and_is_the_real_game() -> None:
+    """references/example-cake.md is a design the checks accept (12 sections, a scene plan that reads), with three
+    levels and the hands kit's helpers, and its scene plan is the one the real cake game is built from (gate/examples/
+    cake, which the gate's tests play through) (task 12)."""
+    import re
+
+    from app.core.config import REPO_ROOT
+
+    text = (design.DESIGN_SKILL / "references" / "example-cake.md").read_text()
+    inner = text[text.index("```markdown\n") + len("```markdown\n"): text.rstrip().rindex("```")]
+    made = design._read_doc(inner)
+    assert made["problems"] == [] and made["mode"] == "desk" and made["look"] == "ink-toon"
+    assert made["title"] == "Rise and Bake"
+    for helper in ("handPour", "handStir", "motionHeat"):
+        assert helper in inner
+    levels = [line for line in design._section(inner, 6).splitlines() if re.match(r"^\| \d\.", line)]
+    assert len(levels) == 3
+    game = (REPO_ROOT / "gate" / "examples" / "cake" / "parts" / "scene.js").read_text()
+    assert design._scene("## 5. Environment\n" + game)[0] == made["scene"]

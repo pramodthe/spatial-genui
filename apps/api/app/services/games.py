@@ -43,7 +43,7 @@ def summary(game: dict[str, Any]) -> dict[str, Any]:
     out = {key: value for key, value in game.items() if key != "code"}
     watcher = live.get(live.game_key(game["id"])) if game.get("status") == "writing" else None
     if watcher is not None:
-        out["live"] = {"key": watcher.key, "line": watcher.line(), "seq": watcher.seq}
+        out["live"] = watcher.shelf()
     # Its card picture (GET /api/games/<id>/picture) exists: a headset panel cannot recover from a missing image.
     out["picture"] = studio.picture(f"game-{game['id']}") is not None
     return out

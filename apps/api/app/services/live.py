@@ -21,6 +21,14 @@ from app.pipeline import gate
 
 SNAPSHOT_EVERY_S = 1.5
 KEEP = 64
+# The four steps a card being made shows (plan, build, try it out, check), from the stage the writer reports.
+# A step only moves forward: the coder tries its game and goes back to building many times.
+STEPS = {
+    "starting": 0, "designing": 0,
+    "thinking": 1, "writing": 1, "building": 1,
+    "testing": 2,
+    "grading": 3, "checking": 3, "fixing": 3, "ready": 3, "failed": 3,
+}
 _NAME = re.compile(r"""\.name\s*=\s*(['"`])([^'"`\n]{1,40})\1""")
 _TITLE = re.compile(r"""kit\.panel\(\s*ui\s*,\s*\{[\s\S]{0,600}?\btitle:\s*(['"`])([^'"`\n]{2,60})\1""")
 
@@ -33,6 +41,7 @@ class Live:
         self.key = key
         self.started = time.time()
         self.stage = "starting"
+        self.step = 0
         self.detail = ""
         self.attempt = 0
         self.text = ""
@@ -50,6 +59,7 @@ class Live:
 
     def set_stage(self, stage: str, detail: str = "") -> None:
         self.stage = stage
+        self.step = max(self.step, STEPS.get(stage, self.step))
         self.detail = detail[:160]
 
     def begin_attempt(self) -> None:
@@ -63,7 +73,8 @@ class Live:
         if len(text) < len(self.text):  # the stream started over after a dropped connection
             self._snapped_len = 0
         self.text = text
-        self.stage = "writing"
+        if self.stage != "writing":
+            self.set_stage("writing")
         for match in _NAME.finditer(text):
             name = match.group(2).strip()
             if name and name not in self.parts:
@@ -107,12 +118,19 @@ class Live:
             return f"Building: {count} parts so far" if count else f"Writing ({clock})"
         if self.stage == "checking":
             return "Checking it runs"
-        return {"starting": "Starting", "designing": "Designing the game"}.get(self.stage, self.stage.capitalize())
+        return {"starting": "Starting", "designing": "Designing the game", "building": f"Building ({clock})",
+                "testing": f"Trying it out ({clock})", "grading": "Checking it against the plan"}.get(self.stage, self.stage.capitalize())
+
+    def shelf(self) -> dict[str, Any]:
+        """What a shelf card shows while this is being made: its line, its step (0-3), the stage and the seconds so far."""
+        return {"key": self.key, "line": self.line(), "seq": self.seq, "stage": self.stage, "step": self.step,
+                "seconds": int(time.time() - self.started)}
 
     def view(self, after: int = 0) -> dict[str, Any]:
         out: dict[str, Any] = {
             "key": self.key,
             "stage": self.stage,
+            "step": self.step,
             "detail": self.detail,
             "line": self.line(),
             "attempt": self.attempt,

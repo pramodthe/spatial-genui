@@ -77,7 +77,7 @@ def summary(course: dict[str, Any]) -> dict[str, Any]:
         rest = {key: value for key, value in lesson.items() if key not in {"code", "firstCode", "critique", "prompt"}}
         watcher = live.get(live.lesson_key(course["id"], index)) if lesson.get("status") == "generating" else None
         if watcher is not None:
-            rest["live"] = {"key": watcher.key, "line": watcher.line(), "seq": watcher.seq}
+            rest["live"] = watcher.shelf()
         rest["picture"] = studio.picture(f"course-{course['id']}-{index}") is not None
         lessons.append(rest)
     return {**course, "lessons": lessons}

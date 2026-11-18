@@ -18,8 +18,8 @@ LIMITS = {"sound": 6, "music": 1}
 
 
 def _no_room(kind: str) -> str | None:
-    if not media.enabled():
-        return "Generated media is not set up on this host: use the synth sounds and the sound library."
+    if not media.sounds_enabled():
+        return "Generated sounds are not set up on this host: use the synth sounds and the sound library."
     made = scope.made.get()
     if made is not None and made.get(kind, 0) >= LIMITS[kind]:
         return f"This game already has {LIMITS[kind]} generated {kind}s, the most it may have: use those."

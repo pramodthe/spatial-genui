@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 
 import pytest
 
+from app.core import llm
 from app.core.llm import complete, default_target, LlmTarget, load_model, refuse_anthropic
 
 CLAUDE_IDS = ("claude-opus-5-5", "claude-fable-5-2", "claude-sonnet-5-5", "claude-haiku-5-5")
@@ -84,3 +85,19 @@ async def test_reasoning_effort_reaches_the_app_model_only(monkeypatch: pytest.M
     for target in (app_model, router, other):
         await complete([{"role": "user", "content": "hi"}], target)
     assert [body.get("reasoning_effort") for body in sent] == ["max", "low", None]
+
+
+def test_the_app_runs_on_muse_by_default(monkeypatch) -> None:
+    """With no model in .env the app is Meta's Muse Ember on Meta's key, and its agents are Muse: no OpenAI anywhere."""
+    from app.core import config as config_mod
+
+    for name in ("LLM_BASE_URL", "LLM_API_KEY", "LLM_MODEL", "LLM_REASONING_EFFORT", "OPENAI_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("META_API_KEY", "meta-test-key")
+    settings = config_mod.load_config()
+    assert settings.base_url == "https://api.meta.ai/v1" and settings.model == "muse-ember-1.0"
+    assert settings.api_key == "meta-test-key"
+    monkeypatch.setattr(llm, "config", settings)
+    agent = llm.agent_model()
+    assert agent.model_name == "muse-ember-1.0" and "api.meta.ai" in str(agent.openai_api_base)
+    assert not hasattr(llm, "gpt_chat")

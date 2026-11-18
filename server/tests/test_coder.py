@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 from deepagents.profiles.harness.harness_profiles import _harness_profile_for_model
-from langchain.agents.middleware import ModelCallLimitMiddleware, ModelFallbackMiddleware, ToolCallLimitMiddleware
+from langchain.agents.middleware import ModelCallLimitMiddleware, ModelFallbackMiddleware, ModelRetryMiddleware, ToolCallLimitMiddleware
 from langchain_openai import ChatOpenAI
 from langchain.agents.middleware.model_refusal import ModelRefusalError
 from langchain_core.messages import AIMessage
@@ -399,9 +399,13 @@ def test_profile_disables_the_general_subagent_and_delete() -> None:
     assert not profile.system_prompt_suffix
 
 
-def test_muse_falls_back_to_gpt() -> None:
-    middleware = coder.coder_middleware(_Model("muse-spark", "https://api.meta.ai/v1"))
-    assert any(isinstance(item, ModelFallbackMiddleware) for item in middleware)
+def test_a_muse_run_stays_on_muse(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The app runs on Meta's models only: no OpenAI model backs Muse up, and no OpenAI key is needed to build one."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    for model in (_Model("muse-ember-1.0", "https://api.meta.ai/v1"), _Model("muse-spark", "https://api.meta.ai/v1")):
+        middleware = coder.coder_middleware(model)
+        assert not any(isinstance(item, ModelFallbackMiddleware) for item in middleware)
+        assert any(isinstance(item, ModelRetryMiddleware) for item in middleware)
 
 
 def test_model_maker_is_isolated() -> None:

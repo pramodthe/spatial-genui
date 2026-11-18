@@ -1,8 +1,8 @@
 """Model calls: OpenAI-compatible chat completions for one-call steps, chat models for the agents, and the model
 list with prices (models.json).
 
-The agents' chat model uses OpenAI's Responses API on api.openai.com and Chat Completions on other
-OpenAI-compatible services.
+The app's model is Meta's Muse (Muse Ember by default, or Muse Spark contributor) on Meta's Model API, through its
+OpenAI-compatible Chat Completions; another OpenAI-compatible service can be named in .env instead.
 """
 
 from __future__ import annotations
@@ -73,13 +73,13 @@ def refuse_anthropic(
     if not blocked:
         return
     label = next((name for name in names if name), None) or host or "Anthropic"
-    raise RuntimeError(f"Anthropic is disabled ({label}). Use gpt-6.1-sol or a Meta Muse model.")
+    raise RuntimeError(f"Anthropic is disabled ({label}). Use a Meta Muse model.")
 
 
 def _refuse_target(target: LlmTarget) -> None:
     refuse_anthropic(target.model, target.base_url, also=target.id)
     if target.headers and any("anthropic" in key.lower() for key in target.headers):
-        raise RuntimeError("Anthropic is disabled (request header). Use gpt-6.1-sol or a Meta Muse model.")
+        raise RuntimeError("Anthropic is disabled (request header). Use a Meta Muse model.")
 
 
 def default_target() -> LlmTarget:
@@ -285,25 +285,17 @@ def _retry_after(response: httpx.Response) -> float | None:
         return min(60.0, max(0.0, when.timestamp() - time.time()))
 
 
-def gpt_chat():
-    """gpt-6.1-sol for the agents, on the Responses API: on Chat Completions Sol refuses function tools with its
-    default reasoning (400: "use /v1/responses or set reasoning_effort to 'none'"), and an agent always has tools.
-    Always OpenAI's gpt-6.1-sol: when .env points the app at Muse, this is the fallback, so it must not be Muse again."""
-    on_openai = "api.meta.ai" not in config.base_url and not config.model.startswith("muse")
-    target = None if on_openai else load_model("gpt-6.1-sol")
-    model = config.model if target is None else target.model
-    base_url = config.base_url if target is None else target.base_url
-    api_key = (config.api_key if target is None else target.api_key) or "missing"
-    refuse_anthropic(model, base_url)
-    # The Responses API is OpenAI's own; an OpenAI-compatible service speaks Chat Completions.
-    on_openai_host = urlparse(base_url).netloc == "api.openai.com"
+def compatible_chat():
+    """The agents' model on another OpenAI-compatible service, when .env names one (LLM_BASE_URL, LLM_API_KEY,
+    LLM_MODEL): Chat Completions, at LLM_REASONING_EFFORT when it is set (GLM: none turns its thinking off)."""
+    refuse_anthropic(config.model, config.base_url)
     effort = os.environ.get("LLM_REASONING_EFFORT")
     return ChatOpenAI(
-        model=model,
-        api_key=api_key,
-        base_url=base_url,
-        use_responses_api=on_openai_host,
-        extra_body=None if on_openai_host or not effort else {"reasoning_effort": effort},
+        model=config.model,
+        api_key=config.api_key or "missing",
+        base_url=config.base_url,
+        use_responses_api=False,
+        extra_body={"reasoning_effort": effort} if effort else None,
         max_tokens=config.max_completion_tokens,
         max_retries=MAX_RETRIES,
         timeout=REQUEST_TIMEOUT_S,
@@ -330,7 +322,8 @@ def muse_chat(model: str = "muse-spark-1.3-contributor", *, reasoning_effort: st
 
 
 def agent_model():
-    """The app's own model for the coder. Muse when .env points at Meta, otherwise gpt-6.1-sol."""
+    """The app's own model for the agents: Meta's Muse (the default, Muse Ember), or the OpenAI-compatible service
+    .env names instead."""
     refuse_anthropic(config.model, config.base_url)
     if "api.meta.ai" in config.base_url or config.model.startswith("muse"):
         effort = None
@@ -340,5 +333,5 @@ def agent_model():
             return muse_chat(entry.model, reasoning_effort=str(effort) if effort else None)
         except Exception:
             return muse_chat(config.model, reasoning_effort=os.environ.get("LLM_REASONING_EFFORT"))
-    return gpt_chat()
+    return compatible_chat()
 

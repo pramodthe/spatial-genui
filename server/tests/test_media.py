@@ -80,3 +80,20 @@ def test_the_committed_sound_library_matches_its_table() -> None:
         assert re.fullmatch(r"snd-[0-9a-f]{10}", entry["id"]) and f"`{entry['id']}`" in table
         record = json.loads((library / f"{entry['id']}.json").read_text())
         assert (library / record["file"]).is_file(), entry["name"]
+
+
+def test_on_meta_pictures_are_muse_image_and_no_sound_model_is_called(monkeypatch) -> None:
+    """The app's media are Meta's: Muse Image draws the pictures, and Meta makes no sounds, so no other company's sound
+    model is offered to the coder (games use the sound library)."""
+    from app.pipeline.coder import agent as coder
+
+    monkeypatch.setenv("MEDIA_BASE_URL", "https://api.meta.ai/v1")
+    monkeypatch.setenv("MEDIA_API_KEY", "meta-test-key")
+    monkeypatch.delenv("MEDIA_IMAGE_MODEL", raising=False)
+    assert media.enabled() and media._model("image") == "muse-image-1.0"
+    assert not media.sounds_enabled()
+    assert "not set up" in asyncio.run(make_sound.ainvoke({"prompt": "a chirp", "seconds": 1}))
+    assert "make_sound" not in coder._prompt("game")
+    # A provider that makes sounds keeps them.
+    monkeypatch.setenv("MEDIA_BASE_URL", "http://media.invalid")
+    assert media.sounds_enabled() and "make_sound" in coder._prompt("game")

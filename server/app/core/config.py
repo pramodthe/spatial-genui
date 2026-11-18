@@ -1,7 +1,7 @@
 """Settings, read from the environment and the .env at the repo root.
 
-Python does not read Anthropic settings. The running model is OpenAI gpt-6.1-sol unless
-LLM_BASE_URL and LLM_MODEL name another non-Anthropic endpoint.
+Python does not read Anthropic settings. The running model is Meta's Muse Ember (muse-ember-1.0 on Meta's Model API,
+with META_API_KEY) unless LLM_BASE_URL and LLM_MODEL name another non-Anthropic endpoint.
 """
 
 from __future__ import annotations
@@ -55,11 +55,11 @@ class Config:
 
 
 def load_config() -> Config:
-    base = os.environ.get("LLM_BASE_URL") or "https://api.openai.com/v1/"
+    base = os.environ.get("LLM_BASE_URL") or "https://api.meta.ai/v1"
     return Config(
         base_url=base,
-        api_key=os.environ.get("LLM_API_KEY") or "",
-        model=os.environ.get("LLM_MODEL") or "gpt-6.1-sol",
+        api_key=os.environ.get("LLM_API_KEY") or (os.environ.get("META_API_KEY") or "" if "api.meta.ai" in base else ""),
+        model=os.environ.get("LLM_MODEL") or "muse-ember-1.0",
         port=int(os.environ.get("GENUI_PORT") or 8787),
         max_repairs=2,
         max_completion_tokens=64000,

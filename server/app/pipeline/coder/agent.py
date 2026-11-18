@@ -16,7 +16,6 @@ from deepagents.backends.protocol import FileDownloadResponse
 from deepagents.profiles import GeneralPurposeSubagentProfile, HarnessProfile, register_harness_profile
 from langchain.agents.middleware import (
     ModelCallLimitMiddleware,
-    ModelFallbackMiddleware,
     ModelRetryMiddleware,
     TodoListMiddleware,
     ToolCallLimitMiddleware,
@@ -27,8 +26,8 @@ from langchain_modal import ModalSandbox
 from langgraph.config import get_stream_writer
 
 from app.core.background import track
-from app.core.config import SKILLS_DIR
-from app.core.llm import agent_model, gpt_chat
+from app.core.config import SKILLS_DIR, config
+from app.core.llm import agent_model
 from app.pipeline import grader
 from app.pipeline.coder import scope
 from app.pipeline.coder.middleware import CostMeterMiddleware, TimeLeftMiddleware, ToolImagesAsUserMessage
@@ -50,7 +49,7 @@ register_harness_profile("openai", OPENAI_PROFILE)
 
 MODEL_CALLS = 40
 TOOL_CALLS = 80
-# A lesson in a look (its skill: new-lesson, build, check) takes 5-8 minutes on gpt-6.1-sol; 8 minutes ran out.
+# A lesson in a look (its skill: new-lesson, build, check) takes 5-8 minutes; 8 minutes ran out.
 WALL_S = int(os.environ.get("AGENT_WALL_S") or 15 * 60)
 SANDBOX_GRACE_S = 180
 # Out of time, how long the cancelled agent gets to stop before its module is read.
@@ -92,7 +91,7 @@ def _prompt(kind: str) -> str:
     # No generated pictures in the game: the app opens it with its name as a text title card.
     art = (
         " make_sound only the sounds the sound library lacks; a calm music loop with make_music is optional."
-        if media.enabled() else ""
+        if media.sounds_enabled() else ""
     )
     # Side by side (Nov 17) games written as entities, components and systems were as good and a little faster, and
     # their code says what the game is. CODER_ECS=0 keeps the plain form.
@@ -168,7 +167,7 @@ def _tool_error(exc: Exception, request: Any) -> str:
 
 
 def coder_middleware(model: Any) -> list[Any]:
-    model_id = getattr(model, "model_name", None) or "gpt-6.1-sol"
+    model_id = getattr(model, "model_name", None) or config.model
     middleware: list[Any] = [
         TodoListMiddleware(),
         ModelCallLimitMiddleware(run_limit=MODEL_CALLS),
@@ -179,9 +178,8 @@ def coder_middleware(model: Any) -> list[Any]:
         # Play-test screenshots read with read_file reach the model as pictures, not as noise.
         ToolImagesAsUserMessage(),
     ]
-    base = getattr(model, "openai_api_base", None) or ""
-    if "api.meta.ai" in base or str(model_id).startswith("muse"):
-        middleware.append(ModelFallbackMiddleware(gpt_chat()))
+    # A Muse run stays on Muse: no OpenAI model takes over when Muse answers with an error (the app runs on Meta's models
+    # only; Nov 19 a Sol fallback with no OpenAI key failed every game before it began). ModelRetryMiddleware retries.
     return middleware
 
 
@@ -387,7 +385,7 @@ async def _write_with_agent(state: dict[str, Any], studio: StudioRun | None) -> 
             subagents=[model_maker_spec()],
             # The grading loop sits after the coder's own middleware: it runs when the coder would finish.
             middleware=[*coder_middleware(model), TimeLeftMiddleware(deadline, WALL_S), *([grader.rubric_middleware(agent_model(), backend, kind, _on_evaluation, budget_usd=RUN_BUDGET_USD)] if grader.enabled() else [])],
-            tools=[*_HOST_TOOLS, *(SOUND_TOOLS if media.enabled() else [])],
+            tools=[*_HOST_TOOLS, *(SOUND_TOOLS if media.sounds_enabled() else [])],
             system_prompt=_prompt(kind),
             context_schema=RunContext,
             state_schema=CoderState,

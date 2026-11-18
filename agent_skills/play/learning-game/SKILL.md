@@ -32,8 +32,10 @@ with six steps from catching to a Serve button. Nobody could tell how to play th
 
 - **One sentence of about 15 words says the whole game**: "Swipe the fruit to cut it into the pieces the order asks
   for." "Fold the sheet, then throw the plane as far as you can." It is the panel's first line.
-- **One main action, with one hand**: cut, throw, fold, pour, push, stack, steer. The other hand is free. Two
-  controls at most; no modes, allowances, bonus rules or combos.
+- **One gesture per move; at most three different hand actions per game; each new action gets its own learn move
+  before the round uses it.** A move is one hand action done with one gesture: cut, throw, fold, pour, stir, twist,
+  push, stack, steer (folding three flaps is three moves). The round only asks for actions the player has already
+  learned. No modes, allowances, bonus rules or combos.
 - **A familiar, real action.** People already know how to cut, throw, pour and steer; nobody knows how to "aim a
   listening cone". When the idea is invisible (sound, heat, a force), show it as something you see as well.
 - **The scene shows the first move.** Before the player tries, the hero does the move by itself once (the flap folds
@@ -117,7 +119,7 @@ with six steps from catching to a Serve button. Nobody could tell how to play th
    your own gestures earned. Then read `references/mistakes.md` once and make sure none of those happened.
 
 6. **Play-test it, then finish.** Follow the playtest skill (`/skills/play/playtest/SKILL.md`): open the game in the
-   real headset app, look at the screenshot, apply the 5-second test, try the main action with an emulated hand, and
+   real headset app, look at the screenshot, apply the 5-second test, try each hand action with an emulated hand, and
    fix what you see. Finish only when a first-time player would know what to do.
 
 ## Kinds of game

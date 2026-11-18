@@ -41,12 +41,12 @@ STATE = "node /skills/play/playtest/scripts/playtest.mjs --state"
 # The learning-game loop (agent_skills/play/learning-game) as checkable statements, plus the request's own idea.
 RUBRIC = """- run_play_check prints "game ok" for /work/module.js.
 - The game is about the request's own idea ({request}), and its goal says that idea in one sentence a player could repeat.
-- The player does the main action with their hands on the scene (grab, steer by following the hand, slice, fold, pour, place), not only by pressing panel buttons, and the thing they act on is the biggest interactive object and stands out from the set.
+- The player does the game's hand actions with their hands on the scene (grab, steer by following the hand, slice, fold, pour, place), not only by pressing panel buttons, and the thing they act on is the biggest interactive object and stands out from the set.
 - Every move has a why of one short line that says why it matters for the idea, in plain words a 10-year-old knows (no caveats, no jargon, no formulas without words).
 - The challenge ends with a measured number that depends on the idea (not on clicking speed), with 1 to 3 stars and a Try again.
 - The game has levels inside it (LEVELS, three or more, `levels` in the play block): each is the same round with one setting changed, a round that earns a star shows the level and a Next level button, Try again replays the same level, and the check's "levels:" line shows every level earning a star.
 - Nothing scores, counts down or hurts before Start, and a wrong try costs nothing while learning.
-- In the playtest screenshot, a first-time player knows within five seconds what to do: the panel's first line says the whole game in one sentence, there is one main action with one hand (at most two controls, no modes or bonus rules), and the scene itself shows the first move before the player tries.
+- In the playtest screenshot, a first-time player knows within five seconds what to do: the panel's first line says the whole game in one sentence, the game keeps one gesture per move, at most three different hand actions per game, and each new action gets its own learn move before the round uses it (no modes or bonus rules), and the scene itself shows the first move before the player tries.
 - The game has its own look in the playtest screenshot: the panel wears a skin in colours that suit this game (kit.panel skin). The app shows the game's name as a title card when it opens, so no title sign stays in the scene.
 - The panel stands beside the scene in reach, with at most about 8 parts and no text over two short sentences.
 - The play block is honest: each gesture is what a first-time player's hand would do for that move or for the round (the same object, the same direction, about the same distance), none exists only to satisfy a counter, and no place, until or pose function changes the game."""
@@ -67,7 +67,7 @@ play_in_app plays the game by its own play block in the real headset app, with t
 one round, in one call. A move that registers in the gate's play-through and not in the app is a failure of the hand
 wiring. For a closer look, after playtest: game_state, then iwsdk with `xr run-sequence` on the thing the game says to
 touch first (its `center` is in the playtest report, or name it as the step's target), then game_state again. The piece
-should have moved where the game says, and the values in `game` should change as the moves say. A game whose main action
+should have moved where the game says, and the values in `game` should change as the moves say. A game whose hand action
 does nothing when a hand does it fails, however it looks. A game whose `game` is null has no `play` block: say so."""
 
 

@@ -145,7 +145,7 @@ const out = {
   consoleErrors: consoleErrors(),
   screenshot: picture,
   next: picture
-    ? `Look at it: read_file ${picture}. Would a first-time player know what to do? Try the main action with npx iwsdk xr run-sequence (see SKILL.md), then node ${join(here, 'playtest.mjs')} --shot-only.`
+    ? `Look at it: read_file ${picture}. Would a first-time player know what to do? Try each hand action with npx iwsdk xr run-sequence (see SKILL.md), then node ${join(here, 'playtest.mjs')} --shot-only.`
     : 'No screenshot was taken; run the play-test again.',
 };
 console.log(JSON.stringify(out, null, 1));

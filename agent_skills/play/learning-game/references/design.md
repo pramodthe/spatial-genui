@@ -9,7 +9,8 @@
 
 ## 1. The idea, the goal and the hero
 
-(First pass the 5-second test in SKILL.md: one sentence, one main action, one hand, a familiar action.)
+(First pass the 5-second test in SKILL.md: one sentence, one gesture per move, at most three hand actions, a
+familiar action.)
 
 Start from the idea, not the objects. Write it as one sentence a player could say back after playing: "the more a
 lever's weight is from the pivot, the more it turns", "plants need light, water and air to make food", "a sail pushes
@@ -26,6 +27,11 @@ obvious from the first second that it is the thing to touch. Everything else is 
 ## 2. Moves: learn by doing
 
 A move is one hand action that does one real step of the idea, and the scene's answer to it.
+
+- **One gesture per move; at most three different hand actions per game; each new action gets its own learn move
+  before the round uses it.** A move the hand cannot do in one gesture is two moves. A game with a pour and a stir
+  teaches the pour as a move and the stir as a move, then the challenge asks for both; it never asks for a fourth
+  kind of action, or for one the player has not learned.
 
 - **The hands do the real thing.** Folding is a pinch that carries the flap over, not a Fold button. Adding weight is
   picking a weight up and dropping it on the plank. Planting is putting the seed in the soil. Press only when the

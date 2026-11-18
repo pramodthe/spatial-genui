@@ -1,12 +1,12 @@
 ---
 name: playtest
-description: Play-test the module in the real headset app, run headless in this sandbox by Meta's IWSDK runtime - open it in XR with emulated hands, look at a screenshot of it, try the main action with an emulated hand, and read the console. Use it after the check passes, before you finish any lesson or game, and whenever you need to see what you built or why something does not work in the headset.
+description: Play-test the module in the real headset app, run headless in this sandbox by Meta's IWSDK runtime - open it in XR with emulated hands, look at a screenshot of it, try each hand action with an emulated hand, and read the console. Use it after the check passes, before you finish any lesson or game, and whenever you need to see what you built or why something does not work in the headset.
 ---
 
 # Play-test
 
 The check proves the module runs; it cannot tell you whether a player would understand it. Before you finish, look
-at your game the way a player first sees it, and try its main action with a hand. Meta's IWSDK runtime runs the real
+at your game the way a player first sees it, and try its hand actions with a hand. Meta's IWSDK runtime runs the real
 headset app headless in this sandbox (an emulated Quest: headset, hands, WebXR), so what you see is what the player
 gets.
 
@@ -29,7 +29,7 @@ gets.
    - Is anything hidden, cut off, overlapping, too small or floating where it should not be?
    If the answer to any is wrong, fix the module, run the check again, and play-test again.
 
-3. **Try the main action with a hand.** Use a target's `center` from the report:
+3. **Try each hand action with a hand.** Use a target's `center` from the report:
 
    ```
    cd /opt/xr && npx iwsdk xr run-sequence --input-json '{"device":"hand-right","steps":[

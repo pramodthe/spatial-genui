@@ -39,3 +39,25 @@ def test_published_prompts_are_unchanged() -> None:
     assert _sha(GAME_SYSTEM_PROMPT) == FINGERPRINTS["GAME_SYSTEM_PROMPT"]
     assert _sha(REVIEW_MESSAGE) == FINGERPRINTS["REVIEW_MESSAGE"]
     assert _sha(repair_message("Boom at line 1")) == FINGERPRINTS["repairSample"]
+
+
+def test_the_action_rule_is_the_same_in_the_prompt_the_skill_and_the_rubric() -> None:
+    """One gesture per move; at most three different hand actions per game; each new action gets its own learn move
+    before the round uses it. The design prompt, the learning-game skill, its design reference and the grader's rubric
+    all say it, and none says the old "one main action" or "at most two controls" (task 10)."""
+    from app.core.config import SKILLS_DIR
+    from app.pipeline import design, grader
+
+    texts = {
+        "DESIGN_PROMPT": design.DESIGN_PROMPT,
+        "learning-game SKILL.md": (SKILLS_DIR / "play" / "learning-game" / "SKILL.md").read_text(),
+        "references/design.md": (SKILLS_DIR / "play" / "learning-game" / "references" / "design.md").read_text(),
+        "RUBRIC": grader.RUBRIC,
+        "xr-design-doc SKILL.md": (SKILLS_DIR / "design" / "xr-design-doc" / "SKILL.md").read_text(),
+    }
+    for name, text in texts.items():
+        flat = " ".join(text.split()).lower()
+        assert "one gesture per move" in flat, name
+        assert "at most three different hand actions" in flat, name
+        assert "each new action gets its own learn move before the round uses it" in flat, name
+        assert "one main action" not in flat and "two controls" not in flat, name

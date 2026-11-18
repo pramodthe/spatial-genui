@@ -23,7 +23,7 @@ src/genui/
   sound.ts, capture.ts, library.ts   sound, pictures for look-and-fix, library models
 public/games/, public/lessons/       the example games and lessons, ready to open, with their card pictures
 public/ui/              the dashboard's panel and Muse's picture (scripts/write-muse.mjs)
-public/logo.png, public/icon-*.png   the logo and icons (scripts/render-brand.mjs, also writes docs/brand)
+public/logo.png, public/icon-*.png   the logo and icons (scripts/render-brand.mjs, also writes .github/assets)
 tests/                  smoke tests in the IWSDK emulator
 ```
 

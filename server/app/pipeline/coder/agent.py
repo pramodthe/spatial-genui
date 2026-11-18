@@ -108,6 +108,15 @@ def _prompt(kind: str) -> str:
         "(/skills/game/motion): its helpers are tested, already in the module, and give the same result at any frame rate."
         if os.environ.get("CODER_MOTION", "1") != "0" else ""
     )
+    # The scene plan (agent_skills/play/learning-game/references/scene.md): the things and how they stand to each
+    # other, placed by a solver before any geometry. Off until a side-by-side shows it helps: CODER_SCENE_PLAN=1.
+    scene = (
+        " Before any geometry, plan the scene: in /work/parts/scene.js write every thing of the game with its size, its "
+        "role and how it stands to the others, place them with `node /skills/play/learning-game/scripts/layout.mjs "
+        "/work/module.js`, and stand each thing where the plan put it with sceneAt (the learning-game skill's "
+        "references/scene.md)."
+        if os.environ.get("CODER_SCENE_PLAN", "0") == "1" else ""
+    )
     return (
         f"You write a mixed-reality {subject} in JavaScript. Everything this app makes is a learning game: follow the "
         "learning-game skill. Start it with `node /skills/play/learning-game/scripts/new-game.mjs <look> /work/module.js` "
@@ -125,6 +134,7 @@ def _prompt(kind: str) -> str:
         + art
         + ecs
         + motion
+        + scene
     )
 
 
@@ -187,8 +197,13 @@ def _open_sandbox(run_id: str) -> modal.Sandbox:
         workdir="/work",
         block_network=True,
         # The game check's layout rules (gate layout.ts) and its play-through (gate play.ts); CODER_LAYOUT_CHECK=0 and
-        # CODER_PLAY_CHECK=0 run without them, for side-by-sides.
-        env={"LAYOUT_CHECK": os.environ.get("CODER_LAYOUT_CHECK", "1"), "PLAY_CHECK": os.environ.get("CODER_PLAY_CHECK", "1")},
+        # CODER_PLAY_CHECK=0 run without them, for side-by-sides. CODER_SCENE_PLAN=1 starts the game with a scene plan
+        # (gate place.ts).
+        env={
+            "LAYOUT_CHECK": os.environ.get("CODER_LAYOUT_CHECK", "1"),
+            "PLAY_CHECK": os.environ.get("CODER_PLAY_CHECK", "1"),
+            "SCENE_PLAN": os.environ.get("CODER_SCENE_PLAN", "0"),
+        },
     )
 
 

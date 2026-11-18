@@ -8,6 +8,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assembleParts } from './assemble.mjs';
 import { buildModule, toGameLines } from './build-module.mjs';
+import { readScene } from './layout.mjs';
 
 const here = join(dirname(fileURLToPath(import.meta.url)), '..');
 const file = process.argv[2] ?? '/work/module.js';
@@ -57,6 +58,41 @@ if ((s.grabbables ?? 0) === 0) add(note, 'Nothing to pick up: most learning game
 // The layout as the player sees it, measured on the built scene by the dry run (hidden targets, the start spot,
 // reach, label sizes; a world's rules are in references/world.md).
 if (process.env.LAYOUT_CHECK !== '0') for (const f of s.layout?.findings ?? []) add(f.level === 'fix' ? fix : note, `Layout: ${f.text}`);
+// The scene plan (parts/scene.js, references/scene.md), when the game has one: placed, placed from the plan as it is
+// now, and every thing of it built, no bigger than the box it was placed with.
+const sceneFile = join(dirname(file), 'parts', 'scene.js');
+if (process.env.SCENE_PLAN !== '0' && existsSync(sceneFile)) {
+  let part = null;
+  try {
+    part = readScene(sceneFile);
+  } catch (err) {
+    add(fix, `Scene: parts/scene.js does not run: ${String(err?.message ?? err).slice(0, 160)}`);
+  }
+  const again = 'node /skills/play/learning-game/scripts/layout.mjs /work/module.js';
+  if (part && !part.scene) add(fix, 'Scene: parts/scene.js must define const SCENE = { mode, things, relations } (references/scene.md).');
+  else if (part && !part.places) add(fix, `Scene: the plan is not placed. Run \`${again}\`: it says which thing finds no place and why.`);
+  else if (part && !part.fresh) add(fix, `Scene: SCENE changed since it was placed. Run \`${again}\`: it places the plan again, or says which thing finds no place and why.`);
+  else if (part) {
+    for (const [name, placed] of Object.entries(part.places)) {
+      const thing = part.scene.things[name];
+      if (!thing || thing.role === 'panel') continue;
+      const built = s.things?.[name] ?? [];
+      const planned = Array.isArray(placed) ? placed.length : 1;
+      if (built.length === 0) {
+        add(fix, `Scene: \`${name}\` is in the plan and nowhere in the game. Build it and stand it with sceneAt(THREE, object, '${name}', { ground }), or take it out of SCENE.`);
+        continue;
+      }
+      if (built.length < planned) add(note, `Scene: ${built.length} of the plan's ${planned} \`${name}\` are in the game.`);
+      const size = built[0].size;
+      const text = (v) => v.map((n) => Number(n.toFixed(3))).join(' x ');
+      if (size.some((n, i) => n > thing.size[i] * 1.3 + 0.005)) {
+        add(fix, `Scene: \`${name}\` is built ${text(size)}, bigger than the ${text(thing.size)} its place was found for. Write its real size in SCENE and run \`${again}\`, or build it smaller.`);
+      } else if (size.every((n, i) => n < thing.size[i] * 0.5)) {
+        add(note, `Scene: \`${name}\` is built ${text(size)}, much smaller than the ${text(thing.size)} of its plan: the plan keeps more room for it than it needs.`);
+      }
+    }
+  }
+}
 // The play-through: a simulated hand plays the game as its `play` block says (references/play.md), in the gate's
 // dry run. Its FIX findings count like any other; PLAY_CHECK=note reports them without failing the check, and
 // PLAY_CHECK=0 skips the play-through (the server passes CODER_PLAY_CHECK here).

@@ -112,8 +112,12 @@ export function validateModule(code: string, knownAssets: ReadonlySet<string> = 
           ((callee.object.type === 'Identifier' && callee.object.name === 'assets') ||
             (callee.object.type === 'MemberExpression' && !callee.object.computed && callee.object.property.name === 'assets'));
         if (!isAssetsGet) break;
-        const id = constantString(node.arguments[0]);
-        if (id == null) problems.push(`assets.get() needs the asset id written as a string, e.g. assets.get('heart-bp3d')${where}`);
+        // One plain string: the headset reads the ids out of the code to load the models before build() runs
+        // (headset/src/genui/library.ts assetIdsIn), so an id put together from pieces would pass here and never load.
+        const arg = node.arguments[0];
+        const plain = arg?.type === 'Literal' ? typeof arg.value === 'string' : arg?.type === 'TemplateLiteral' && arg.expressions.length === 0;
+        const id = plain ? constantString(arg) : null;
+        if (id == null) problems.push(`assets.get() needs the asset id written as one plain string, e.g. assets.get('heart-bp3d')${where}`);
         else if (!knownAssets.has(id)) problems.push(`There is no library asset '${id}'${where}. Available: ${[...knownAssets].join(', ') || 'none'}.`);
         else assetIds.add(id);
         break;

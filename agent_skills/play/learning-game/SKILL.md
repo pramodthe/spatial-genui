@@ -69,6 +69,10 @@ with six steps from catching to a Serve button. Nobody could tell how to play th
    - the challenge: what is measured, why that number depends on the idea, and the thresholds for 1, 2 and 3 stars;
    - what a player changes on Try again to do better (that is where the learning sticks).
 
+   When the game started with `/work/parts/scene.js`, plan the scene there too (`references/scene.md`): every
+   thing with its size, its role and how it stands to the others. `scripts/layout.mjs` finds the places, and in
+   step 3 each thing is stood where the plan put it with `sceneAt`.
+
 3. **Build the pieces in the look.** Open the look's skill, `/skills/looks/<look>/SKILL.md`, and use its builders
    (listed at the top of `/skills/looks/<look>/assets/<look>.js`), `references/recipes.md` and
    `references/mistakes.md`. Skip that skill's own start and check steps: this skill's scripts replace them and still
@@ -150,6 +154,8 @@ when the real look of the thing matters (a microscope, a guitar).
 - `references/feel.md` - step 4: making every action answered, the scene alive and the reward land.
 - `references/mistakes.md` - step 5: failures seen in generated games and lessons.
 - `references/parts.md` - the plan's format and the parts' format (identity.js, sounds.js).
+- `scripts/layout.mjs` - step 2, for a game with a scene plan: places the things of `/work/parts/scene.js`.
+- `references/scene.md` - the scene plan: things, roles, relations, `sceneAt`.
 - `references/play.md` - steps 4 and 5: the `play` block (gestures, places, the hand's pose, state) and what each
   `Play:` finding means.
 - `references/world.md` - when the plan says mode: world: a place around the player, built in desk units and shown

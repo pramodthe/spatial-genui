@@ -26,6 +26,8 @@ export type SceneStats = {
   layout: Layout;
   /** The play-through (play.ts): only when build() returns a `play` block and the caller asked for it, else null. */
   play: PlayReport | null;
+  /** The things of the game's scene plan as built (objects tagged userData.thing by sceneAt), before anything moves. */
+  things: Record<string, { centre: [number, number, number]; size: [number, number, number] }[]>;
 };
 
 export type DryRunResult =
@@ -215,9 +217,21 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
     ...o.position.toArray(), ...o.quaternion.toArray(), ...o.scale.toArray(), o.visible ? 1 : 0,
     ((o as THREE.Mesh).geometry?.attributes?.position as THREE.BufferAttribute | undefined)?.version ?? 0,
   ];
+  const things: SceneStats['things'] = {};
   const snapshot = (root: unknown) => {
     before = new Map();
-    if (root instanceof THREE.Object3D) root.traverse((o) => before.set(o, pose(o)));
+    if (!(root instanceof THREE.Object3D)) return;
+    root.updateMatrixWorld(true);
+    root.traverse((o) => {
+      before.set(o, pose(o));
+      const thing = o.userData?.thing;
+      if (typeof thing !== 'string') return;
+      const box = new THREE.Box3().setFromObject(o);
+      if (box.isEmpty()) return;
+      const centre = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      (things[thing] ??= []).push({ centre: [round(centre.x), round(centre.y), round(centre.z)], size: [round(size.x), round(size.y), round(size.z)] });
+    });
   };
   const compare = () => {
     for (const [o, was] of before) {
@@ -365,6 +379,7 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
       size: [round(size.x), round(size.y), round(size.z)],
       layout,
       play,
+      things,
     },
   };
 }

@@ -23,6 +23,12 @@
 //                                        point, the catch): .at(x, y, z) in parent's space, .update(delta)
 //   playPop()                            a squash-and-stretch bounce on any object: .pop(object, amount),
 //                                        .update(delta) every frame; the object keeps its own scale
+//   sceneAt(THREE, object, name, { ground, index })   stand an object where the scene plan put it (parts/scene.js,
+//                                        references/scene.md): its box centred on the plan's place, its base at the
+//                                        plan's height above `ground` (the set's top), turned as the plan says. Add
+//                                        the object to its group first. For one of several: { index }.
+//   scenePlace(name, index)              that place itself, { position, turn, size }, or null (a panel takes
+//                                        kit.panel(ui, { position, rotationY: turn }))
 
 function playStarShape(THREE, outer, inner) {
   const shape = new THREE.Shape();
@@ -244,4 +250,29 @@ function playSounds(sound, map = {}) {
     stop(event) { loops.get(event)?.stop(); loops.delete(event); },
     hum(id, o) { if (sound) sound.hum(id, o); },
   };
+}
+
+// ---------------------------------------------------------------- the scene plan (parts/scene.js)
+function scenePlace(name, index = 0) {
+  const places = typeof PLACES === 'undefined' ? null : PLACES;
+  const found = places ? places[name] : null;
+  return (Array.isArray(found) ? found[index] : found) ?? null;
+}
+
+function sceneAt(THREE, object, name, o = {}) {
+  const place = scenePlace(name, o.index ?? 0);
+  if (!place && (typeof PLACES === 'undefined' || !PLACES)) throw new Error('sceneAt(): the scene plan is not placed. Run layout.mjs: it says which thing finds no place and why.');
+  if (!place) throw new Error(`sceneAt(): the scene plan has no place for '${name}'. Add it to SCENE in /work/parts/scene.js and run layout.mjs.`);
+  object.userData.thing = name; // the check compares what was built with the plan
+  object.rotation.y = place.turn;
+  object.updateWorldMatrix(true, true);
+  const box = new THREE.Box3().setFromObject(object);
+  const at = object.getWorldPosition(new THREE.Vector3());
+  // The middle of its base goes to the plan's place: where the object's own origin is does not matter.
+  const from = box.isEmpty() ? at.clone() : new THREE.Vector3((box.min.x + box.max.x) / 2, box.min.y, (box.min.z + box.max.z) / 2);
+  at.x += place.position[0] - from.x;
+  at.y += (o.ground ?? 0) + place.position[1] - place.size[1] / 2 - from.y;
+  at.z += place.position[2] - from.z;
+  object.position.copy(object.parent ? object.parent.worldToLocal(at) : at);
+  return object;
 }

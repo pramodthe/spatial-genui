@@ -34,6 +34,19 @@ if (broken.ok || broken.error == null) {
   process.exit(1);
 }
 
+// A library model's id is one plain string: the headset reads it out of the code to load the model first, so an id
+// put together from pieces is refused here, where the agent can still fix it.
+const known = (code: string) => {
+  const child = spawnSync(tsx, [gate], { input: JSON.stringify({ code, knownAssets: ['heart-bp3d'] }), encoding: 'utf8' });
+  return JSON.parse(child.stdout) as { ok: boolean; stage?: string; error?: string };
+};
+const pieced = known(`export default function build({ THREE, assets }) { const root = new THREE.Group(); root.add(assets.get('heart-' + 'bp3d').object3D); return { root }; }`);
+const unknown = known(`export default function build({ THREE, assets }) { const root = new THREE.Group(); root.add(assets.get('liver').object3D); return { root }; }`);
+if (pieced.ok || pieced.stage !== 'validate' || !pieced.error?.includes('one plain string') || unknown.ok || !unknown.error?.includes("no library asset 'liver'")) {
+  console.error('expected an id built from pieces, and an unknown id, to be refused before the dry run', pieced, unknown);
+  process.exit(1);
+}
+
 // The module's own ECS (api.ecs, EliCS, as in the headset): a system that turns a box runs in the dry run.
 const ecsKit = readFileSync(new URL('../agent_skills/common/ecs/assets/ecs-kit.js', import.meta.url), 'utf8');
 const ecs = run(`${ecsKit}

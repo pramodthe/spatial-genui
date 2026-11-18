@@ -7,6 +7,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { assembleParts, PARTS_START, PARTS_END } from './assemble.mjs';
 import { buildModule } from './build-module.mjs';
+import { layoutScene } from './layout.mjs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -35,6 +36,17 @@ const parts = join(dirname(out), 'parts');
 mkdirSync(parts, { recursive: true });
 for (const name of ['identity.js', 'sounds.js']) {
   if (!existsSync(join(parts, name)) || process.argv.includes('--force')) copyFileSync(join(here, 'assets', 'parts', name), join(parts, name));
+}
+// The scene plan (references/scene.md), when the run asks for one (SCENE_PLAN=1): the starter's own, placed by the
+// solver. Where the solver is not there the plan stays unplaced, and the check says so.
+if (process.env.SCENE_PLAN === '1' && (!existsSync(join(parts, 'scene.js')) || process.argv.includes('--force'))) {
+  // A world shows everything 12 times bigger: what the hands use is hand-sized there (references/world.md).
+  const world = process.argv.includes('--world');
+  writeFileSync(join(parts, 'scene.js'), readFileSync(join(here, 'assets', 'parts', 'scene.js'), 'utf8')
+    .replace('__MODE__', world ? 'world' : 'desk')
+    .replace('__HERO__', world ? '[0.03, 0.03, 0.03]' : '[0.12, 0.08, 0.12]')
+    .replace('__START__', world ? '[0.025, 0.012, 0.025]' : '[0.06, 0.03, 0.06]'));
+  layoutScene(join(parts, 'scene.js'));
 }
 writeFileSync(kitsFile, [
   `// learning-game look: ${look}`,

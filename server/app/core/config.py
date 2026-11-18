@@ -54,11 +54,17 @@ class Config:
         return urlparse(self.base_url).netloc
 
 
+def is_meta(url: str | None) -> bool:
+    """Meta's Model API, by its exact host: a URL that only contains the name (another host, a proxy path) is not
+    Meta's, and is never sent Meta's key."""
+    return (urlparse(str(url or "")).hostname or "").lower() == "api.meta.ai"
+
+
 def load_config() -> Config:
     base = os.environ.get("LLM_BASE_URL") or "https://api.meta.ai/v1"
     return Config(
         base_url=base,
-        api_key=os.environ.get("LLM_API_KEY") or (os.environ.get("META_API_KEY") or "" if "api.meta.ai" in base else ""),
+        api_key=os.environ.get("LLM_API_KEY") or (os.environ.get("META_API_KEY") or "" if is_meta(base) else ""),
         model=os.environ.get("LLM_MODEL") or "muse-ember-1.0",
         port=int(os.environ.get("GENUI_PORT") or 8787),
         max_repairs=2,

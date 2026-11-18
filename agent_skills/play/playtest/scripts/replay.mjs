@@ -160,6 +160,10 @@ export default async function run({ frame, page }) {
         const by = { x: to.x - at.x, y: to.y - at.y, z: to.z - at.z };
         await remote.dispatch('animate_to', { device, position: { x: from.x + by.x, y: from.y + by.y, z: from.z + by.z }, duration: Math.max(0.3, Number(g.seconds ?? 0.6)), easing: 'minimum-jerk' });
         await wait(150);
+        // A grab with `until` holds the piece where it was carried until that is true, as a near grab does.
+        if (typeof g.until === 'function' && !g.throw && !(await until(() => g.until(), UNTIL_MAX_S * 1000))) {
+          throw new Error(`what the grab waits for (until) had not happened after ${UNTIL_MAX_S} s`);
+        }
         if (!g.keep) await remote.dispatch('set_select_value', { device, value: 0, duration: 0.1 });
         holding[device] = Boolean(g.keep);
         await wait(250);

@@ -101,8 +101,9 @@ let played = '';
 if (playCheck !== '0') {
   const strict = playCheck !== 'note';
   if (!s.play) add(strict ? fix : note, 'Play: build() returns no `play` block, so nothing can play the game through (references/play.md).');
-  else if (/\bconst LEVELS\s*=/.test(game) && !/\blevels\s*:/.test(game)) add(note, 'Play: the game has LEVELS but its play block has no `levels: LEVELS.length`, so the check plays level 1 only (references/play.md).');
   else {
+    // A game that keeps LEVELS but does not say so in its play block is played at level 1 only; its findings still count.
+    if (/\bconst LEVELS\s*=/.test(game) && !/\blevels\s*:/.test(game)) add(note, 'Play: the game has LEVELS but its play block has no `levels: LEVELS.length`, so the check plays level 1 only (references/play.md).');
     for (const f of s.play.findings ?? []) add(strict && f.level === 'fix' ? fix : note, `Play: ${f.text}`);
     const r = s.play.rounds ?? {};
     const round = (x) => (x?.phase === 'done' ? `${x.stars} star${x.stars === 1 ? '' : 's'} (result ${Number(x.result).toFixed(2)})` : 'no result');

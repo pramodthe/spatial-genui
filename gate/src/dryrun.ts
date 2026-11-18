@@ -2,8 +2,9 @@ import vm from 'node:vm';
 import * as THREE from 'three';
 import { parse as parseUIKitML, resolveKitComponentSets } from '@drawcall/uikitml';
 import { createKit } from './kit/kit.js';
-import { World as EcsWorld, createComponent, createSystem, Types as EcsTypes } from 'elics';
+import { World as EcsWorld, ComponentRegistry, createComponent, createSystem, Types as EcsTypes } from 'elics';
 import { measureLayout, type Layout } from './layout.js';
+import { playThrough, type PlayReport } from './play.js';
 
 export type SceneStats = {
   meshes: number;
@@ -23,11 +24,38 @@ export type SceneStats = {
   size: [number, number, number];
   /** Layout checks from where the player stands (layout.ts). */
   layout: Layout;
+  /** The play-through (play.ts): only when build() returns a `play` block and the caller asked for it, else null. */
+  play: PlayReport | null;
 };
 
 export type DryRunResult =
   | { ok: true; stats: SceneStats; warnings: string[] }
   | { ok: false; error: string };
+
+type SimHand = { tracked: boolean; tip: THREE.Vector3; palm: THREE.Vector3; pinching: boolean; pinched: boolean };
+type TraitTarget = { object: unknown; grab: boolean; press: boolean; onPress?: () => void };
+type PanelRecord = {
+  markup: string;
+  options: any;
+  holder: THREE.Group;
+  /** The click handlers kit.panel wired, by `<element id>:<event>`, and the properties it last set on each element. */
+  handlers: Map<string, () => void>;
+  props: Map<string, Record<string, unknown>>;
+};
+/** One build of a module on the stand-in host API: what the dry run inspects and what the play-through plays. */
+type Instance = {
+  api: { hands: { left: SimHand; right: SimHand } };
+  context: vm.Context;
+  /** What build() returned. */
+  result: any;
+  traitTargets: TraitTarget[];
+  panels: PanelRecord[];
+  /** The objects a simulated hand holds: isGrabbed(object) is true for them. */
+  held: Set<unknown>;
+  counts: { rawPanels: number; sounds: number };
+  /** Game time in ms: the module's Date.now() follows it. */
+  clock: { ms: number };
+};
 
 // Initial Quest budgets for one generated scene; tune on device in Phase 4.
 // The shapes a lesson builds itself. Library models (scans, generated models) are counted on their own: the
@@ -48,17 +76,32 @@ const MAX_PANEL_YAW = 0.4; // ~23°: at 40° judges already saw text as steeply 
 const MIN_TEXT_CM = 1.1;
 let horizonComponents: ReturnType<typeof resolveKitComponentSets> | null = null;
 
+// The same random numbers and the same clock on every build, so two runs of the gate agree and the play-through's
+// runs differ only in what the hand does and in the frame rate. Date.now() follows game time, not the wall clock
+// (a round of a minute is simulated in a fraction of a second).
+const DETERMINISTIC = `{
+  let s = 0x2f6e2b1;
+  Math.random = () => {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  Date.now = () => 1700000000000 + __clock.ms;
+}`;
+
 /**
- * Execute a validated, transformed module in a VM context with real Three.js and stub host APIs,
- * so crashes, infinite loops, bad UI markup and over-budget scenes are caught before the code ever
- * reaches the headset. Node's vm is NOT a security boundary: only call this inside the sandbox
- * process (sandbox.ts); everywhere else use `dryRun` from sandbox.ts.
+ * Build a validated, transformed module once, on the stand-in host API. Throws what the module throws.
+ * Only call this inside the sandbox process (see dryRunUnsafe).
  */
-export function dryRunUnsafe(transformed: string, assets: Record<string, AssetStub> = {}): DryRunResult {
-  const traitTargets: { object: unknown; grab: boolean; press: boolean }[] = [];
-  const panels: { markup: string; options: any; holder: THREE.Group }[] = [];
-  let rawPanels = 0;
-  let sounds = 0;
+function instantiate(transformed: string, assets: Record<string, AssetStub> = {}): Instance {
+  // EliCS keeps every component in one registry by name; the ECS kit names a game's components from Math.random(),
+  // which is the same on every build here.
+  ComponentRegistry.clear();
+  const traitTargets: TraitTarget[] = [];
+  const panels: PanelRecord[] = [];
+  const counts = { rawPanels: 0, sounds: 0 };
+  const held = new Set<unknown>();
 
   // The same paintbox the headset uses (kit/kit.js); dry mode builds real shapes but paints no pixels.
   const kit = createKit(THREE, { dry: true });
@@ -66,11 +109,12 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
     THREE,
     kit,
     traits(object: unknown, options: any = {}) {
-      traitTargets.push({ object, grab: Boolean(options.grab), press: typeof options.onPress === 'function' });
+      const onPress = typeof options.onPress === 'function' ? options.onPress : undefined;
+      traitTargets.push({ object, grab: Boolean(options.grab), press: Boolean(onPress), onPress });
       return object;
     },
     ui(markup: unknown, options: any = {}) {
-      if (!kit.madePanel(String(markup))) rawPanels++;
+      if (!kit.madePanel(String(markup))) counts.rawPanels++;
       return hostUi(markup, options);
     },
     assets: {
@@ -81,8 +125,9 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
         return stubAsset(entry, hostUi);
       },
     },
-    isGrabbed() {
-      return false;
+    // True for what a simulated hand holds: nothing in the dry run's own ten frames, the pinched thing in a play-through.
+    isGrabbed(object: unknown) {
+      return held.has(object);
     },
     // Games read the player's hands every frame: here the right hand sweeps across the desk and pinches on
     // frames 3 to 5, so code that follows a hand runs before the headset does; the left hand is not seen.
@@ -91,25 +136,25 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
     sound: {
       play(name: unknown) {
         if (!SOUND_NAMES.includes(String(name))) throw new Error(`sound.play('${String(name)}'): no such sound. Sounds: ${SOUND_NAMES.join(', ')}.`);
-        sounds++;
+        counts.sounds++;
       },
       tone(frequency: unknown) {
         if (typeof frequency !== 'number' || !Number.isFinite(frequency)) throw new Error('sound.tone(frequency): frequency must be a number in Hz.');
-        sounds++;
+        counts.sounds++;
       },
       note(name: unknown) {
         if (!/^[A-G][#b]?-?\d$/.test(String(name))) throw new Error(`sound.note('${String(name)}'): write a note like 'C4', 'F#3' or 'Bb5'.`);
-        sounds++;
+        counts.sounds++;
       },
       hum(id: unknown, o: unknown) {
         if (o !== null && !(typeof o === 'object' && Number.isFinite((o as { frequency?: unknown }).frequency))) {
           throw new Error(`sound.hum('${String(id)}', o): o is { frequency, volume?, type? } or null to stop.`);
         }
-        sounds++;
+        counts.sounds++;
       },
       clip(id: unknown) {
         if (!CLIP_ID.test(String(id))) throw new Error(`sound.clip('${String(id)}'): use an id make_sound or make_music returned ('snd-' or 'mus-' and 10 letters or digits).`);
-        sounds++;
+        counts.sounds++;
         return { stop() {} };
       },
       load(id: unknown) {
@@ -123,18 +168,6 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
     // EliCS, as the headset gives it (headset/src/genui/host.ts): the module's own ECS world runs here too.
     ecs: ECS,
   };
-  /** Move the simulated right hand for frame i of the dry run (called from inside the sandbox before update). */
-  const moveHand = (i: number) => {
-    const hand = api.hands.right;
-    // A world (build() returned mode: 'world') is around the player at the origin: the hand is in front of them, at
-    // about 1.1 m in a world shown 12 times bigger, so a tool that follows it is measured where the headset shows it.
-    if ((context as any).__result?.mode === 'world') hand.tip.set(0.02 + 0.004 * Math.sin(i), 0.09, -0.03 - 0.002 * i);
-    else hand.tip.set(-0.15 + i * 0.03, 0.08 + 0.02 * Math.sin(i), 0.12);
-    hand.palm.copy(hand.tip).add(new THREE.Vector3(0, -0.02, 0.05));
-    const pinching = i >= 3 && i <= 5;
-    hand.pinched = pinching && !hand.pinching;
-    hand.pinching = pinching;
-  };
   function hostUi(markup: unknown, options: any = {}) {
     {
       // Place the holder exactly like the browser host does, so placement checks see the same panel.
@@ -142,11 +175,38 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
       const [x = 0, y = 0, z = 0] = Array.isArray(options?.position) ? options.position : [];
       holder.position.set(x, y, z);
       holder.rotation.y = typeof options?.rotationY === 'number' ? options.rotationY : 0;
-      panels.push({ markup: String(markup), options, holder });
-      return { object3D: holder, on() {}, set() {} };
+      const handlers = new Map<string, () => void>();
+      const props = new Map<string, Record<string, unknown>>();
+      panels.push({ markup: String(markup), options, holder, handlers, props });
+      return {
+        object3D: holder,
+        on(id: string, event: string, fn: () => void) {
+          if (typeof fn === 'function') handlers.set(`${id}:${event}`, fn);
+        },
+        set(id: string, values: Record<string, unknown>) {
+          props.set(String(id), { ...props.get(String(id)), ...values });
+        },
+      };
     }
   }
 
+  const clock = { ms: 0 };
+  const context = vm.createContext({ __exports: {}, __api: api, __clock: clock, console: { log() {}, warn() {}, error() {} } });
+  vm.runInContext(DETERMINISTIC, context);
+  // Browsers load the module as an ES module, which is always strict: an assignment to an
+  // undeclared name throws there, so it must throw here too. Same line, so line numbers match.
+  vm.runInContext(`'use strict'; ${transformed}`, context, { filename: 'component.js', timeout: TIMEOUT_MS });
+  vm.runInContext('__result = __exports.default(__api);', context, { filename: 'host-call.js', timeout: TIMEOUT_MS });
+  return { api, context, result: (context as any).__result, traitTargets, panels, held, counts, clock };
+}
+
+/**
+ * Execute a validated, transformed module in a VM context with real Three.js and stub host APIs,
+ * so crashes, infinite loops, bad UI markup and over-budget scenes are caught before the code ever
+ * reaches the headset. Node's vm is NOT a security boundary: only call this inside the sandbox
+ * process (sandbox.ts); everywhere else use `dryRun` from sandbox.ts.
+ */
+export function dryRunUnsafe(transformed: string, assets: Record<string, AssetStub> = {}, options: { play?: boolean } = {}): DryRunResult {
   // What every object looked like before update() ran, compared after each frame, so the stats can say whether the
   // scene moves by itself (a bounce that settles back within the second still counts; so do vertices that heave).
   let before = new Map<unknown, number[]>();
@@ -164,25 +224,34 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
       if (!moved.has(o) && pose(o as THREE.Object3D).some((v, i) => Math.abs(v - was[i]!) > 1e-4)) moved.add(o);
     }
   };
-  const context = vm.createContext({ __exports: {}, __api: api, __moveHand: moveHand, __snapshot: snapshot, __compare: compare, console: { log() {}, warn() {}, error() {} } });
-  let result: any;
+  let instance: Instance;
   try {
-    // Browsers load the module as an ES module, which is always strict: an assignment to an
-    // undeclared name throws there, so it must throw here too. Same line, so line numbers match.
-    vm.runInContext(`'use strict'; ${transformed}`, context, { filename: 'component.js', timeout: TIMEOUT_MS });
+    const built = (instance = instantiate(transformed, assets));
+    /** Move the simulated right hand for frame i of the dry run (called from inside the sandbox before update). */
+    const moveHand = (i: number) => {
+      const hand = built.api.hands.right;
+      // A world (build() returned mode: 'world') is around the player at the origin: the hand is in front of them, at
+      // about 1.1 m in a world shown 12 times bigger, so a tool that follows it is measured where the headset shows it.
+      if (built.result?.mode === 'world') hand.tip.set(0.02 + 0.004 * Math.sin(i), 0.09, -0.03 - 0.002 * i);
+      else hand.tip.set(-0.15 + i * 0.03, 0.08 + 0.02 * Math.sin(i), 0.12);
+      hand.palm.copy(hand.tip).add(new THREE.Vector3(0, -0.02, 0.05));
+      const pinching = i >= 3 && i <= 5;
+      hand.pinched = pinching && !hand.pinching;
+      hand.pinching = pinching;
+    };
+    Object.assign(built.context, { __moveHand: moveHand, __snapshot: snapshot, __compare: compare });
     vm.runInContext(
-      `__result = __exports.default(__api);
-       __snapshot(__result && __result.root);
+      `__snapshot(__result && __result.root);
        if (__result && typeof __result.update === 'function') {
-         for (let i = 0; i < 10; i++) { __moveHand(i); __result.update(i * 0.1, 0.1); __compare(); }
+         for (let i = 0; i < 10; i++) { __clock.ms = i * 100; __moveHand(i); __result.update(i * 0.1, 0.1); __compare(); }
        }`,
-      context,
+      built.context,
       { filename: 'host-call.js', timeout: TIMEOUT_MS },
     );
-    result = (context as any).__result;
   } catch (err) {
     return { ok: false, error: describeRuntimeError(err) };
   }
+  const { api, context, traitTargets, panels, result } = instance;
 
   if (typeof (context as any).__exports.default !== 'function') {
     return { ok: false, error: 'The default export must be a function `build(api)`.' };
@@ -277,6 +346,8 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
   if (errors.length > 0) return { ok: false, error: errors.join('\n') };
   const targets = traitTargets.filter((t): t is { object: THREE.Object3D; grab: boolean; press: boolean } => t.object instanceof THREE.Object3D);
   const layout = measureLayout(root, targets, panels.map((p) => p.holder), result?.mode === 'world', api.hands.right.tip.clone(), moved);
+  // The play-through plays fresh builds: this one has already had a hand swept across it.
+  const play = options.play && result?.play !== undefined ? playThrough(() => instantiate(transformed, assets), describeRuntimeError) : null;
   return {
     ok: true,
     warnings,
@@ -287,12 +358,13 @@ export function dryRunUnsafe(transformed: string, assets: Record<string, AssetSt
       panels: panels.length,
       grabbables: traitTargets.filter((t) => t.grab).length,
       crowdedGrabPairs: crowdedPairs.length,
-      rawPanels,
-      sounds,
+      rawPanels: instance.counts.rawPanels,
+      sounds: instance.counts.sounds,
       pressables: traitTargets.filter((t) => t.press).length,
       moving: moved.size,
       size: [round(size.x), round(size.y), round(size.z)],
       layout,
+      play,
     },
   };
 }
@@ -366,7 +438,7 @@ const labelMarkup = (text: string) => `
   </style>
   <div class="l"><span class="t" id="text">${text.replace(/[<>&]/g, ' ')}</span></div>`;
 
-type StubUi = (markup: unknown, options?: any) => { object3D: THREE.Object3D; on(): void; set(): void };
+type StubUi = (markup: unknown, options?: any) => { object3D: THREE.Object3D; on(id: string, event: string, fn: () => void): void; set(id: string, values: Record<string, unknown>): void };
 
 /** Same handle as the browser host's assets.get(), with a small box standing in for each part. */
 function stubAsset(entry: AssetStub, ui: StubUi) {

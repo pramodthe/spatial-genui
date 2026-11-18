@@ -18,6 +18,9 @@ const SERVER_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const CHILD_SOURCE = fileURLToPath(new URL('./sandbox-child.ts', import.meta.url));
 const CHILD_BUNDLE = fileURLToPath(new URL('../.cache/sandbox-child.mjs', import.meta.url));
 const KILL_AFTER_MS = 15_000;
+// A play-through (play.ts) simulates several rounds of the game on its own budget of 30 s of computing; on a busy
+// machine that takes longer on the clock.
+const KILL_AFTER_PLAY_MS = 90_000;
 
 let bundled: Promise<void> | null = null;
 
@@ -40,7 +43,7 @@ function ensureBundle(): Promise<void> {
   return bundled;
 }
 
-export async function dryRun(transformed: string, assets: Record<string, AssetStub> = {}): Promise<DryRunResult> {
+export async function dryRun(transformed: string, assets: Record<string, AssetStub> = {}, options: { play?: boolean } = {}): Promise<DryRunResult> {
   await ensureBundle();
   if (!existsSync(CHILD_BUNDLE)) return { ok: false, error: 'Sandbox bundle missing.' };
 
@@ -52,7 +55,8 @@ export async function dryRun(transformed: string, assets: Record<string, AssetSt
     );
     let stdout = '';
     let stderr = '';
-    const timer = setTimeout(() => child.kill('SIGKILL'), KILL_AFTER_MS);
+    const killAfter = options.play ? KILL_AFTER_PLAY_MS : KILL_AFTER_MS;
+    const timer = setTimeout(() => child.kill('SIGKILL'), killAfter);
     child.stdout.on('data', (d) => (stdout += d));
     child.stderr.on('data', (d) => (stderr += d));
     child.on('close', (code, signal) => {
@@ -60,10 +64,10 @@ export async function dryRun(transformed: string, assets: Record<string, AssetSt
       try {
         resolve(JSON.parse(stdout) as DryRunResult);
       } catch {
-        const reason = signal === 'SIGKILL' ? `killed after ${KILL_AFTER_MS / 1000} s` : `exit ${code}: ${stderr.trim().split('\n').slice(-2).join(' ')}`;
+        const reason = signal === 'SIGKILL' ? `killed after ${killAfter / 1000} s` : `exit ${code}: ${stderr.trim().split('\n').slice(-2).join(' ')}`;
         resolve({ ok: false, error: `Sandbox failed (${reason}).` });
       }
     });
-    child.stdin.end(JSON.stringify({ transformed, assets }));
+    child.stdin.end(JSON.stringify({ transformed, assets, play: Boolean(options.play) }));
   });
 }

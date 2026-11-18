@@ -91,16 +91,19 @@ model, and nothing is parented under something that gets hidden.
 The player sets something up, launches it, watches it go, reads the number, changes one thing and tries again.
 
 ```js
-const v = new THREE.Vector3();               // made once
-let flying = false, t = 0;
-function launch(speed, angle) { v.set(0, Math.sin(angle) * speed, -Math.cos(angle) * speed); flying = true; t = 0; }
+const steps = motionSteps();                 // the motion kit (/skills/game/motion), made once
+const held = motionHeld(THREE, plane, isGrabbed);   // the speed the hand gives it
+const body = motionBody(THREE, { position: plane.position, radius: 0.01, bounce: 0, floor: groundY,
+  gravity: 9.8 * SCALE });                   // SCALE: the desk is small, so slow the world down to watch it
+let flying = false;
 // in update:
-if (flying) {
-  t += dt;
-  v.y -= 9.8 * SCALE * dt;                   // SCALE: the desk is small, so slow the world down to watch it
-  plane.position.addScaledVector(v, dt);
-  if (plane.position.y <= groundY) { flying = false; finishWith(distanceFromStart() / SCALE); } // real metres
-}
+if (held.update(delta) === 'thrown') { body.launch(held.velocity); flying = true; }
+steps.run(delta, (dt) => {
+  if (!flying) return;
+  motionGlide(body, { lift, drag }, dt);     // the idea: what the player changed sets lift and drag
+  body.step(dt);
+  if (body.landed) { flying = false; finishWith(distanceFromStart() / SCALE); } // real metres
+});
 ```
 
 Report results in real units (the plane flew 4.2 m), even though the desk model is small.
@@ -117,7 +120,7 @@ const target = new THREE.Vector3();
 if (hands.right.tracked) target.copy(hands.right.tip).clamp(min, max); // stay on the playfield
 heading.subVectors(target, boat.position).setY(0);
 const wantYaw = Math.atan2(heading.x, heading.z);
-boat.rotation.y += angleDiff(wantYaw, boat.rotation.y) * Math.min(1, dt * 3);
+boat.rotation.y = motionTurnTo(boat.rotation.y, wantYaw, 3, dt);        // the short way round, at any frame rate
 const windFactor = Math.max(0.15, Math.sin(Math.abs(angleDiff(boat.rotation.y, windYaw)))); // the idea
 boat.position.addScaledVector(forwardOf(boat), SPEED * windFactor * dt);
 ```
@@ -148,9 +151,11 @@ Grab weights onto marks, or set amounts with a slider; the system answers contin
 how close to balance, or how few tries it took.
 
 ```js
-const turning = weights.reduce((sum, w) => sum + w.mass * w.mark, 0); // mark: signed distance from the pivot
-plankAngle += (clamp(turning * K, -MAX, MAX) - plankAngle) * Math.min(1, dt * 4);
-plank.rotation.z = plankAngle;
+const lever = motionLever({ limit: MAX, give: 0.5 });                  // made once (/skills/game/motion)
+// in update:
+const turning = motionTurning(weights.map((w) => ({ mass: w.mass, x: w.mark }))); // mark: signed distance from the pivot
+lever.step(dt, turning);
+plank.rotation.z = -lever.angle;                                       // level when lever.balanced(turning)
 ```
 
 ### Grow it (set conditions, run time, watch)

@@ -1,6 +1,6 @@
 // Start a learning game that passes the gate as it is, with the look's demo pieces, a move to learn, a challenge, stars
 // and Try again. Writes /work/game.js (the game's own code: the parts and the play starter; the file to edit),
-// /work/kits.js (the look kit, the look, the play, ECS and world kits: ready, never edited) and /work/module.js built
+// /work/kits.js (the look kit, the look, the play, ECS, motion and world kits: ready, never edited) and /work/module.js built
 // from the two (scripts/build-module.mjs). Usage: node new-game.mjs <look> [/work/module.js] [--force] [--world]
 // --world: a world around the player instead of a toy on the desk (references/world.md).
 // <look>: one of the looks in /skills/looks (soft-clay, voxel, ...), or plain for the kit's realistic materials.
@@ -39,11 +39,13 @@ for (const name of ['identity.js', 'sounds.js']) {
 writeFileSync(kitsFile, [
   `// learning-game look: ${look}`,
   '// The kits a learning game uses, ready as they are: every function here is in scope in game.js. Their APIs are in',
-  '// the skills (the look kit and the look: /skills/looks; the play kit: assets/play-kit.js; the ECS kit: /skills/common/ecs).',
+  '// the skills (the look kit and the look: /skills/looks; the play kit: assets/play-kit.js; the ECS kit: /skills/common/ecs;',
+  '// the motion kit: /skills/game/motion).',
   read(join(looks, 'shared', 'look-kit.js')),
   read(look === 'plain' ? join(here, 'assets', 'plain.js') : join(looks, look, 'assets', `${look}.js`)),
   read(join(here, 'assets', 'play-kit.js')),
   read(join(here, '..', '..', 'common', 'ecs', 'assets', 'ecs-kit.js')),
+  read(join(here, '..', '..', 'game', 'motion', 'assets', 'motion-kit.js')),
   ...(process.argv.includes('--world') ? [read(join(here, 'assets', 'world-kit.js'))] : []),
 ].join('\n\n'));
 writeFileSync(gameFile, [

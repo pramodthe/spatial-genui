@@ -9,7 +9,7 @@
   },
   "scripts": {
     "gate": "tsx gate.ts",
-    "test": "tsx test-gate.ts && tsx test-play.ts",
+    "test": "tsx test-gate.ts && tsx test-play.ts && tsx test-motion.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

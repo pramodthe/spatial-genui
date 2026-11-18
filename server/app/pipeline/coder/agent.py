@@ -100,6 +100,14 @@ def _prompt(kind: str) -> str:
         "too. The ECS kit (playWorld) is already in the module."
         if os.environ.get("CODER_ECS", "1") != "0" else ""
     )
+    # The motion kit (agent_skills/game/motion): tested helpers for what is thrown, falls, bounces, glides, swings,
+    # balances or floats, already in the module. CODER_MOTION=0 leaves the sentence out, for side-by-sides.
+    motion = (
+        " When something in the game moves by a physical rule (thrown, falling, bouncing, rolling, gliding, carried by "
+        "wind or water, swinging, hanging, balancing, floating), build it on the motion kit with the motion skill "
+        "(/skills/game/motion): its helpers are tested, already in the module, and give the same result at any frame rate."
+        if os.environ.get("CODER_MOTION", "1") != "0" else ""
+    )
     return (
         f"You write a mixed-reality {subject} in JavaScript. Everything this app makes is a learning game: follow the "
         "learning-game skill. Start it with `node /skills/play/learning-game/scripts/new-game.mjs <look> /work/module.js` "
@@ -116,6 +124,7 @@ def _prompt(kind: str) -> str:
         "ready clips and ambience loops by id, as { clip: id } in SOUNDS)."
         + art
         + ecs
+        + motion
     )
 
 

@@ -126,7 +126,7 @@ def _prompt(kind: str) -> str:
         "edit kits.js; the APIs are in the skills); the check and the play-test build /work/module.js from the two. "
         "Draw it with that look's skill. Check it with "
         "`node /skills/play/learning-game/scripts/check.mjs /work/module.js` and fix game.js until it prints game ok, "
-        "then play-test it (the playtest skill: look at it in the headset app, try its main action) and fix what you "
+        "then play-test it (the playtest skill: look at it in the headset app, try its hand actions) and fix what you "
         "see. The sandbox has no network. Never look for API keys. Only for a realistic model of one real object in "
         "the plain look, delegate it to model-maker with task() and place what it returns. When the file passes and "
         "a first-time player would know what to do, stop."

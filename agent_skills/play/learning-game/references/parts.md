@@ -13,7 +13,7 @@ pitch: <the whole game in one sentence of about 15 words: the panel's first line
 idea: <the one idea, a sentence a player could repeat>
 look: <the look> - mood: <two or three words for the colours, e.g. "night, neon, mysterious">
 hero: <the one thing the hands work on; size; where it stands>
-main action: <the one hand action; how the hand does it>
+hand actions: <at most three; for each, how the hand does it in one gesture and the move that teaches it>
 moves: <3 to 7: say / what the scene does / why>
 challenge: <what is measured, unit, stars at [one, two, three]>
 events: <the game's sound events: touch, cheer, start, win, miss, and the subject's own (e.g. echo, splash, slice)>

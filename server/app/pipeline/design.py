@@ -18,7 +18,7 @@ from app.services.studio import StudioRun
 
 DESIGN_PROMPT = """You design one mixed-reality learning game that is played with the player's hands, before any code is written. Every game here teaches one real idea by playing it: find the idea under the request (a sailing game: how wind pushes a sail; a racing game: speed, grip and turning) and make the rules depend on it, so playing well means understanding it. Players are from about 9 years old to adults.
 
-Keep it simple enough to understand in five seconds without reading: the whole game in one sentence of about 15 words; ONE main action with one hand (cut, throw, fold, pour, push, stack, steer), the other hand free; at most two controls; no modes, bonus allowances or combos. Use a familiar real action, and when the idea is invisible (sound, heat, a force), make it something you can see too. Depth comes from harder versions of the same action, not from more rules.
+Keep it simple enough to understand in five seconds without reading: the whole game in one sentence of about 15 words; one gesture per move (each move is one hand action: cut, throw, fold, pour, stir, twist, push, stack, steer); at most three different hand actions in the whole game; each new action gets its own learn move before the round uses it; no modes, bonus allowances or combos. Use a familiar real action, and when the idea is invisible (sound, heat, a force), make it something you can see too. Depth comes from harder versions of the same action, not from more rules.
 
 Make it original: never use the name, characters or look of an existing game, film or brand, even when the request names one; a request that names a game gets an original game of that kind, with its own name.
 

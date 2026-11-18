@@ -1,6 +1,6 @@
 ---
 name: motion
-description: Tested motion for learning games. Use it whenever something in the game is thrown, falls, bounces, rolls to rest, glides on a wing, is carried by wind or water, swings, springs, hangs on a rope, balances on a pivot, topples or floats, instead of writing the formula again. The motion kit (motionBody, motionHeld, motionGlide and the rest) is already in every learning-game module, gives the same result at any frame rate, and is what makes a throw leave the hand with the hand's speed.
+description: Tested motion for learning games. Use it whenever something in the game is thrown, falls, bounces, rolls to rest, glides on a wing, is carried by wind or water, swings, springs, hangs on a rope, balances on a pivot, topples, floats, fills up, heats or cools, is driven by gears, cranks or cams, or slides down a slope, instead of writing the formula again. The motion kit (motionBody, motionHeld, motionGlide and the rest) is already in every learning-game module, gives the same result at any frame rate, and is what makes a throw leave the hand with the hand's speed.
 ---
 
 # Motion
@@ -43,6 +43,10 @@ fall right, the game makes the fall mean something.
 | a tower, a loaded boat, a crane | `motionCentre`, `motionTopples` | it falls when its centre of mass leaves its base |
 | a dam, a diver, a boat that floats or sinks | `motionPressure`, `motionFloat` | pressure grows with depth; density decides floating |
 | pieces dropped into slots | `motionSnap` | (which slot a piece is over) |
+| a bowl, a tin, a tank or a glass that fills | `motionFill`: `to.add(from.take(amount))` | volume is kept: what leaves one arrives in the other; the level is volume over area |
+| an oven, a cake baking, a pan cooling, a kettle | `motionHeat` | a thing heats fast at first and slower near the setting, never past it; `timeTo` says when it is ready |
+| gears, a bicycle, a clock, an engine, a pump | `motionMechanism` with `motionGearRatio`, cranks and cams | one turn of the driver sets every part: a small gear turns a big one slower, the other way |
+| a block on a ramp, a sledge, a car parked on a hill | `motionSlope` | it slides once tan(angle) passes the friction; steeper slides faster |
 
 ## Sketches
 
@@ -90,6 +94,28 @@ const line = motionRope(THREE, { segments: 10, length: 0.4, gravity: 9.8 * SCALE
 // in the steps:
 line.step(dt, handle.position, kite.position);
 // after the steps: lineMesh.geometry.setFromPoints(line.points)   (make the geometry once, with that many points)
+```
+
+Batter poured from a jug into a tin, then baked. Every amount is real (grams, degrees), and the poured mass is the
+mass the jug lost:
+
+```js
+const jug = motionFill({ volume: 300 });                        // grams of batter
+const tin = motionFill({ area: 300 / 0.03 });                   // 300 g stands 3 cm high in the game
+const oven = motionHeat({ value: 20, setting: 20, rate: 0.02 });
+// in the steps: pouring (pour.flowing from the hands kit) moves what it poured this step
+tin.add(jug.take(poured));
+batter.scale.y = Math.max(0.01, tin.level / 0.03);
+oven.step(dt, ovenOn ? dialC : 20);                             // the dial sets it; it gets there over time
+```
+
+A crank the hand turns (the hands kit's `handTwist` gives the angle), driving a wheel and a piston:
+
+```js
+const engine = motionMechanism({ ratios: { wheel: motionGearRatio(12, 36) }, cranks: { piston: { radius: 0.03, rod: 0.1 } } });
+const parts = engine.drive(THREE.MathUtils.degToRad(crank.angle));
+wheel.rotation.z = parts.wheel;
+piston.position.y = base + parts.piston;
 ```
 
 ## What it does not do

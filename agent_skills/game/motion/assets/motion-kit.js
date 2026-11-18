@@ -48,6 +48,27 @@
 // Water
 //   motionPressure(depth, density, gravity)   the push of a liquid at a depth: density x gravity x depth
 //   motionFloat(mass, volume, density)   the share of a floating thing under the surface (above 1 it sinks)
+// Filling, heating, machines, slopes
+//   motionFill({ capacity, area, volume })   a container's contents: .add(amount) puts in what fits (the rest is
+//                                        .spilled) and returns the .level (volume / area: how high it stands);
+//                                        .take(amount) returns what it really had, so to.add(from.take(x)) pours
+//                                        without making or losing any. .volume, .level, .full, .empty
+//   motionHeat({ value, setting, rate })  a temperature that moves toward its setting (an oven, a cake in it, a pan
+//                                        cooling): .step(dt, setting) returns the value. It closes rate share of the
+//                                        gap a second, exactly, so it never passes the setting. .timeTo(value) is
+//                                        how many seconds until it gets there (Infinity if it never does)
+//   motionMechanism({ ratios, cranks, cams })   a machine the hand drives by one angle (a crank, a pedal, a key):
+//                                        .drive(angle) returns every part from it. ratios: { part: turns per
+//                                        driver turn } (gears that mesh: motionGearRatio(10, 20) = -0.5); cranks:
+//                                        { piston: { on, radius, rod } } how far a slider is from the shaft;
+//                                        cams: { valve: { on, rise } } how far a follower is lifted. on: the part
+//                                        it turns with (the driver when left out). Radians.
+//   motionGearRatio(...teeth)            how many turns the last of a row of meshing gears makes per turn of the
+//                                        first: first / last, turned round once for each mesh
+//   motionSlope({ angle, friction, gravity })   a block on a slope: .step(dt, angle) slides it once the slope is
+//                                        steep enough (tan angle > friction), at gravity x (sin - friction x cos),
+//                                        and a moving block slows to rest on a gentler one. .sliding, .distance
+//                                        (down the slope), .speed. Radians.
 
 function motionSteps(step = 1 / 120) {
   let left = 0;
@@ -470,4 +491,124 @@ function motionPressure(depth, density = 1000, gravity = 9.8) {
 
 function motionFloat(mass, volume, density = 1000) {
   return volume > 0 ? mass / (volume * density) : Infinity;
+}
+
+function motionFill(o = {}) {
+  const fill = {
+    capacity: o.capacity ?? Infinity,
+    area: o.area ?? 1, // how much it takes to raise the level by one unit
+    volume: Math.min(o.volume ?? 0, o.capacity ?? Infinity),
+    spilled: 0,
+    level: 0,
+    full: false,
+    empty: true,
+    add(amount) {
+      const fits = Math.max(0, Math.min(amount, fill.capacity - fill.volume));
+      fill.volume += fits;
+      fill.spilled += Math.max(0, amount - fits);
+      return settle();
+    },
+    take(amount) {
+      const had = Math.max(0, Math.min(amount, fill.volume));
+      fill.volume -= had;
+      settle();
+      return had;
+    },
+  };
+  const settle = () => {
+    fill.level = fill.volume / fill.area;
+    fill.full = fill.volume >= fill.capacity;
+    fill.empty = fill.volume <= 0;
+    return fill.level;
+  };
+  settle();
+  return fill;
+}
+
+function motionHeat(o = {}) {
+  const heat = {
+    value: o.value ?? 20,
+    setting: o.setting ?? o.value ?? 20,
+    rate: o.rate ?? 0.1, // the share of the gap to the setting it closes in a second, at first
+    step(dt, setting = heat.setting) {
+      heat.setting = setting;
+      // The exact solution of Newton's law of heating for this step: it never jumps past the setting.
+      heat.value = setting + (heat.value - setting) * Math.exp(-heat.rate * Math.max(dt, 0));
+      return heat.value;
+    },
+    timeTo(value) {
+      const left = (value - heat.setting) / (heat.value - heat.setting);
+      if (heat.value === value) return 0;
+      return left > 0 && left < 1 ? -Math.log(left) / heat.rate : Infinity;
+    },
+  };
+  return heat;
+}
+
+function motionGearRatio(...teeth) {
+  if (teeth.length < 2) return 1;
+  return (teeth.length % 2 === 0 ? -1 : 1) * (teeth[0] / teeth[teeth.length - 1]);
+}
+
+function motionMechanism(o = {}) {
+  const ratios = o.ratios ?? {};
+  const cranks = o.cranks ?? {};
+  const cams = o.cams ?? {};
+  const mechanism = {
+    angle: 0,
+    parts: { driver: 0 },
+    drive(angle) {
+      mechanism.angle = angle;
+      const parts = { driver: angle };
+      for (const name of Object.keys(ratios)) parts[name] = angle * ratios[name];
+      const turn = (on) => (on && on in parts ? parts[on] : angle);
+      // A slider on a crank: its distance from the shaft, radius cos + the rod across (the engine's piston).
+      for (const [name, c] of Object.entries(cranks)) {
+        const a = turn(c.on);
+        const r = c.radius ?? 0.02;
+        const rod = Math.max(c.rod ?? r * 3, r);
+        parts[name] = r * Math.cos(a) + Math.sqrt(rod * rod - (r * Math.sin(a)) ** 2);
+      }
+      // A follower on a round cam: lifted by rise x (1 - cos) / 2, once a turn, highest half way round.
+      for (const [name, c] of Object.entries(cams)) parts[name] = ((c.rise ?? 0.01) * (1 - Math.cos(turn(c.on)))) / 2;
+      mechanism.parts = parts;
+      return parts;
+    },
+  };
+  mechanism.drive(o.angle ?? 0);
+  return mechanism;
+}
+
+function motionSlope(o = {}) {
+  const slope = {
+    angle: o.angle ?? 0, // radians from level
+    friction: o.friction ?? 0.3,
+    gravity: o.gravity ?? 9.8,
+    distance: 0, // down the slope from where it started
+    speed: 0,
+    sliding: false,
+    step(dt, angle = slope.angle) {
+      slope.angle = angle;
+      const pull = slope.gravity * (Math.sin(angle) - slope.friction * Math.cos(Math.abs(angle)));
+      if (slope.speed <= 0 && pull <= 0) {
+        // Friction holds a still block until the slope is steep enough: tan(angle) > friction.
+        slope.speed = 0;
+        slope.sliding = false;
+        return slope;
+      }
+      const v = slope.speed + pull * dt;
+      if (v < 0) {
+        // It slows to rest within this step and stays there: friction does not push it back up.
+        slope.distance += (slope.speed * slope.speed) / (-2 * pull);
+        slope.speed = 0;
+        slope.sliding = false;
+        return slope;
+      }
+      slope.distance += slope.speed * dt + 0.5 * pull * dt * dt;
+      slope.speed = v;
+      slope.sliding = slope.speed > 0;
+      return slope;
+    },
+  };
+  return slope;
 }

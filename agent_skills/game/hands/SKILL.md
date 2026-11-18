@@ -77,5 +77,5 @@ A knob that sets an oven: `const dial = handTwist(THREE, knob, isGrabbed, { axis
 ## What it does not do
 
 It reads hand actions; it does not simulate what they act on. A pour is an amount, not a liquid: show it as a level
-that rises. A cut is a crossing, not a mesh split: show the two halves the game
+(the motion kit's `motionFill`, `/skills/game/motion`). A cut is a crossing, not a mesh split: show the two halves the game
 built. For throwing, use the motion kit's `motionHeld` and `motionBody`.

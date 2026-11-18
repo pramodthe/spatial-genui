@@ -4,7 +4,7 @@
  * card opens at once; "Make a new one" then writes a fresh version live.
  */
 export const EXAMPLE_LESSONS = [
-  { title: 'Heart', sub: 'How blood flows, step by step', prompt: 'Show me how blood flows through the heart, step by step.', saved: 'heart' },
+  { title: 'Volcano', sub: "What's inside, and how it erupts", prompt: 'Show me what is inside a volcano and how it erupts.', saved: 'volcano' },
   { title: 'Microscope', sub: 'Its parts and what they do', prompt: 'Teach me the parts of a microscope and what each part does.', saved: 'microscope' },
   { title: 'Gears', sub: 'Speed and turning force', prompt: 'Teach me how two gears change speed and turning force.', saved: 'gears' },
   { title: 'Flower', sub: 'Its parts and what they do', prompt: 'Teach me the parts of a flower and what each part does.', saved: 'flower' },

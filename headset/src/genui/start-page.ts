@@ -1,6 +1,6 @@
 import { VisibilityState, type World } from '@iwsdk/core';
 import { APP_NAME, CARD_COLORS, COLORS, MASCOT_NAME } from './brand';
-import { myCards, readyCards, type Card } from './cards';
+import { isFolder, myCards, readyCards, type Card } from './cards';
 import { fetchCourseLesson, listCourses, type CourseSummary } from './courses';
 import { EXAMPLE_GAMES, createGame, fetchGame, listGames, loadExampleGame, type GameSummary } from './games';
 import { EXAMPLE_LESSONS } from './lessons';
@@ -109,6 +109,35 @@ const STYLE = `
 .sp-cards.sp-arrive .sp-card:nth-child(3) { animation-delay: 0.12s; }
 .sp-cards.sp-arrive .sp-card:nth-child(4) { animation-delay: 0.18s; }
 @media (prefers-reduced-motion: reduce) { .sp-cards.sp-arrive .sp-card, .sp-fill::before, .sp-fill::after { animation: none; } .sp-card, .sp-btn, .sp-fill { transition: none; } }
+/* A course is a folder: a pile of cards. Two paper sheets peek out behind a face in the course's colour, which has no
+   picture, only what to do with it, in the letters the cards' marks use; pointed at, the words lift and the pile fans. */
+.sp-folder { position: relative; padding: 0; border: 0; background: transparent; box-shadow: none; }
+.sp-folder:not(:disabled):hover, .sp-folder:focus-visible, .sp-folder:not(:disabled):active { box-shadow: none; }
+.sp-face { position: relative; display: flex; flex-direction: column; gap: 4px; height: 100%; padding: 8px 8px 14px; border: 4px solid var(--ink);
+  border-radius: 26px; background: var(--card); box-shadow: 0 9px 0 var(--ink); transition: box-shadow 0.15s; }
+.sp-folder:not(:disabled):hover .sp-face, .sp-folder:focus-visible .sp-face { box-shadow: 0 16px 0 var(--ink); }
+.sp-folder:not(:disabled):active .sp-face { box-shadow: 0 2px 0 var(--ink); }
+.sp-sheet { position: absolute; inset: 0; border: 4px solid var(--ink); border-radius: 26px; background: var(--paper); box-shadow: 0 9px 0 var(--ink);
+  transition: transform 0.2s cubic-bezier(0.2, 1.4, 0.4, 1); }
+.sp-sheet:nth-child(1) { transform: rotate(5deg) translate(9px, -7px); }
+.sp-sheet:nth-child(2) { transform: rotate(-3.5deg) translate(-7px, -11px); }
+.sp-folder:not(:disabled):hover .sp-sheet:nth-child(1), .sp-folder:focus-visible .sp-sheet:nth-child(1) { transform: rotate(9deg) translate(16px, -9px); }
+.sp-folder:not(:disabled):hover .sp-sheet:nth-child(2), .sp-folder:focus-visible .sp-sheet:nth-child(2) { transform: rotate(-7deg) translate(-14px, -13px); }
+.sp-peek { position: relative; display: flex; flex-direction: column; justify-content: center; width: 100%; aspect-ratio: 4 / 3; padding: 0 10px;
+  font-family: var(--display); font-size: clamp(40px, 4.6vw, 64px); line-height: 0.92; color: var(--paper);
+  -webkit-text-stroke: 5px var(--ink); paint-order: stroke fill; transform: rotate(-3deg); transition: transform 0.2s cubic-bezier(0.2, 1.4, 0.4, 1); }
+.sp-peek span:last-child { margin-left: 0.6em; }
+.sp-folder:not(:disabled):hover .sp-peek, .sp-folder:focus-visible .sp-peek { transform: rotate(-6deg) translateY(-6px) scale(1.06); }
+.sp-folder .sp-chip { top: 14px; left: 14px; }
+.sp-folder[data-state="making"] .sp-peek { padding-top: 26px; }
+.sp-folder .sp-card-title, .sp-folder .sp-card-sub { color: var(--ink); }
+/* Inside a folder the shelf's heading is the course's name, after the way back out. */
+.sp-shelf-head { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 18px; margin: 44px 0 22px; }
+.sp-shelf-head .sp-h2 { margin: 0; }
+.sp-back { min-height: 50px; padding: 8px 20px 8px 14px; font-size: 21px; }
+.sp-back::before { content: ''; width: 12px; height: 12px; margin-right: 2px; border-left: 4px solid var(--ink); border-bottom: 4px solid var(--ink); transform: rotate(45deg); }
+.sp-back[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { .sp-sheet, .sp-peek { transition: none; } }
 .sp-empty { padding: 20px 22px; border: 4px dashed rgba(18, 6, 59, 0.5); border-radius: 22px; background: rgba(255, 255, 255, 0.55); font-size: 18px; max-width: 760px; }
 
 .sp-dev { margin-top: 56px; color: rgba(18, 6, 59, 0.75); }
@@ -162,6 +191,19 @@ function card(item: Card, index: number, open: (item: Card) => void): HTMLButton
   node.style.setProperty('--card', CARD_COLORS[index % CARD_COLORS.length]);
   const pic = el('span', 'sp-pic');
   const mark = () => pic.replaceChildren(el('span', 'sp-mark', item.mark));
+  if (isFolder(item)) {
+    // A folder has no picture: it says what to do with it. A level being made keeps its tag.
+    const peek = el('span', 'sp-peek');
+    peek.append(el('span', '', 'Peek'), el('span', '', 'inside'));
+    node.classList.add('sp-folder');
+    const face = el('span', 'sp-face');
+    face.append(peek, el('span', 'sp-card-title', item.title), el('span', 'sp-card-sub', item.sub));
+    // The tag sits on the face, not in the big lettering, so it keeps its own plain type.
+    if (item.state === 'making') face.append(el('span', 'sp-chip', item.making?.left ?? 'Being made'));
+    node.append(el('span', 'sp-sheet'), el('span', 'sp-sheet'), face);
+    node.addEventListener('click', () => open(item));
+    return node;
+  }
   if (item.state === 'making') {
     // The cards are drawn again on every refresh: start the wave where the last one was, so it never jumps.
     const fill = el('span', 'sp-fill');
@@ -220,7 +262,10 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
       <p class="sp-message" data-id="hero-message"></p>
       <h2 class="sp-h2">Ready to play</h2>
       <div class="sp-cards sp-arrive" data-id="ready"></div>
-      <h2 class="sp-h2">Your games</h2>
+      <div class="sp-shelf-head">
+        <button class="sp-btn sp-back" data-id="mine-back" type="button" hidden>Back to your games</button>
+        <h2 class="sp-h2" data-id="mine-title">Your games</h2>
+      </div>
       <div data-id="mine"></div>
       <details class="sp-dev"><summary>Developer tools</summary></details>
     </div>`;
@@ -243,6 +288,8 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
   let hiddenByHost = false;
   let courses: CourseSummary[] = [];
   let games: GameSummary[] = [];
+  // The course folder open under Your games (its levels are listed), or null for all of the player's cards.
+  let folder: string | null = null;
   // What was being made at the last look, so Muse can cheer when one of them is ready.
   let making = new Set<string>();
   let poll = 0;
@@ -323,7 +370,10 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
     const source = item.source;
     if (source.kind === 'game') void openGame(source.id);
     else if (source.kind === 'level') void openLesson(source.courseId, source.index);
-    else if (source.kind === 'example-lesson') {
+    else if (source.kind === 'course') {
+      folder = source.id;
+      renderMine(true);
+    } else if (source.kind === 'example-lesson') {
       preview(true);
       void startLesson(EXAMPLE_LESSONS[source.index].prompt);
     } else if (source.kind === 'example-game') {
@@ -359,12 +409,16 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
   }
 
   /** Draws the player's cards; true while one is being made. Muse thinks while one is, and cheers when it is ready. */
-  function renderMine(): boolean {
-    const cards = myCards(games, courses, 'Tap');
+  function renderMine(deal = false): boolean {
+    if (folder && !courses.some((course) => course.id === folder)) folder = null;
+    const cards = myCards(games, courses, 'Tap', folder);
+    // Inside a folder: the course's name as the heading, after the way back out.
+    find('mine-title').textContent = courses.find((course) => course.id === folder)?.title ?? 'Your games';
+    find('mine-back').hidden = folder === null;
     const box = find('mine');
     if (cards.length === 0) box.replaceChildren(el('div', 'sp-empty', 'The games you ask for show up here. Ask for one at the top.'));
     else {
-      const grid = el('div', 'sp-cards');
+      const grid = el('div', deal ? 'sp-cards sp-arrive' : 'sp-cards');
       grid.append(...cards.map((item, index) => card(item, index, open)));
       box.replaceChildren(grid);
     }
@@ -405,6 +459,11 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
   }
 
   bar.querySelector('[data-id="back"]')!.addEventListener('click', () => preview(false));
+  find('mine-back').addEventListener('click', () => {
+    folder = null;
+    renderMine(true);
+    find('mine-title').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  });
   show();
   void refresh();
 }

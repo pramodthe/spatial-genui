@@ -3,7 +3,8 @@
   background: the room shows through, like a store front floating in it, and every word sits on its own white,
   dark or yellow piece so it reads against any room. At the top Muse (in 3D, picker.ts places it on the
   invisible picture here, which takes the pinch) asks what you wonder about, with the two voice buttons beside; below, one list that scrolls down (pinch and drag up or down, or a controller's thumbstick):
-  Ready to play, then Your games, with a yellow scrollbar on its right.
+  Ready to play, then Your games, with a yellow scrollbar on its right. A course is a folder: two sheets behind its
+  face (a pile; the face's z-index keeps it in front of them), a face in the course's colour saying Peek inside; inside it, Back to your games beside its name.
   The cards are the start page's (start-page.ts): a picture in a dark frame, a thick dark outline, a hard dark
   shadow under them and a slight tilt that straightens when pointed at. While a game is open only the small bar
   shows (Home, the game's name, smaller and bigger). Letters are pictures in the start page's font
@@ -258,6 +259,36 @@
     scrollbar-border-radius: 12px;
   }
 
+  .shelf-head {
+    flex-direction: row;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 18px;
+  }
+
+  .back-button {
+    flex-shrink: 0;
+    padding-top: 10px;
+    padding-bottom: 12px;
+    padding-left: 20px;
+    padding-right: 20px;
+    border-radius: 22px;
+    border-width: 4px;
+    border-color: #12063b;
+    background-color: #ffffff;
+    cursor: pointer;
+  }
+
+  .back-button:hover {
+    background-color: #ffd60a;
+  }
+
+  .back-label {
+    color: #12063b;
+    font-size: 24px;
+    font-weight: 700;
+  }
+
   .tag {
     align-self: flex-start;
     flex-shrink: 0;
@@ -325,6 +356,7 @@
   }
 
   .card-face {
+    z-index: 1;
     flex-direction: column;
     height: 318px;
     gap: 4px;
@@ -430,6 +462,40 @@
     color: #12063b;
     font-size: 17px;
     font-weight: 700;
+  }
+
+  .card-sheet {
+    position-type: absolute;
+    position-top: 0px;
+    position-left: 0px;
+    width: 248px;
+    height: 318px;
+    border-radius: 28px;
+    border-width: 4px;
+    border-color: #12063b;
+    background-color: #ffffff;
+  }
+
+  .sheet-0 {
+    transform-rotate-z: -5;
+    transform-translate-x: 11px;
+    transform-translate-y: -9px;
+  }
+
+  .sheet-1 {
+    transform-rotate-z: 3.5;
+    transform-translate-x: -8px;
+    transform-translate-y: -12px;
+  }
+
+  .card-peek {
+    z-index: 2;
+    width: 210px;
+    color: #12063b;
+    font-size: 54px;
+    line-height: 0.95;
+    font-weight: 700;
+    transform-rotate-z: 3;
   }
 
   .card-title {
@@ -686,16 +752,23 @@
           </div>
         </div>
       </div>
-      <div class="tag">
-        <span class="tag-label">Your games</span>
+      <div class="shelf-head">
+        <div id="mine-back" class="back-button" style="display: none">
+          <span class="back-label">Back to your games</span>
+        </div>
+        <div class="tag">
+          <span id="mine-tag" class="tag-label">Your games</span>
+        </div>
       </div>
       <div id="mine-empty" class="empty" style="display: none">
         <span class="empty-text">The games you ask for show up here. Pinch Ask for a game and say one.</span>
       </div>
       <div id="mine-cards" class="cards">
         <div id="mine-0" class="card tilt-0" style="display: none">
+          <div id="mine-0-sheet-0" class="card-sheet sheet-0" style="display: none"></div>
+          <div id="mine-0-sheet-1" class="card-sheet sheet-1" style="display: none"></div>
           <div id="mine-0-face" class="card-face">
-            <div class="card-frame">
+            <div id="mine-0-frame" class="card-frame">
               <div id="mine-0-block" class="card-block">
                 <img id="mine-0-dots" class="card-dots" src="ui/cards/dots.png" style="display: none" />
                 <div id="mine-0-fill" class="card-fill" style="display: none">
@@ -703,6 +776,7 @@
                 </div>
                 <img id="mine-0-letter" class="card-letter" src="ui/cards/mark-A.png" style="display: none" />
                 <span id="mine-0-mark" class="card-mark">?</span>
+                <span id="mine-0-peek" class="card-peek" style="display: none">Peek inside</span>
               </div>
               <img id="mine-0-pic" class="card-pic" src="ui/muse.svg" object-fit="cover" style="display: none" />
               <div id="mine-0-chip" class="card-chip" style="display: none">
@@ -714,8 +788,10 @@
           </div>
         </div>
         <div id="mine-1" class="card tilt-1" style="display: none">
+          <div id="mine-1-sheet-0" class="card-sheet sheet-0" style="display: none"></div>
+          <div id="mine-1-sheet-1" class="card-sheet sheet-1" style="display: none"></div>
           <div id="mine-1-face" class="card-face">
-            <div class="card-frame">
+            <div id="mine-1-frame" class="card-frame">
               <div id="mine-1-block" class="card-block">
                 <img id="mine-1-dots" class="card-dots" src="ui/cards/dots.png" style="display: none" />
                 <div id="mine-1-fill" class="card-fill" style="display: none">
@@ -723,6 +799,7 @@
                 </div>
                 <img id="mine-1-letter" class="card-letter" src="ui/cards/mark-A.png" style="display: none" />
                 <span id="mine-1-mark" class="card-mark">?</span>
+                <span id="mine-1-peek" class="card-peek" style="display: none">Peek inside</span>
               </div>
               <img id="mine-1-pic" class="card-pic" src="ui/muse.svg" object-fit="cover" style="display: none" />
               <div id="mine-1-chip" class="card-chip" style="display: none">
@@ -734,8 +811,10 @@
           </div>
         </div>
         <div id="mine-2" class="card tilt-2" style="display: none">
+          <div id="mine-2-sheet-0" class="card-sheet sheet-0" style="display: none"></div>
+          <div id="mine-2-sheet-1" class="card-sheet sheet-1" style="display: none"></div>
           <div id="mine-2-face" class="card-face">
-            <div class="card-frame">
+            <div id="mine-2-frame" class="card-frame">
               <div id="mine-2-block" class="card-block">
                 <img id="mine-2-dots" class="card-dots" src="ui/cards/dots.png" style="display: none" />
                 <div id="mine-2-fill" class="card-fill" style="display: none">
@@ -743,6 +822,7 @@
                 </div>
                 <img id="mine-2-letter" class="card-letter" src="ui/cards/mark-A.png" style="display: none" />
                 <span id="mine-2-mark" class="card-mark">?</span>
+                <span id="mine-2-peek" class="card-peek" style="display: none">Peek inside</span>
               </div>
               <img id="mine-2-pic" class="card-pic" src="ui/muse.svg" object-fit="cover" style="display: none" />
               <div id="mine-2-chip" class="card-chip" style="display: none">
@@ -754,8 +834,10 @@
           </div>
         </div>
         <div id="mine-3" class="card tilt-3" style="display: none">
+          <div id="mine-3-sheet-0" class="card-sheet sheet-0" style="display: none"></div>
+          <div id="mine-3-sheet-1" class="card-sheet sheet-1" style="display: none"></div>
           <div id="mine-3-face" class="card-face">
-            <div class="card-frame">
+            <div id="mine-3-frame" class="card-frame">
               <div id="mine-3-block" class="card-block">
                 <img id="mine-3-dots" class="card-dots" src="ui/cards/dots.png" style="display: none" />
                 <div id="mine-3-fill" class="card-fill" style="display: none">
@@ -763,6 +845,7 @@
                 </div>
                 <img id="mine-3-letter" class="card-letter" src="ui/cards/mark-A.png" style="display: none" />
                 <span id="mine-3-mark" class="card-mark">?</span>
+                <span id="mine-3-peek" class="card-peek" style="display: none">Peek inside</span>
               </div>
               <img id="mine-3-pic" class="card-pic" src="ui/muse.svg" object-fit="cover" style="display: none" />
               <div id="mine-3-chip" class="card-chip" style="display: none">
@@ -774,8 +857,10 @@
           </div>
         </div>
         <div id="mine-4" class="card tilt-0" style="display: none">
+          <div id="mine-4-sheet-0" class="card-sheet sheet-0" style="display: none"></div>
+          <div id="mine-4-sheet-1" class="card-sheet sheet-1" style="display: none"></div>
           <div id="mine-4-face" class="card-face">
-            <div class="card-frame">
+            <div id="mine-4-frame" class="card-frame">
               <div id="mine-4-block" class="card-block">
                 <img id="mine-4-dots" class="card-dots" src="ui/cards/dots.png" style="display: none" />
                 <div id="mine-4-fill" class="card-fill" style="display: none">
@@ -783,6 +868,7 @@
                 </div>
                 <img id="mine-4-letter" class="card-letter" src="ui/cards/mark-A.png" style="display: none" />
                 <span id="mine-4-mark" class="card-mark">?</span>
+                <span id="mine-4-peek" class="card-peek" style="display: none">Peek inside</span>
               </div>
               <img id="mine-4-pic" class="card-pic" src="ui/muse.svg" object-fit="cover" style="display: none" />
               <div id="mine-4-chip" class="card-chip" style="display: none">
@@ -794,8 +880,10 @@
           </div>
         </div>
         <div id="mine-5" class="card tilt-1" style="display: none">
+          <div id="mine-5-sheet-0" class="card-sheet sheet-0" style="display: none"></div>
+          <div id="mine-5-sheet-1" class="card-sheet sheet-1" style="display: none"></div>
           <div id="mine-5-face" class="card-face">
-            <div class="card-frame">
+            <div id="mine-5-frame" class="card-frame">
               <div id="mine-5-block" class="card-block">
                 <img id="mine-5-dots" class="card-dots" src="ui/cards/dots.png" style="display: none" />
                 <div id="mine-5-fill" class="card-fill" style="display: none">
@@ -803,6 +891,7 @@
                 </div>
                 <img id="mine-5-letter" class="card-letter" src="ui/cards/mark-A.png" style="display: none" />
                 <span id="mine-5-mark" class="card-mark">?</span>
+                <span id="mine-5-peek" class="card-peek" style="display: none">Peek inside</span>
               </div>
               <img id="mine-5-pic" class="card-pic" src="ui/muse.svg" object-fit="cover" style="display: none" />
               <div id="mine-5-chip" class="card-chip" style="display: none">
@@ -814,8 +903,10 @@
           </div>
         </div>
         <div id="mine-6" class="card tilt-2" style="display: none">
+          <div id="mine-6-sheet-0" class="card-sheet sheet-0" style="display: none"></div>
+          <div id="mine-6-sheet-1" class="card-sheet sheet-1" style="display: none"></div>
           <div id="mine-6-face" class="card-face">
-            <div class="card-frame">
+            <div id="mine-6-frame" class="card-frame">
               <div id="mine-6-block" class="card-block">
                 <img id="mine-6-dots" class="card-dots" src="ui/cards/dots.png" style="display: none" />
                 <div id="mine-6-fill" class="card-fill" style="display: none">
@@ -823,6 +914,7 @@
                 </div>
                 <img id="mine-6-letter" class="card-letter" src="ui/cards/mark-A.png" style="display: none" />
                 <span id="mine-6-mark" class="card-mark">?</span>
+                <span id="mine-6-peek" class="card-peek" style="display: none">Peek inside</span>
               </div>
               <img id="mine-6-pic" class="card-pic" src="ui/muse.svg" object-fit="cover" style="display: none" />
               <div id="mine-6-chip" class="card-chip" style="display: none">
@@ -834,8 +926,10 @@
           </div>
         </div>
         <div id="mine-7" class="card tilt-3" style="display: none">
+          <div id="mine-7-sheet-0" class="card-sheet sheet-0" style="display: none"></div>
+          <div id="mine-7-sheet-1" class="card-sheet sheet-1" style="display: none"></div>
           <div id="mine-7-face" class="card-face">
-            <div class="card-frame">
+            <div id="mine-7-frame" class="card-frame">
               <div id="mine-7-block" class="card-block">
                 <img id="mine-7-dots" class="card-dots" src="ui/cards/dots.png" style="display: none" />
                 <div id="mine-7-fill" class="card-fill" style="display: none">
@@ -843,6 +937,7 @@
                 </div>
                 <img id="mine-7-letter" class="card-letter" src="ui/cards/mark-A.png" style="display: none" />
                 <span id="mine-7-mark" class="card-mark">?</span>
+                <span id="mine-7-peek" class="card-peek" style="display: none">Peek inside</span>
               </div>
               <img id="mine-7-pic" class="card-pic" src="ui/muse.svg" object-fit="cover" style="display: none" />
               <div id="mine-7-chip" class="card-chip" style="display: none">
@@ -854,8 +949,10 @@
           </div>
         </div>
         <div id="mine-8" class="card tilt-0" style="display: none">
+          <div id="mine-8-sheet-0" class="card-sheet sheet-0" style="display: none"></div>
+          <div id="mine-8-sheet-1" class="card-sheet sheet-1" style="display: none"></div>
           <div id="mine-8-face" class="card-face">
-            <div class="card-frame">
+            <div id="mine-8-frame" class="card-frame">
               <div id="mine-8-block" class="card-block">
                 <img id="mine-8-dots" class="card-dots" src="ui/cards/dots.png" style="display: none" />
                 <div id="mine-8-fill" class="card-fill" style="display: none">
@@ -863,6 +960,7 @@
                 </div>
                 <img id="mine-8-letter" class="card-letter" src="ui/cards/mark-A.png" style="display: none" />
                 <span id="mine-8-mark" class="card-mark">?</span>
+                <span id="mine-8-peek" class="card-peek" style="display: none">Peek inside</span>
               </div>
               <img id="mine-8-pic" class="card-pic" src="ui/muse.svg" object-fit="cover" style="display: none" />
               <div id="mine-8-chip" class="card-chip" style="display: none">
@@ -874,8 +972,10 @@
           </div>
         </div>
         <div id="mine-9" class="card tilt-1" style="display: none">
+          <div id="mine-9-sheet-0" class="card-sheet sheet-0" style="display: none"></div>
+          <div id="mine-9-sheet-1" class="card-sheet sheet-1" style="display: none"></div>
           <div id="mine-9-face" class="card-face">
-            <div class="card-frame">
+            <div id="mine-9-frame" class="card-frame">
               <div id="mine-9-block" class="card-block">
                 <img id="mine-9-dots" class="card-dots" src="ui/cards/dots.png" style="display: none" />
                 <div id="mine-9-fill" class="card-fill" style="display: none">
@@ -883,6 +983,7 @@
                 </div>
                 <img id="mine-9-letter" class="card-letter" src="ui/cards/mark-A.png" style="display: none" />
                 <span id="mine-9-mark" class="card-mark">?</span>
+                <span id="mine-9-peek" class="card-peek" style="display: none">Peek inside</span>
               </div>
               <img id="mine-9-pic" class="card-pic" src="ui/muse.svg" object-fit="cover" style="display: none" />
               <div id="mine-9-chip" class="card-chip" style="display: none">
@@ -894,8 +995,10 @@
           </div>
         </div>
         <div id="mine-10" class="card tilt-2" style="display: none">
+          <div id="mine-10-sheet-0" class="card-sheet sheet-0" style="display: none"></div>
+          <div id="mine-10-sheet-1" class="card-sheet sheet-1" style="display: none"></div>
           <div id="mine-10-face" class="card-face">
-            <div class="card-frame">
+            <div id="mine-10-frame" class="card-frame">
               <div id="mine-10-block" class="card-block">
                 <img id="mine-10-dots" class="card-dots" src="ui/cards/dots.png" style="display: none" />
                 <div id="mine-10-fill" class="card-fill" style="display: none">
@@ -903,6 +1006,7 @@
                 </div>
                 <img id="mine-10-letter" class="card-letter" src="ui/cards/mark-A.png" style="display: none" />
                 <span id="mine-10-mark" class="card-mark">?</span>
+                <span id="mine-10-peek" class="card-peek" style="display: none">Peek inside</span>
               </div>
               <img id="mine-10-pic" class="card-pic" src="ui/muse.svg" object-fit="cover" style="display: none" />
               <div id="mine-10-chip" class="card-chip" style="display: none">
@@ -914,8 +1018,10 @@
           </div>
         </div>
         <div id="mine-11" class="card tilt-3" style="display: none">
+          <div id="mine-11-sheet-0" class="card-sheet sheet-0" style="display: none"></div>
+          <div id="mine-11-sheet-1" class="card-sheet sheet-1" style="display: none"></div>
           <div id="mine-11-face" class="card-face">
-            <div class="card-frame">
+            <div id="mine-11-frame" class="card-frame">
               <div id="mine-11-block" class="card-block">
                 <img id="mine-11-dots" class="card-dots" src="ui/cards/dots.png" style="display: none" />
                 <div id="mine-11-fill" class="card-fill" style="display: none">
@@ -923,6 +1029,7 @@
                 </div>
                 <img id="mine-11-letter" class="card-letter" src="ui/cards/mark-A.png" style="display: none" />
                 <span id="mine-11-mark" class="card-mark">?</span>
+                <span id="mine-11-peek" class="card-peek" style="display: none">Peek inside</span>
               </div>
               <img id="mine-11-pic" class="card-pic" src="ui/muse.svg" object-fit="cover" style="display: none" />
               <div id="mine-11-chip" class="card-chip" style="display: none">

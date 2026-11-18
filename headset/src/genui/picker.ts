@@ -13,7 +13,7 @@ import {
   type World,
 } from '@iwsdk/core';
 import { CARD_COLORS, COLORS, MASCOT_NAME } from './brand';
-import { myCards, readyCards, type Card } from './cards';
+import { isFolder, myCards, readyCards, type Card } from './cards';
 import { createCourse, fetchCourse, fetchCourseLesson, listCourses, polishCourseLesson, type CourseSummary } from './courses';
 import { EXAMPLE_GAMES, createGame, fetchGame, listGames, loadExampleGame, type GameSummary } from './games';
 import { makeCardGrabbable, type CardGrab } from './grab';
@@ -163,6 +163,8 @@ class LessonPickerSystem extends createSystem({
   private games: GameSummary[] = [];
   private courses: CourseSummary[] = [];
   private readonly cards: Record<Shelf, Card[]> = { mine: [], ready: readyCards(import.meta.env.BASE_URL) };
+  /** The course folder open under Your games (its levels are listed), or null for all of the player's cards. */
+  private folder: string | null = null;
   /** The cards that were being made at the last look, so Muse can cheer when one is ready. */
   private making = new Set<string>();
   private cheerUntil = 0;
@@ -360,6 +362,10 @@ class LessonPickerSystem extends createSystem({
       }
     }
     document.getElementById('mini-home')?.addEventListener('click', () => handlers?.close());
+    document.getElementById('mine-back')?.addEventListener('click', () => {
+      this.folder = null;
+      this.listCards();
+    });
     document.getElementById('mini-smaller')?.addEventListener('click', () => zoomGame(-1));
     document.getElementById('mini-bigger')?.addEventListener('click', () => zoomGame(1));
     // Muse waves when pinched.
@@ -380,6 +386,11 @@ class LessonPickerSystem extends createSystem({
       handlers?.start(lesson.prompt);
     } else if (source.kind === 'game') await this.openGame(source.id);
     else if (source.kind === 'level') await this.openLevel(source.courseId, source.index);
+    else if (source.kind === 'course') {
+      // A course is a folder: its levels take the list, with the way back beside the shelf's name.
+      this.folder = source.id;
+      this.listCards();
+    }
   }
 
   /** A ready-made game: it opens at once. */
@@ -495,7 +506,8 @@ class LessonPickerSystem extends createSystem({
 
   /** The player's cards from what the server has; Muse cheers when one that was being made is ready. */
   private listCards() {
-    this.cards.mine = myCards(this.games, this.courses, 'Pinch');
+    if (this.folder && !this.courses.some((course) => course.id === this.folder)) this.folder = null;
+    this.cards.mine = myCards(this.games, this.courses, 'Pinch', this.folder);
     const making = new Set(this.cards.mine.filter((card) => card.state === 'making').map((card) => card.key));
     if (this.cards.mine.some((card) => card.state === 'ready' && this.making.has(card.key))) this.cheerUntil = performance.now() + 2500;
     this.making = making;
@@ -535,8 +547,13 @@ class LessonPickerSystem extends createSystem({
         const making = card.state === 'making' ? card.making : undefined;
         this.put(`${id}-chip`, 'display', making ? 'flex' : 'none');
         if (making) this.put(`${id}-chip-label`, 'text', making.left);
+        // A course folder: a pile behind a face in its colour, and words in place of a picture (only 'mine' slots).
+        if (shelf === 'mine') this.renderFolder(id, index, card);
         if (pictured) this.put(`${id}-pic`, 'src', card.picture!);
-        else {
+        else if (isFolder(card)) {
+          for (const part of ['letter', 'mark', 'fill', 'dots']) this.put(`${id}-${part}`, 'display', 'none');
+          this.put(`${id}-block`, 'backgroundColor', CARD_COLORS[index % CARD_COLORS.length]!);
+        } else {
           const colour = CARD_COLORS[index % CARD_COLORS.length];
           // The letter as a picture in the start page's font, or as text when there is none (a two-digit level).
           const art = ART_MARK.test(card.mark);
@@ -560,9 +577,23 @@ class LessonPickerSystem extends createSystem({
       }
     }
     this.waves = waves;
+    const open = this.folder ? this.courses.find((course) => course.id === this.folder) : undefined;
+    this.put('mine-tag', 'text', clip(open?.title ?? 'Your games', 34));
+    this.put('mine-back', 'display', open ? 'flex' : 'none');
     const none = this.cards.mine.length === 0;
     this.put('mine-cards', 'display', none ? 'none' : 'flex');
     this.put('mine-empty', 'display', none ? 'flex' : 'none');
+  }
+
+  /** A folder's pile, face and words on a 'mine' slot; the plain card's look for any other card. */
+  private renderFolder(id: string, index: number, card: Card) {
+    const folder = isFolder(card);
+    const colour = CARD_COLORS[index % CARD_COLORS.length]!;
+    for (let s = 0; s < 2; s++) this.put(`${id}-sheet-${s}`, 'display', folder ? 'flex' : 'none');
+    this.put(`${id}-peek`, 'display', folder ? 'flex' : 'none');
+    // A folder's face is its colour all over: no dark frame round a picture.
+    this.put(`${id}-face`, 'backgroundColor', folder ? colour : COLORS.paper);
+    this.put(`${id}-frame`, 'backgroundColor', folder ? colour : COLORS.ink);
   }
 
   /**

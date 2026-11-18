@@ -4,7 +4,7 @@ import { EXAMPLE_LESSONS } from './lessons';
 
 /**
  * The cards the start page and the headset dashboard both show: one card per thing to play. The player's own
- * games (those being made first), each level of their courses as a card of its own, and the ready-made games and
+ * games and courses (those being made first; a course is a folder holding its levels), and the ready-made games and
  * lessons. A card names what it opens (`source`); each screen opens it its own way.
  */
 
@@ -58,9 +58,14 @@ export function makingOf(live: LiveSummary | undefined, askedAt?: string, now = 
 const stepLine = (making: Making, live?: LiveSummary) =>
   `Step ${making.step + 1} of 4: ${live?.stage === 'fixing' ? 'fixing a problem' : STEP_TEXT[making.step]}`;
 
-/** The player's own games and course levels. `verb` is how this screen picks a card: 'Tap' or 'Pinch'. */
-export function myCards(games: GameSummary[], courses: CourseSummary[], verb: 'Tap' | 'Pinch'): Card[] {
+/**
+ * The player's own games and courses. A course is one card, a folder: `folder` (a course's id) lists that course's
+ * levels instead (each screen shows its own way back). `verb` is how this screen picks a card: 'Tap' or 'Pinch'.
+ */
+export function myCards(games: GameSummary[], courses: CourseSummary[], verb: 'Tap' | 'Pinch', folder: string | null = null): Card[] {
   const again = `Didn't work: ${verb.toLowerCase()} to try again`;
+  const open = folder === null ? undefined : courses.find((course) => course.id === folder && course.lessons.length > 0);
+  if (open) return levelCards(open, verb, again);
   const cards: Card[] = games.map((game) => {
     const making = game.status === 'writing' ? makingOf(game.live, game.createdAt) : undefined;
     return {
@@ -75,7 +80,7 @@ export function myCards(games: GameSummary[], courses: CourseSummary[], verb: 'T
     };
   });
   for (const course of courses) {
-    if (course.status === 'planning' || course.status === 'failed') {
+    if (course.status === 'planning' || course.status === 'failed' || course.lessons.length === 0) {
       const making = course.status === 'planning' ? makingOf(undefined) : undefined;
       cards.push({
         key: `course-${course.id}`, title: course.title, mark: first(course.title), source: { kind: 'course', id: course.id },
@@ -85,24 +90,46 @@ export function myCards(games: GameSummary[], courses: CourseSummary[], verb: 'T
       });
       continue;
     }
-    course.lessons.forEach((lesson, index) => {
-      const making = lesson.status === 'generating' ? makingOf(lesson.live) : undefined;
-      cards.push({
-        key: `course-${course.id}-${index}`,
-        title: lesson.title,
-        sub: lesson.status === 'ready' ? `Level ${index + 1} of ${course.lessons.length}: ${course.title}`
-          : making ? stepLine(making, lesson.live)
-          : lesson.status === 'failed' ? again : `Not made yet: ${verb.toLowerCase()} to make it`,
-        state: lesson.status === 'ready' ? 'ready' : lesson.status === 'generating' ? 'making' : lesson.status === 'failed' ? 'failed' : 'todo',
-        picture: lesson.status === 'ready' && lesson.picture ? `/api/courses/${course.id}/lessons/${index}/picture` : undefined,
-        mark: String(index + 1),
-        making,
-        source: { kind: 'level', courseId: course.id, index },
-      });
+    // The folder: its first level's picture, how many levels are ready, and the level being made, if one is.
+    const levels = course.lessons;
+    const ready = levels.filter((lesson) => lesson.status === 'ready').length;
+    const busy = levels.findIndex((lesson) => lesson.status === 'generating');
+    const making = busy >= 0 ? makingOf(levels[busy]!.live) : undefined;
+    cards.push({
+      key: `course-${course.id}`,
+      title: course.title,
+      sub: making ? `Making level ${busy + 1}: ${levels[busy]!.live?.stage === 'fixing' ? 'fixing a problem' : STEP_TEXT[making.step]}`
+        : `${levels.length} levels${ready < levels.length ? `, ${ready} ready` : ''}`,
+      state: making ? 'making' : ready > 0 ? 'ready' : levels.some((lesson) => lesson.status === 'failed') ? 'failed' : 'todo',
+      mark: first(course.title),
+      making,
+      source: { kind: 'course', id: course.id },
     });
   }
   return [...cards.filter((c) => c.state === 'making'), ...cards.filter((c) => c.state !== 'making')];
 }
+
+/** The levels of one course, one card each, in order. */
+function levelCards(course: CourseSummary, verb: 'Tap' | 'Pinch', again: string): Card[] {
+  return course.lessons.map((lesson, index) => {
+    const making = lesson.status === 'generating' ? makingOf(lesson.live) : undefined;
+    return {
+      key: `course-${course.id}-${index}`,
+      title: lesson.title,
+      sub: lesson.status === 'ready' ? `Level ${index + 1} of ${course.lessons.length}: ${course.title}`
+        : making ? stepLine(making, lesson.live)
+        : lesson.status === 'failed' ? again : `Not made yet: ${verb.toLowerCase()} to make it`,
+      state: lesson.status === 'ready' ? 'ready' : lesson.status === 'generating' ? 'making' : lesson.status === 'failed' ? 'failed' : 'todo',
+      picture: lesson.status === 'ready' && lesson.picture ? `/api/courses/${course.id}/lessons/${index}/picture` : undefined,
+      mark: String(index + 1),
+      making,
+      source: { kind: 'level', courseId: course.id, index },
+    };
+  });
+}
+
+/** Is this card a course folder (drawn as a pile of cards)? */
+export const isFolder = (card: Card) => card.source.kind === 'course';
 
 /** The ready-made games and lessons: they open at once. `base` is where the app's own files are served from. */
 export function readyCards(base: string): Card[] {

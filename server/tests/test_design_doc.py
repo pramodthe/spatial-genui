@@ -118,6 +118,24 @@ def test_a_scene_plan_is_read_as_data_and_checked() -> None:
     assert any("Right of" in p for p in problems)
 
 
+def test_a_scene_plan_the_solver_refuses_goes_back_to_the_designer_with_its_words(monkeypatch) -> None:
+    # Nov 19: a design wrote ['path', 'between', 'player'] (between takes two things); it passed, the layout failed in
+    # the coder's sandbox and the coder spent its calls in the gate's code. The real solver (gate/place.ts) reads it here.
+    refused = SCENE.replace("['start', 'near', 'bowl'],", "['start', 'near', 'bowl'],\n    ['jug', 'between', 'player'],")
+    fake, sent = replies(doc(scene=refused), doc())
+    monkeypatch.setattr(llm, "complete", fake)
+    made = asyncio.run(design.design_doc("bake a cake"))
+    assert len(sent) == 2
+    asked = sent[1][-1]["content"]
+    assert "The solver cannot place the scene plan" in asked and "between takes two things" in asked
+    assert made["problems"] == [] and set(made["scene"]["things"]) == {"bowl", "jug", "start", "panel"}
+    # Refused twice: the design is kept without a scene plan, so the coder is not told one is placed.
+    fake, sent = replies(doc(scene=refused), doc(scene=refused))
+    monkeypatch.setattr(llm, "complete", fake)
+    made = asyncio.run(design.design_doc("bake a cake"))
+    assert made["scene"] is None and any("between takes two things" in p for p in made["problems"])
+
+
 def test_a_reply_that_is_no_design_or_a_failed_call_gives_none(monkeypatch) -> None:
     fake, _sent = replies("I cannot help with that.", "Still no.")
     monkeypatch.setattr(llm, "complete", fake)
@@ -231,6 +249,9 @@ def test_the_coder_builds_from_design_md_with_its_scene_plan() -> None:
     task = coder._task_text(state)
     assert "/work/design.md" in task and "write no /work/plan.md" in task and "play block" in task
     assert "already copied into /work/parts/scene.js" in task
+    # When the solver could not place the plan as the sandbox opened, the brief says so, with its words.
+    refused = coder._task_text({**state, "layout_error": "LAYOUT: not placed.\n['a', 'between', 'b']: between takes two things"})
+    assert "could not place it" in refused and "between takes two things" in refused and "already copied" not in refused
     # A repair keeps the module's own scene part: only the document goes in again.
     later = {**state, "attempts": [{"error": "gate"}]}
     assert [path for path, _ in coder._design_files(later)] == ["/work/design.md"]
@@ -259,6 +280,8 @@ def test_the_worked_example_passes_the_design_checks_and_is_the_real_game() -> N
     made = design._read_doc(inner)
     assert made["problems"] == [] and made["mode"] == "desk" and made["look"] == "ink-toon"
     assert made["title"] == "Rise and Bake"
+    # The solver places its scene plan, as the design step now asks of every plan.
+    assert asyncio.run(design._solver_problem(made["scene"])) is None
     for helper in ("handPour", "handStir", "motionHeat"):
         assert helper in inner
     levels = [line for line in design._section(inner, 6).splitlines() if re.match(r"^\| \d\.", line)]

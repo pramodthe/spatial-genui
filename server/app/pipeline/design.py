@@ -16,9 +16,10 @@ import re
 from typing import Any
 
 from app.core import llm
-from app.core.config import SKILLS_DIR
+from app.core.config import REPO_ROOT, SKILLS_DIR
 from app.core.guard import record_spend
 from app.core.json_reply import extract_json
+from app.pipeline.gate import TSX
 from app.services import media
 from app.services.studio import StudioRun
 
@@ -63,6 +64,11 @@ SCENE_RELATIONS = (
 # A size over this many metres was written in centimetres (a desk game is half a metre wide; a world is built in desk
 # units and shown 12 times bigger).
 SCENE_SIZE_MOST_M = 2
+# The placement solver the coder's layout.mjs runs (gate/place.ts): a plan it cannot place goes back to the designer
+# with its words, instead of to the coder as a plan that is "already placed" (Nov 19: ['path', 'between', 'player']
+# passed, the layout failed in the sandbox, and the coder spent its calls in the gate's code).
+PLACE = REPO_ROOT / "gate" / "place.ts"
+SOLVER_TIMEOUT_S = 30
 
 DESIGN_NOTE = (
     "The files this skill names under references/ follow below, each under its own heading. The paths under /skills/ "
@@ -305,10 +311,44 @@ def _design_or_none(read: dict[str, Any]) -> dict[str, Any] | None:
     return read if read["title"] or len(_missing_sections(read["design_md"])) < len(SECTIONS) else None
 
 
+async def _solver_problem(scene: dict[str, Any]) -> str | None:
+    """What the placement solver says against a scene plan; None when it places every thing, or cannot run here."""
+    if not TSX.exists():
+        return None
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            str(TSX), str(PLACE), stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )
+    except OSError:
+        return None
+    try:
+        stdout, _stderr = await asyncio.wait_for(proc.communicate(json.dumps(scene).encode()), SOLVER_TIMEOUT_S)
+        placed = json.loads(stdout.decode())
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+        return None
+    except json.JSONDecodeError:
+        return None
+    if placed.get("ok"):
+        return None
+    return (f"The solver cannot place the scene plan in section 5:\n{placed.get('error')}\nFix the plan's things and "
+            "relations (environment.md); never give coordinates.")
+
+
+async def _placed(read: dict[str, Any] | None) -> dict[str, Any] | None:
+    """A design with the solver's word on its scene plan: a plan the solver refuses is a problem, and is not handed on."""
+    if read is None or read.get("scene") is None:
+        return read
+    problem = await _solver_problem(read["scene"])
+    return {**read, "scene": None, "problems": [*read["problems"], problem]} if problem else read
+
+
 async def design_doc(request: str) -> dict[str, Any] | None:
     """The game's design document: one call with the xr-design-doc skill as its prompt, checked for the template's 12
-    sections and a scene plan that can be read, and written once more, with what is missing named, when it falls
-    short. {design_md, mode, look, title, pitch, scene, problems}; None when the call fails or gives no document."""
+    sections and a scene plan that can be read and that the solver places, and written once more, with what is missing
+    named, when it falls short. {design_md, mode, look, title, pitch, scene, problems}; None when the call fails or
+    gives no document."""
     target = llm.default_target()
     messages = [{"role": "system", "content": design_doc_prompt()}, {"role": "user", "content": request}]
     try:
@@ -316,14 +356,14 @@ async def design_doc(request: str) -> dict[str, Any] | None:
         await record_spend([{"model": target.id, "promptTokens": reply.prompt_tokens, "completionTokens": reply.completion_tokens}])
     except Exception:
         return None
-    first = _design_or_none(_read_doc(reply.text))
+    first = await _placed(_design_or_none(_read_doc(reply.text)))
     if first is not None and not first["problems"]:
         return first
     try:
         problems = "\n".join(f"- {problem}" for problem in (first or {}).get("problems") or ["The reply was not a design document."])
         again = await llm.complete([*messages, {"role": "assistant", "content": reply.text}, {"role": "user", "content": DESIGN_AGAIN.format(problems=problems)}], target)
         await record_spend([{"model": target.id, "promptTokens": again.prompt_tokens, "completionTokens": again.completion_tokens}])
-        second = _design_or_none(_read_doc(again.text))
+        second = await _placed(_design_or_none(_read_doc(again.text)))
     except Exception:
         second = None
     # The second document replaces the first only when it has less missing.

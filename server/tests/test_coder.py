@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -223,6 +224,53 @@ async def test_a_repair_closes_the_last_attempts_final_view_before_its_sandbox_o
         task.cancel()
     await asyncio.gather(*list(background._tasks), return_exceptions=True)
     assert sandboxes[1].terminated is True
+
+
+@pytest.mark.asyncio
+async def test_a_repair_waits_for_a_close_that_a_cancel_cut_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review of PR #31: a cancel that lands while the last attempt's sandbox is closing must not let the repair open
+    a sandbox of the same name before the close has ended."""
+    order: list[str] = []
+    sandboxes: list[_Sandbox] = []
+
+    class SlowClose(_Sandbox):
+        def terminate(self) -> None:
+            number = sandboxes.index(self) + 1
+            order.append(f"closing {number}")
+            time.sleep(0.3)  # Modal's terminate is a blocking call, run in a thread
+            order.append(f"closed {number}")
+            super().terminate()
+
+    class QuickView(_Backend):
+        async def aexecute(self, command: str, timeout: int | None = None) -> object:
+            self.commands.append(command)
+            return SimpleNamespace(output="")  # no picture: the view ends at once and the close begins
+
+    class Agent:
+        def __init__(self, backend: _Backend) -> None:
+            self.backend = backend
+
+        async def astream_events(self, payload, *, context, config, version):
+            self.backend.files["/work/module.js"] = b"export default function build(){}"
+            yield {"event": "on_tool_start", "name": "write_file"}
+
+    def open_sandbox(run_id: str, **_options) -> SlowClose:
+        sandboxes.append(SlowClose())
+        order.append(f"open {len(sandboxes)}")
+        return sandboxes[-1]
+
+    _install(monkeypatch, lambda **kwargs: Agent(kwargs["backend"]))
+    monkeypatch.setattr(coder, "ModalSandbox", QuickView)
+    monkeypatch.setattr(coder, "_open_sandbox", open_sandbox)
+    coder.set_checkpointer(None)
+    first = await coder.write_with_agent({"run_id": "repair-race", "kind": "game", "request": "a kite"})
+    await asyncio.sleep(0.05)
+    assert order == ["open 1", "closing 1"]  # the close is under way when the repair comes
+    await coder.write_with_agent({"run_id": "repair-race", "kind": "game", "request": "a kite",
+                                  "attempts": first["attempts"], "code": first["code"]})
+    assert order.index("closed 1") < order.index("open 2")
+    await asyncio.gather(*list(background._tasks), return_exceptions=True)
+    assert all(sandbox.terminated for sandbox in sandboxes)
 
 
 @pytest.mark.asyncio

@@ -36,8 +36,10 @@ def run_dir(run_id: str) -> Path | None:
 PICTURES = Path(os.environ.get("PICTURES_DIR") or REPO_ROOT / "server" / "data" / "pictures")
 PICTURE_NAME = re.compile(r"^[a-z0-9-]{1,60}$")
 # Card pictures asked for before their run's final view was taken, by run: the coder takes the final view after it has
-# returned the module (coder/agent.py), so a game or level is often saved first. Kept when the view lands.
+# returned the module (coder/agent.py), so a game or level is often saved first. Kept when the view lands, dropped when
+# the view ends without a picture (drop_waiting_pictures), and never more than WAITING_MOST runs (the oldest go first).
 _waiting: dict[str, list[str]] = {}
+WAITING_MOST = 100
 
 
 def keep_picture(name: str, run_id: str | None) -> bool:
@@ -48,7 +50,11 @@ def keep_picture(name: str, run_id: str | None) -> bool:
     if source is None or not PICTURE_NAME.fullmatch(name):
         return False
     if not source.is_file():
-        _waiting.setdefault(str(run_id), []).append(name)
+        names = _waiting.setdefault(str(run_id), [])
+        if name not in names:
+            names.append(name)
+        while len(_waiting) > WAITING_MOST:
+            _waiting.pop(next(iter(_waiting)))
         return False
     try:
         PICTURES.mkdir(parents=True, exist_ok=True)
@@ -56,6 +62,11 @@ def keep_picture(name: str, run_id: str | None) -> bool:
     except OSError:
         return False  # a picture only: the game is saved without it
     return True
+
+
+def drop_waiting_pictures(run_id: str) -> None:
+    """The run's final view has ended: card pictures still waiting for it will not get one."""
+    _waiting.pop(run_id, None)
 
 
 def picture(name: str) -> Path | None:

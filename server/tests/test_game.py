@@ -103,3 +103,19 @@ def test_plan_pictures_are_on_by_default_and_can_be_turned_off(monkeypatch, caps
     assert not design.pictures_enabled()
     # On, but no provider: one line says why there are none.
     assert capsys.readouterr().out.strip() == "Plan pictures skipped: MEDIA_BASE_URL or MEDIA_API_KEY is not set."
+
+
+def test_waiting_card_pictures_never_pile_up() -> None:
+    """Review of PR #31: a card picture asked for before its run's final view waits only while that view can still
+    come, once per name, and never for more than WAITING_MOST runs."""
+    studio.StudioRun("wait-run-1", "a kite", "game", "glm")
+    assert studio.keep_picture("game-wait1", "wait-run-1") is False
+    assert studio.keep_picture("game-wait1", "wait-run-1") is False  # asked twice, kept once
+    assert studio._waiting["wait-run-1"] == ["game-wait1"]
+    studio.drop_waiting_pictures("wait-run-1")  # the view ended with no picture
+    assert "wait-run-1" not in studio._waiting
+    for n in range(studio.WAITING_MOST + 5):
+        studio.StudioRun(f"wait-many-{n}", "a kite", "game", "glm")
+        studio.keep_picture(f"game-many{n}", f"wait-many-{n}")
+    assert len(studio._waiting) == studio.WAITING_MOST and "wait-many-0" not in studio._waiting
+    studio._waiting.clear()

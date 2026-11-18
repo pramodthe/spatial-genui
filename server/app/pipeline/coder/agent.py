@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import time
+from dataclasses import dataclass
 from typing import Any
 
 import modal
@@ -36,7 +37,7 @@ from app.pipeline.coder.sound_tools import SOUND_TOOLS
 from app.pipeline.coder.state import CoderState, RunContext
 from app.pipeline.coder.tools import library_lookup, real_size
 from app.services import live, media
-from app.services.studio import StudioRun
+from app.services.studio import StudioRun, drop_waiting_pictures
 from sandbox.image import coder_image
 
 # Provider key "openai" matches ChatOpenAI (Muse and gpt). This build has no OpenAI prompt suffix
@@ -224,21 +225,57 @@ async def _final_view(backend: Any, studio: StudioRun, kind: str) -> None:
         return  # a record only: the game is judged by the gate, not by this picture
 
 
-# The final view each run's last attempt is still taking, by run id: it holds that attempt's sandbox, and a repair's
-# sandbox takes the same name, so a repair closes it first.
-_closing: dict[str, asyncio.Task[Any]] = {}
+@dataclass
+class _Closing:
+    """The final view a run's last attempt is still taking, the sandbox it holds, and an event set once that sandbox
+    is closed. A repair's sandbox takes the same name, so a repair closes this one first and waits for the close."""
+
+    task: asyncio.Task[Any]
+    sandbox: Any
+    closed: asyncio.Event
 
 
-async def _final_view_then_close(backend: Any, sandbox: Any, studio: StudioRun, kind: str) -> None:
+_closing: dict[str, _Closing] = {}
+
+
+async def _close(sandbox: Any, closed: asyncio.Event) -> None:
+    try:
+        await asyncio.to_thread(sandbox.terminate)
+    except Exception:
+        pass
+    finally:
+        closed.set()
+
+
+async def _final_view_then_close(backend: Any, sandbox: Any, studio: StudioRun, kind: str, closed: asyncio.Event) -> None:
     """The final view, taken after the run has returned its module (a play-test takes up to four minutes), then the
     sandbox is closed. Runs in the background: the result never waits for it."""
     try:
         await _final_view(backend, studio, kind)
     finally:
-        try:
-            await asyncio.to_thread(sandbox.terminate)
-        except Exception:
-            pass
+        # Shielded: a cancel that lands while the sandbox closes must not leave the close half done (`closed` is set
+        # when it ends). Card pictures still waiting for this run's view will not get one now.
+        drop_waiting_pictures(studio.run_id)
+        await asyncio.shield(_close(sandbox, closed))
+
+
+def _forget_closed(run_id: str, closed: asyncio.Event) -> None:
+    closing = _closing.get(run_id)
+    if closing is not None and closing.closed is closed and closed.is_set():
+        _closing.pop(run_id, None)
+
+
+async def _close_last_attempt(run_id: str) -> None:
+    """Before a repair opens its sandbox: stop the run's last final view (it shows a rejected module) and wait until
+    its sandbox is closed. A view that never started, or whose close a cancel cut off, is closed here."""
+    closing = _closing.pop(run_id, None)
+    if closing is None:
+        return
+    if not closing.task.done():
+        closing.task.cancel()
+    await asyncio.gather(closing.task, return_exceptions=True)
+    if not closing.closed.is_set():
+        await _close(closing.sandbox, closing.closed)
 
 
 def _picture_paths(state: dict[str, Any]) -> dict[str, str]:
@@ -325,11 +362,8 @@ async def _write_with_agent(state: dict[str, Any], studio: StudioRun | None) -> 
     model = agent_model()
     # The sandbox lives WALL_S from now; the run must finish inside that, file transfers included.
     deadline = time.monotonic() + WALL_S - 20
-    # A repair: the last attempt's final view is of a rejected module, and its sandbox holds this run's sandbox name.
-    previous = _closing.pop(run_id, None)
-    if previous is not None and not previous.done():
-        previous.cancel()
-        await asyncio.gather(previous, return_exceptions=True)
+    # A repair: the last attempt's sandbox holds this run's sandbox name until it is closed.
+    await _close_last_attempt(run_id)
     sandbox = await asyncio.to_thread(_open_sandbox, run_id)
     backend = ModalSandbox(sandbox=sandbox)
     backend_token = scope.backend.set(backend)
@@ -441,9 +475,11 @@ async def _write_with_agent(state: dict[str, Any], studio: StudioRun | None) -> 
         attempt = {"stage": "ok", "ms": 0, **tokens, **_cost(), "finishReason": "length" if timed_out else "stop", **await _rubric_outcome(coder, config)}
         if studio is not None:
             # The Studio's picture of what was built, after the module is in hand: it never delays the result.
-            closing = track(asyncio.get_running_loop().create_task(_final_view_then_close(backend, sandbox, studio, kind)))
-            _closing[run_id] = closing
-            closing.add_done_callback(lambda task: _closing.pop(run_id, None) if _closing.get(run_id) is task else None)
+            closed = asyncio.Event()
+            task = track(asyncio.get_running_loop().create_task(_final_view_then_close(backend, sandbox, studio, kind, closed)))
+            _closing[run_id] = _Closing(task, sandbox, closed)
+            # Kept until the sandbox is closed, so a repair right after a cancelled close still waits for it.
+            task.add_done_callback(lambda _: _forget_closed(run_id, closed))
             handed_off = True
         return {"attempts": [*state.get("attempts", []), attempt], "code": code}
     finally:

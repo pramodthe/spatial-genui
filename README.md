@@ -30,8 +30,8 @@ Runtime for Seated Mixed Reality and Walkable Virtual Worlds*](paper/muses-lab-p
   grader, and a gate that runs every module locked down before a headset loads it.
 - **Desk or world.** Desk games sit on the player's real table in passthrough; world games are places to walk around.
   Every game is hands-first: pinch, poke and grab, no controllers needed.
-- **One idea per game.** Each game teaches one real idea through its main action, with visible feedback such as
-  pressure arrows, airflow ribbons or flight trails.
+- **One idea per game.** Each game teaches one real idea through its hand actions (one gesture per move, at most
+  three kinds), with visible feedback such as pressure arrows, airflow ribbons or flight trails.
 - **Voice tutor.** Muse answers questions about the open game, quizzes the player out loud and can plan a course of
   levels.
 - **The Studio.** Every build is recorded: the design, the planning pictures, each agent step, the play-test
@@ -91,7 +91,7 @@ headset browser, accepting the local certificate. On the start page, tap **Turn 
 
 | Stage | Code | What it does |
 |---|---|---|
-| Design | [`pipeline/design.py`](server/app/pipeline/design.py) | One model call designs the game: one idea, one main action, a goal, desk or world. Two planning pictures (the first view and a front/side/top sheet of the main object) guide the coder and are never shown in the game. |
+| Design | [`pipeline/design.py`](server/app/pipeline/design.py) | One model call writes the game's design document, `design.md`, with the [xr-design-doc skill](agent_skills/design/xr-design-doc): the idea, the moves (one gesture each, at most three hand actions), the controls and their checks, desk or world with a scene plan, levels, facts, the look and assets. The coder builds from it and the grader checks against it. Two planning pictures (the first view and a front/side/top sheet of the main object) guide the coder and are never shown in the game. |
 | Code | [`pipeline/coder/`](server/app/pipeline/coder) | A Deep Agent in a Modal sandbox (one per run, network blocked, no secrets) writes the game with the [skills](agent_skills), runs the checks, and play-tests it in the real headset app run headless, with an emulated hand. |
 | Grade | [`pipeline/grader.py`](server/app/pipeline/grader.py) | Grades the game against a rubric made for the request and the planning pictures, and can send it back once. |
 | Gate | [`gate`](gate) | Static validation, a dry run with the headset's own three.js and kit, a layout check (nothing hidden, out of reach, or in the player's face), and a play-through: a simulated hand plays the game by its own description, and every move must register and the round must end with a result. |

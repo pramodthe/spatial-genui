@@ -526,6 +526,7 @@ async def test_a_designed_game_gets_its_document_and_placed_scene_plan_before_th
 
     _install(monkeypatch, factory)
     monkeypatch.setattr(coder, "_open_sandbox", open_sandbox)
+    monkeypatch.delenv("CODER_RUBRIC", raising=False)  # the grader on, so its designed rubric is checked
     coder.set_checkpointer(None)
     scene = {"mode": "desk", "things": {"bowl": {"role": "hero", "size": [0.14, 0.07, 0.14]}}, "relations": []}
     made = {"design_md": "# Rise and Bake - Design\n", "mode": "desk", "title": "Rise and Bake", "pitch": "Bake.", "scene": scene}
@@ -537,6 +538,5 @@ async def test_a_designed_game_gets_its_document_and_placed_scene_plan_before_th
     assert any(command.startswith(f"node {coder.LAYOUT} ") for command in seen["commands_before"])
     task = seen["payload"]["messages"][0]["content"]
     assert "/work/design.md" in task and "write no /work/plan.md" in task
-    if coder.grader.enabled():
-        assert "read_design" in seen["payload"]["rubric"]
+    assert coder.grader.enabled() and "read_design" in seen["payload"]["rubric"]
     await asyncio.gather(*list(background._tasks))

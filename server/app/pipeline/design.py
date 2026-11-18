@@ -102,9 +102,13 @@ class _Literal:
     """Reads a JavaScript object literal as data, without running it: objects, lists, text in any quotes, numbers,
     true, false and null, bare names as keys, comments and trailing commas. Anything else is an error."""
 
+    # A scene plan is a few levels deep; a reply nested deeper than this is not one (and must not exhaust the stack).
+    DEPTH_MOST = 32
+
     def __init__(self, text: str, at: int = 0) -> None:
         self.text = text
         self.at = at
+        self.depth = 0
 
     def fail(self, what: str) -> ValueError:
         return ValueError(f"{what} near \"{self.text[self.at:self.at + 24].strip()}\"")
@@ -167,6 +171,15 @@ class _Literal:
         return "".join(out)
 
     def items(self, close: str, *, keyed: bool) -> Any:
+        if self.depth >= self.DEPTH_MOST:
+            raise self.fail(f"Nested more than {self.DEPTH_MOST} deep")
+        self.depth += 1
+        try:
+            return self._items(close, keyed=keyed)
+        finally:
+            self.depth -= 1
+
+    def _items(self, close: str, *, keyed: bool) -> Any:
         self.at += 1
         made: Any = {} if keyed else []
         while True:
@@ -250,7 +263,8 @@ def _scene(doc: str) -> tuple[dict[str, Any] | None, list[str]]:
     else:
         for relation in relations:
             kind = relation[1] if isinstance(relation, list) and len(relation) >= 2 else None
-            if not isinstance(kind, str) or kind.lower() not in SCENE_RELATIONS:
+            # As the solver reads them (gate/src/place.ts): written exactly so, in lower case.
+            if not isinstance(kind, str) or kind not in SCENE_RELATIONS:
                 problems.append(f"The relation {relation!r} in the scene plan is not one the solver knows: "
                                 f"{', '.join(SCENE_RELATIONS)}.")
     return (scene if not problems else None), problems

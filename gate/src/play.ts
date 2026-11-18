@@ -783,7 +783,10 @@ export function playThrough(make: () => PlayInstance, describeError: (err: unkno
       }
       // Try again replays the same level.
       yield* p.perform(againOf(p), `Try again on level ${levels}`, 'level');
-      yield* p.until(() => p.state().phase !== 'done', START_WAIT_S);
+      if (!(yield* p.until(() => p.state().phase !== 'done', START_WAIT_S))) {
+        p.add('fix', 'level', `Try again on level ${levels} did not restart the game: ${START_WAIT_S} s later it is still in phase 'done'.`);
+        throw new Abort();
+      }
       if (p.state().level !== levels) p.add('fix', 'level', `Try again on level ${levels} went to level ${p.state().level}: Try again replays the same level.`);
     });
     if (failed()) return report();

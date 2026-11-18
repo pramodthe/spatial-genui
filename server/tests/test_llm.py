@@ -101,3 +101,20 @@ def test_the_app_runs_on_muse_by_default(monkeypatch) -> None:
     agent = llm.agent_model()
     assert agent.model_name == "muse-ember-1.0" and "api.meta.ai" in str(agent.openai_api_base)
     assert not hasattr(llm, "gpt_chat")
+
+
+def test_another_service_in_env_gets_the_agents_whatever_the_model_is_called(monkeypatch) -> None:
+    """LLM_BASE_URL names another service and LLM_MODEL is left out (so it is muse-ember-1.0): the agents call that
+    service with its own key, not Meta's endpoint with Meta's key."""
+    from app.core import config as config_mod
+
+    for name in ("LLM_MODEL", "LLM_REASONING_EFFORT", "OPENAI_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("LLM_BASE_URL", "https://llm.example/v1")
+    monkeypatch.setenv("LLM_API_KEY", "other-key")
+    monkeypatch.setenv("META_API_KEY", "meta-test-key")
+    settings = config_mod.load_config()
+    monkeypatch.setattr(llm, "config", settings)
+    agent = llm.agent_model()
+    assert str(agent.openai_api_base) == "https://llm.example/v1"
+    assert agent.openai_api_key.get_secret_value() == "other-key"

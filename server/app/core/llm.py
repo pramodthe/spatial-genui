@@ -323,9 +323,10 @@ def muse_chat(model: str = "muse-spark-1.3-contributor", *, reasoning_effort: st
 
 def agent_model():
     """The app's own model for the agents: Meta's Muse (the default, Muse Ember), or the OpenAI-compatible service
-    .env names instead."""
+    .env names instead. The service is LLM_BASE_URL's, whatever the model is called: a model named muse on another
+    service is sent there, never to Meta with Meta's key."""
     refuse_anthropic(config.model, config.base_url)
-    if "api.meta.ai" in config.base_url or config.model.startswith("muse"):
+    if "api.meta.ai" in config.base_url:
         effort = None
         try:
             entry = load_model(config.model)

@@ -1451,7 +1451,7 @@ const DESK_REACH_M = [0.3, 0.9] as const;
 const DESK_MARGIN_M = 0.12;
 const DESK_AHEAD_COS = Math.cos((50 * Math.PI) / 180);
 // Surfaces people sit or lie on, never a desk for a lesson.
-const SEAT_LABELS = /bed|couch|sofa|seat|chair|benchmark/i;
+const SEAT_LABELS = /bed|couch|sofa|seat|chair|bench/i;
 
 /** The point on a detected surface nearest to "REACH_DISTANCE_M straight ahead", or null. */
 function findDesk(head: Vector3, forward: Vector3): { point: Vector3; label: string } | null {

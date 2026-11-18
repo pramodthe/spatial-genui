@@ -1,12 +1,16 @@
 // The play-through (src/play.ts): a small game that plays well passes, and the same game broken in one way at a
 // time fails the rule made for that way.
 import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const tsx = fileURLToPath(new URL('./node_modules/.bin/tsx', import.meta.url));
 const gate = fileURLToPath(new URL('./gate.ts', import.meta.url));
 
-type Play = { ok: boolean; complete: boolean; findings: { level: string; rule: string; text: string }[]; rounds: Record<string, { phase: string; move: number; result: number | null; stars: number | null }> };
+type Round = { phase: string; move: number; result: number | null; stars: number | null; level?: number | null };
+type Play = { ok: boolean; complete: boolean; findings: { level: string; rule: string; text: string }[]; rounds: Record<string, Round> & { levels?: Round[] } };
 type Result = { ok: boolean; error?: string; stats?: { play: Play | null } };
 
 function run(code: string, extra: Record<string, unknown> = {}): Result {
@@ -305,4 +309,62 @@ for (const [what, expected, code] of later) {
   }
 }
 
-console.log(`play ok: ${broken.length + later.length + 3} broken games caught; ball ${play.rounds.played?.result?.toFixed(2)} s, toss ${thrown.stats.play.rounds.played?.result?.toFixed(2)} m`);
+// Levels: the ball game with three levels, each with less time for three stars; Next level after a star, Try again
+// on the same level. The play-through plays level 1 and on to the last, and fails a level that cannot be won.
+const leveled = swap(ball,
+  ["let phase = 'learn', move = 0,", "let level = 1, phase = 'learn', move = 0,"],
+  ["{ label: 'Try again', id: 'again', onPress() { begin(); } }]", "{ label: 'Next level', id: 'next', onPress() { if (phase === 'done' && stars > 0 && level < 3) { level++; begin(); } } }, { label: 'Try again', id: 'again', onPress() { begin(); } }]"],
+  ['if (inCup()) end(clock < 5 ? 3 : clock < 10 ? 2 : 1);', 'if (inCup()) end(clock < [5, 4, 3][level - 1] ? 3 : 0);'],
+  ['state: () => ({ phase, move, result, stars }),', 'levels: 3,\n      state: () => ({ phase, move, result, stars, level }),'],
+);
+const climbed = run(leveled);
+const climb = climbed.stats?.play;
+if (!climbed.ok || !climb?.ok || climb.rounds.levels?.map((r) => `${r.level}:${r.stars}`).join(' ') !== '1:3 2:3 3:3') {
+  console.error('expected the ball game to be played through its three levels, three stars each', climbed.error ?? JSON.stringify(climb, null, 1));
+  process.exit(1);
+}
+const levelsBroken: [string, string, string][] = [
+  ['a last level that cannot be won', 'fix:level', swap(leveled, ['[5, 4, 3][level - 1]', '[5, 4, 0.01][level - 1]'])],
+  ['Next level that does not open the next level', 'fix:level', swap(leveled, ["if (phase === 'done' && stars > 0 && level < 3) { level++; begin(); }", 'begin();'])],
+  ['Try again that goes back to level 1', 'fix:level', swap(leveled, ["{ label: 'Try again', id: 'again', onPress() { begin(); } }", "{ label: 'Try again', id: 'again', onPress() { level = 1; begin(); } }"])],
+  ['a state with no level', 'fix:level', swap(leveled, ['state: () => ({ phase, move, result, stars, level }),', 'state: () => ({ phase, move, result, stars }),'])],
+  ['Try again that does nothing once the last level is played', 'fix:level', swap(leveled, ["{ label: 'Try again', id: 'again', onPress() { begin(); } }", "{ label: 'Try again', id: 'again', onPress() { if (level < 3) begin(); } }"])],
+];
+for (const [what, expected, code] of levelsBroken) {
+  const result = run(code);
+  if (!result.ok || rulesOf(result) !== expected) {
+    console.error(`expected ${what} to give ${expected}, got ${rulesOf(result) || 'nothing'}`, result.error ?? JSON.stringify(result.stats?.play, null, 1));
+    process.exit(1);
+  }
+}
+
+// The learning game's starter (new-game.mjs), untouched: it plays through, every level with a star.
+const work = mkdtempSync(join(tmpdir(), 'starter-'));
+try {
+  const made = spawnSync('node', [fileURLToPath(new URL('../agent_skills/play/learning-game/scripts/new-game.mjs', import.meta.url)), 'plain', join(work, 'module.js')], { encoding: 'utf8' });
+  if (made.status !== 0) throw new Error(made.stdout + made.stderr);
+  const starter = run(readFileSync(join(work, 'module.js'), 'utf8'));
+  const levels = starter.stats?.play?.rounds.levels ?? [];
+  if (!starter.ok || !starter.stats?.play?.ok || levels.length !== 3 || levels.some((r) => !(Number(r.stars) > 0))) {
+    console.error("expected the learning game's starter to play through all three of its levels", starter.error ?? JSON.stringify(starter.stats?.play, null, 1));
+    process.exit(1);
+  }
+  // A game with LEVELS that does not say so in its play block is still held to its play-through's findings: here
+  // its round never ends, and the check fails it as well as noting the missing `levels`.
+  const ending = "    if (phase === 'play' && touched.size === targets.length) finish();";
+  const own = readFileSync(join(work, 'game.js'), 'utf8');
+  if (!own.includes(ending) || !own.includes('levels: LEVELS.length,')) throw new Error('test-play: the starter no longer has the lines this test breaks');
+  writeFileSync(join(work, 'game.js'), own.replace('levels: LEVELS.length,', '').replace(ending, ''));
+  const checked = spawnSync('node', [fileURLToPath(new URL('../agent_skills/play/learning-game/scripts/check.mjs', import.meta.url)), join(work, 'module.js')], {
+    encoding: 'utf8',
+    env: { ...process.env, GATE_TSX: fileURLToPath(new URL('./node_modules/.bin/tsx', import.meta.url)), GATE_ENTRY: gate },
+  });
+  if (checked.status === 0 || !/levels: LEVELS.length/.test(checked.stdout) || !/^FIX: Play: .*did not end/m.test(checked.stdout)) {
+    console.error('expected the check to note LEVELS without `levels` and still fail the round that never ends', checked.stdout.slice(0, 3000));
+    process.exit(1);
+  }
+} finally {
+  rmSync(work, { recursive: true, force: true });
+}
+
+console.log(`play ok: ${broken.length + later.length + levelsBroken.length + 3} broken games caught; ball ${play.rounds.played?.result?.toFixed(2)} s, toss ${thrown.stats.play.rounds.played?.result?.toFixed(2)} m; the starter's 3 levels won`);

@@ -44,6 +44,7 @@ RUBRIC = """- run_play_check prints "game ok" for /work/module.js.
 - The player does the main action with their hands on the scene (grab, steer by following the hand, slice, fold, pour, place), not only by pressing panel buttons, and the thing they act on is the biggest interactive object and stands out from the set.
 - Every move has a why of one short line that says why it matters for the idea, in plain words a 10-year-old knows (no caveats, no jargon, no formulas without words).
 - The challenge ends with a measured number that depends on the idea (not on clicking speed), with 1 to 3 stars and a Try again.
+- The game has levels inside it (LEVELS, three or more, `levels` in the play block): each is the same round with one setting changed, a round that earns a star shows the level and a Next level button, Try again replays the same level, and the check's "levels:" line shows every level earning a star.
 - Nothing scores, counts down or hurts before Start, and a wrong try costs nothing while learning.
 - In the playtest screenshot, a first-time player knows within five seconds what to do: the panel's first line says the whole game in one sentence, there is one main action with one hand (at most two controls, no modes or bonus rules), and the scene itself shows the first move before the player tries.
 - The game has its own look in the playtest screenshot: the panel wears a skin in colours that suit this game (kit.panel skin). The app shows the game's name as a title card when it opens, so no title sign stays in the scene.

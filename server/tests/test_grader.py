@@ -13,7 +13,7 @@ def test_rubric_names_the_request_and_the_loop() -> None:
     assert "Make a bat game with sound: hunt moths by their echoes." in text
     assert "game ok" in text and "Try again" in text and "before Start" in text
     assert "play block is honest" in text
-    assert len(text.splitlines()) == 10
+    assert len(text.splitlines()) == 11
 
 
 def test_rubric_can_be_turned_off(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -146,3 +146,9 @@ def test_studio_keeps_each_attempts_module_and_serves_the_latest() -> None:
     again = StudioRun("studio-attempts-run", "blocks", "game", "m")
     assert again.saved("module.js") is None  # the repair starts its own copy
     assert (again.dir / "files" / "module-attempt-1.js").read_bytes() == b"// first build"
+
+
+def test_the_rubric_asks_for_levels_inside_the_game() -> None:
+    """Levels are the same round with one setting changed, opened by Next level after a star (task 9)."""
+    rubric = grader.rubric_for("a sponge cake")
+    assert "LEVELS" in rubric and "Next level" in rubric and "Try again replays the same level" in rubric

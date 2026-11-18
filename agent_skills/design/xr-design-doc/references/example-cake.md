@@ -107,7 +107,8 @@ when its middle reaches 95 °C. Rise = 4.8 cm × whisked (turns / 2, at most 1) 
 ## 7. Mistakes, failure and reset
 | Wrong step | What happens (shows why it matters) | How the player recovers |
 |---|---|---|
-| Less or more than 100 g of sugar or flour | The rise drops by the share the weight is off | Try again; the panel says "weigh 100 g" |
+| More than 110 g of sugar while learning | The extra is scooped back out to 100 g, with a why | Nothing is lost while learning |
+| Less or more than 100 g of flour in the round | The rise drops by the share the weight is off | Try again; the panel says "weigh 100 g" |
 | Fewer than two whisking turns | Less air is beaten in: a lower rise | Whisk more (the move waits for two turns) |
 | Folding past the level's most | The air is knocked out: 0.6 of the rise | Try again, fold once |
 | No folding | Lumps of flour: 0.7 of the rise | Try again |

@@ -3,6 +3,7 @@ Muse's Lab
 </h1>
 
 <p align="center">
+  <a href="paper/muses-lab-paper.pdf"><img src="https://img.shields.io/badge/paper-PDF-B31B1B.svg" alt="Paper (PDF)"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://github.com/facebook/immersive-web-sdk"><img src="https://img.shields.io/badge/WebXR-IWSDK-1877F2.svg" alt="WebXR on IWSDK"></a>
   <img src="https://img.shields.io/badge/python-3.12-3776AB.svg" alt="Python 3.12">
@@ -14,7 +15,8 @@ Muse's Lab turns a question into a hands-on mixed-reality learning game for Meta
 designs the game, writes it as a WebXR module, play-tests it in the real headset runtime and checks it before it
 loads, in about 15 minutes; the player then plays it in their own room, with their hands.
 
-Built for the [Meta VR Start Developer Competition 2026](https://start-developer-competition-26.devpost.com/).
+The system and its evaluation are described in the paper [*Muse's Lab: Generating Hands-On Learning Games at
+Runtime for Seated Mixed Reality and Walkable Virtual Worlds*](paper/muses-lab-paper.pdf) (PDF, 18 pages).
 
 <p align="center">
   <img src=".github/assets/cover.jpg" width="75%" alt="The Muse's Lab dashboard in a room, with a kite game and a paper-folding game">
@@ -128,6 +130,7 @@ apps/
 skills/         the coding agent's skills: learning games, looks, game patterns, sound, panels
 data/library/   the 3D model library and the sound library
 bench/          evaluation prompts and results
+paper/          the research paper (PDF)
 ```
 
 ## Evaluation
@@ -135,7 +138,7 @@ bench/          evaluation prompts and results
 [`bench/results/play-factors`](bench/results/play-factors) measures what makes the games good: 35 games from 11
 setups, judged blind from the same opening view, with a layout check and a hands probe. The model was the largest
 factor, followed by the pipeline and the layout checker. [`bench/`](bench) also holds the earlier model comparisons,
-3D pipelines and the paper's research questions.
+3D pipelines and the paper's research questions; the [paper](paper/muses-lab-paper.pdf) reports them in full.
 
 ## Development
 
@@ -153,6 +156,17 @@ Further documentation:
 - [`apps/api/app/pipeline/README.md`](apps/api/app/pipeline/README.md): how lessons and games are made
 - [`skills/README.md`](skills/README.md): the coding agent's skills
 - [`apps/gate/README.md`](apps/gate/README.md): what the checker tests
+
+## Citation
+
+```bibtex
+@misc{thebe2026museslab,
+  title  = {Muse's Lab: Generating Hands-On Learning Games at Runtime for Seated Mixed Reality and Walkable Virtual Worlds},
+  author = {Thebe, Pramod},
+  year   = {2026},
+  url    = {https://github.com/pramodthe/spatial-genui}
+}
+```
 
 ## License
 

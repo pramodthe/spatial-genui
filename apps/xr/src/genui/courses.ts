@@ -4,7 +4,8 @@
  */
 
 /** A lesson or game being written right now: its live preview (GET /api/live/<key>) and one line on it. */
-export type LiveSummary = { key: string; line: string; seq: number };
+/** While it is being made: one line on it, and (from services/live.py) its stage, its step (0-3: plan, build, try it out, check) and the seconds so far. */
+export type LiveSummary = { key: string; line: string; seq: number; stage?: string; step?: number; seconds?: number };
 export type CourseLessonSummary = { title: string; objective: string; status: 'pending' | 'generating' | 'ready' | 'failed'; error?: string; seconds?: number; live?: LiveSummary; picture?: boolean };
 export type CourseSummary = {
   id: string;

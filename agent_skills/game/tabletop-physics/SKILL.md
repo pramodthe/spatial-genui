@@ -5,6 +5,10 @@ description: Ball, bounce, paddle and collision patterns, plus a short simulated
 
 # Tabletop physics
 
+The motion kit (`/skills/game/motion`) has a ball's flight, bounce and roll, two balls meeting and a ball against a
+paddle or a wall as tested helpers (`motionBody`, `motionCollide`, `motionBlock`), already in the module: build on
+them. What follows is the shape of the same thing by hand, for a game that needs something the kit does not have.
+
 Keep collisions as distances or boxes in `root`'s space. A ball bounce:
 
 ```js

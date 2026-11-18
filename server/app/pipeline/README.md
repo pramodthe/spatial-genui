@@ -31,7 +31,7 @@ course:  plan ──▶ the first lesson; each later lesson is written when the 
 model library at `/data/library`.
 
 1. `new-game.mjs` starts the game: `/work/game.js` (the game's own code, the only file the agent edits) and
-   `/work/kits.js` (the look's kit, the play kit and the ECS kit).
+   `/work/kits.js` (the look's kit, the play kit, the ECS kit and the motion kit).
 2. The agent reads the planning pictures in `/work/plan/` and builds to match them.
 3. `check.mjs` builds `/work/module.js` from the two files and runs the gate, the learning-game rules and the
    play-through (`CODER_PLAY_CHECK=0` turns the play-through off here and in the host gate).

@@ -207,6 +207,13 @@ def test_sandbox_create_blocks_the_network(monkeypatch: pytest.MonkeyPatch) -> N
     assert captured["app"] == (coder.APP_NAME, True)
 
 
+def test_the_prompt_points_at_the_motion_kit_unless_switched_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CODER_MOTION", raising=False)
+    assert "/skills/game/motion" in coder._prompt("game") and "/skills/game/motion" in coder._prompt("lesson")
+    monkeypatch.setenv("CODER_MOTION", "0")
+    assert "/skills/game/motion" not in coder._prompt("game")
+
+
 def test_image_puts_the_gate_and_skills_at_absolute_paths() -> None:
     destinations = [dest for _source, dest in image_layout()]
     assert GATE_ROOT in destinations

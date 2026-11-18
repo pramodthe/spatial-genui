@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { parse as parseUIKitML, resolveKitComponentSets } from '@drawcall/uikitml';
 
 const tsx = fileURLToPath(new URL('./node_modules/.bin/tsx', import.meta.url));
 const gate = fileURLToPath(new URL('./gate.ts', import.meta.url));
@@ -106,6 +107,13 @@ const early = preview(reply.slice(0, Math.round(reply.length * 0.45)));
 const later = preview(reply.slice(0, Math.round(reply.length * 0.7)));
 if (!early.ok || !later.ok || (later.meshes ?? 0) <= (early.meshes ?? 0)) {
   console.error('expected partial replies to run and to grow', early, later);
+  process.exit(1);
+}
+// The headset dashboard's own panel parses with the same component sets: a style rule the format does not take (a
+// comment, a descendant selector) leaves the dashboard empty in VR, with no error anywhere a player would see.
+const dashboard = parseUIKitML(readFileSync(new URL('../headset/public/ui/lesson-picker.uikitml', import.meta.url), 'utf8'), { componentSets: resolveKitComponentSets('horizon') });
+if (!dashboard.success) {
+  console.error('the headset dashboard panel (headset/public/ui/lesson-picker.uikitml) does not parse', dashboard.errors);
   process.exit(1);
 }
 console.log(`gate ok: triangles=${first.stats?.triangles} rawPanels=${first.stats?.rawPanels} warnings=${first.warnings?.length ?? 0} preview=${early.meshes}->${later.meshes} meshes`);

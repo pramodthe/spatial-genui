@@ -63,8 +63,8 @@ the game does (moves, whys, challenge, panel, hand wiring, the play block). When
 the sheet, and name what is missing or different. For every failed criterion, name the exact code (a line or a value)
 and say what to change, so the coder can fix it in one pass.
 
-play_in_app plays the game by its own play block in the real headset app, with the emulated hand: every move, Start and
-one round, in one call. A move that registers in the gate's play-through and not in the app is a failure of the hand
+Use play_in_headset first: it plays the game by its own play block in the real headset app, with the emulated hand:
+every move, Start and one round, in one call. A move that registers in the gate's play-through and not in the app is a failure of the hand
 wiring. For a closer look, after playtest: game_state, then iwsdk with `xr run-sequence` on the thing the game says to
 touch first (its `center` is in the playtest report, or name it as the step's target), then game_state again. The piece
 should have moved where the game says, and the values in `game` should change as the moves say. A game whose hand action
@@ -179,14 +179,14 @@ def grader_tools(backend: Any, kind: str = "lesson", *, designed: bool = False) 
         return (result.output or "no output")[-4000:]
 
     @tool
-    async def play_in_app() -> str:
+    async def play_in_headset() -> str:
         """Play /work/module.js by its own play block in the real headset app, with the emulated hand: every move,
         Start, then one round. Returns JSON: for each move whether it registered, whether Start began a round, how the
         round ended (phase, result, stars), and what went wrong."""
         result = await backend.aexecute(PLAYTEST + (" --game" if kind == "game" else "") + " --play", timeout=420)
         return (result.output or "no output")[-4000:]
 
-    tools = [playtest, run_play_check, read_game_code, plan_pictures, iwsdk, game_state, play_in_app]
+    tools = [playtest, run_play_check, read_game_code, plan_pictures, iwsdk, game_state, play_in_headset]
     return [read_design, *tools] if designed else tools
 
 

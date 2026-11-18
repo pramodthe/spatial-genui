@@ -104,7 +104,9 @@ gets.
    It opens the game fresh, does each move's gesture, then Start and one round, and prints JSON: each move with
    `registered`, whether Start `began` a round, and the `round` as `state()` ends it. A move that registers in the
    check and not here is wired to something the headset does differently (a grab the host does not give, a press on
-   a part a pinch never reaches): fix the wiring, not the gesture. It does not replay `roll` or `yaw`.
+   a part a pinch never reaches): fix the wiring, not the gesture. The whole run keeps inside 390 s; a game whose
+   steps take longer is reported "out of time" with the steps it did not play. The hand turns as the gesture's `tilt`, `roll` and `yaw` say,
+   after it has pinched, as in the check.
 
 ## Notes
 

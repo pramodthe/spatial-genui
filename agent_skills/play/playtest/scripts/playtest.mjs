@@ -20,6 +20,11 @@ const kind = args.includes('--game') ? 'game' : 'lesson';
 const shotOnly = args.includes('--shot-only');
 const stateOnly = args.includes('--state');
 const replay = args.includes('--play');
+// --play's whole run, starting the runtime included, stays inside this (the grader's play_in_headset waits 420 s): a
+// step that would not finish in what is left is not started, and the report says what was not played.
+const PLAY_BUDGET_MS = Number(process.env.PLAYTEST_PLAY_BUDGET_MS) || 390000;
+const began = Date.now();
+const left = () => PLAY_BUDGET_MS - (Date.now() - began);
 // A learning game written as game.js on kits.js plays its latest game.js: build module.js from the two first.
 if (!shotOnly && !stateOnly) {
   try {
@@ -91,7 +96,13 @@ let report = {};
 if (!shotOnly) {
   mkdirSync(join(XR, 'tests'), { recursive: true });
   copyFileSync(join(here, 'mount.mjs'), join(XR, 'tests', '.playtest-mount.mjs'));
-  const run = iwsdk(['browser', 'run', 'tests/.playtest-mount.mjs', '--timeout', '100000'], 130000, { PLAYTEST_MODULE: file, PLAYTEST_KIND: kind });
+  // With --play the mount is part of its budget, and leaves time for at least one step.
+  const most = replay ? Math.min(130000, left() - 40000) : 130000;
+  if (most < 30000) {
+    console.log(JSON.stringify({ ok: false, error: `out of time: starting the runtime used ${Math.round((Date.now() - began) / 1000)} s of the play-through's ${Math.round(PLAY_BUDGET_MS / 1000)} s. Run it again: the runtime is up now.` }));
+    process.exit(1);
+  }
+  const run = iwsdk(['browser', 'run', 'tests/.playtest-mount.mjs', '--timeout', String(most - 30000)], most, { PLAYTEST_MODULE: file, PLAYTEST_KIND: kind });
   if (!run.ok) {
     console.log(JSON.stringify({ ok: false, error: run.error?.message || 'the module could not be opened' }));
     process.exit(1);
@@ -99,11 +110,14 @@ if (!shotOnly) {
   report = run.data?.result || {};
 }
 if (replay) {
-  // The game is open and fresh: play its moves, Start and one round, as its play block says (scripts/replay.mjs), one
+  // The game is open and fresh: play its moves, Start and one round, as its play block says (scripts/play.mjs), one
   // step per browser script (a script may run 110 s at most).
-  copyFileSync(join(here, 'replay.mjs'), join(XR, 'tests', '.playtest-replay.mjs'));
+  copyFileSync(join(here, 'play.mjs'), join(XR, 'tests', '.playtest-play.mjs'));
   const step = (name, index = 0) => {
-    const run = iwsdk(['browser', 'run', 'tests/.playtest-replay.mjs', '--timeout', '105000'], 130000, { REPLAY_STEP: name, REPLAY_INDEX: String(index) });
+    // A step gets up to 105 s in the browser and 130 s in all, less when the budget has less left.
+    const most = Math.min(130000, left() - 5000);
+    if (most < 20000) return { ok: false, outOfTime: true, error: `out of time: ${Math.round(PLAY_BUDGET_MS / 1000)} s used before the ${name} step${name === 'move' || name === 'challenge' ? ` ${index + 1}` : ''}, which was not played` };
+    const run = iwsdk(['browser', 'run', 'tests/.playtest-play.mjs', '--timeout', String(most - 25000)], most, { REPLAY_STEP: name, REPLAY_INDEX: String(index) });
     return run.ok ? run.data?.result ?? { ok: false, error: 'no answer' } : { ok: false, error: run.error?.message || 'the replay step could not run' };
   };
   const played = { ok: false, mounted: report.mounted, moves: [], start: null, challenge: [], round: null, errors: [] };
@@ -118,6 +132,7 @@ if (replay) {
   if (!plan.ok) finish(plan.error);
   for (let i = 0; i < plan.moves; i++) {
     const move = step('move', i);
+    if (move.outOfTime) finish(move.error);
     if (move.skipped) break; // the game left its learn phase: no more moves to learn
     played.moves.push(move);
     if (!move.registered) {
@@ -128,6 +143,7 @@ if (replay) {
   if (!played.start.ok) finish(played.start.error || `Start (${played.start.gesture}) did not begin a round in the app: the game is in phase '${played.start.state?.phase}'.`);
   for (let i = 0; i < (played.start.gestures || 0); i++) {
     const gesture = step('challenge', i);
+    if (gesture.outOfTime) finish(gesture.error);
     if (gesture.skipped) break; // the round has ended
     played.challenge.push(gesture);
     if (gesture.error) played.errors.push(`Challenge gesture ${i + 1} (${gesture.gesture}) failed: ${gesture.error}`);

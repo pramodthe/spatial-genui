@@ -9,13 +9,18 @@
 // Prints one line of JSON: { ok: true, text, ... } or { ok: false, error }.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { replay, unmet } from './check.mjs';
+import { badExpectation, replay, unmet } from './check.mjs';
 import { componentValues, runSequence, sleep } from './iwsdk.mjs';
 
 /** Run one hand sequence and, when it worked, write it into playtest.json. Throws with what happened otherwise. */
 export async function recordStep(game, { id, sequence, expect = {}, waitMs = 500, waitFor = null, clear = false }) {
   if (typeof id !== 'string' || !/^[a-z0-9-]{1,40}$/.test(id)) throw new Error('Give the step an "id" of lower-case letters, digits and dashes, such as "move-1" or "start".');
   if (!sequence?.device || !Array.isArray(sequence.steps) || sequence.steps.length === 0) throw new Error('"sequence" is the input of xr_run_sequence: { "device": "hand-right", "steps": [...] }.');
+  for (const [where, values] of [['expect', expect ?? {}], ['waitFor', waitFor ?? {}]]) {
+    for (const [key, wanted] of Object.entries(values)) {
+      if (key !== 'timeoutMs' && badExpectation(wanted)) throw new Error(`${where}.${key}: ${badExpectation(wanted)}.`);
+    }
+  }
   const file = join(game, 'playtest.json');
   let playtest = { version: 1, state: 'GameState', steps: [] };
   if (!clear && existsSync(file)) {

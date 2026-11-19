@@ -174,4 +174,9 @@ pi runs shell commands with the user's own permissions, as OhMyGame's does. Thre
 - The studio service runs outside that sandbox, so the Modal login never reaches the agent; pi starts with a minimal
   environment, its shell has no keys, and the run's logs are scanned for the key.
 
+Known limit: the sandbox does not block the network, because pi itself calls the model's API from inside it. The
+guard's refusals (no `curl`, no installs, no git) stop the usual ways out, but a command such as `node -e` with
+`fetch` is not refused. What the agent could send is limited to the project folder and the studio token, which its
+shell does not have. Ids that the agent writes into the canvas files are checked before they become file paths.
+
 The runner also records the processes on ports 8081 (the Quest preview) and 8787 (the app) before and after.

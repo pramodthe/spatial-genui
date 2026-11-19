@@ -21,7 +21,15 @@ import { startStudio } from './studio-server.mjs';
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(`--${name}`);
-const option = (name, fallback) => (args.includes(`--${name}`) ? Number(args[args.indexOf(`--${name}`) + 1]) : fallback);
+const option = (name, fallback) => {
+  if (!args.includes(`--${name}`)) return fallback;
+  const value = Number(args[args.indexOf(`--${name}`) + 1]);
+  if (!Number.isFinite(value) || value <= 0) {
+    console.log(`--${name} needs a positive number: a limit that is not a number would not stop the run.`);
+    process.exit(2);
+  }
+  return value;
+};
 const [name, typed] = args.filter((a, i) => !a.startsWith('--') && !['--minutes', '--usd', '--request-file'].includes(args[i - 1]));
 // A long request (a benchmark prompt) comes from a file, word for word.
 const request = args.includes('--request-file') ? readFileSync(args[args.indexOf('--request-file') + 1], 'utf8').trim() : typed;
@@ -47,8 +55,8 @@ const listening = (port) => spawnSync('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LI
 if (!existsSync(join(TEMPLATE, '.pi-xr-template.json'))) throw new Error('No template yet: run `node runner/make-template.mjs` first.');
 if (existsSync(game) && !continuing) throw new Error(`${game} exists already: pick another name, or send it a follow-up with --continue.`);
 if (!existsSync(game) && continuing) throw new Error(`${game} does not exist: there is nothing to continue.`);
-const key = prepareOnly ? null : metaKey(); // the studio's: pictures are Muse Image unless a reference maker is set
 const pictures = prepareOnly ? null : imageMaker(); // null: Muse Image
+const key = prepareOnly || pictures ? null : metaKey(); // the studio's, for Muse Image pictures
 const piKey = prepareOnly ? null : agentKey(); // the agent model's provider
 const others = { 8081: listening(8081), 8787: listening(8787) }; // the Quest preview and the app: must not change
 const ownRuntimeUp = continuing && ready(game); // this game's emulator is still up from its build
@@ -95,7 +103,7 @@ if (prepareOnly) {
 // ---- the studio service: pictures, 3D models, the canvas and the plan, outside the agent's sandbox ----
 const madeBefore = existsSync(join(run, 'media.jsonl')) ? readFileSync(join(run, 'media.jsonl'), 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line)) : [];
 const studio = await startStudio({ game, run, key, limits: MEDIA, previous: madeBefore, images: pictures });
-const spentUsd = () => stats.usd + studio.spent().usd;
+const spentUsd = () => stats.usd + studio.spent().usd + studio.spent().pendingUsd; // art in flight counts too
 
 // ---- the agent: one pi process per prompt, the same session throughout ----
 // A follow-up uses the session its build made (the first record of its event stream names it).
@@ -137,17 +145,27 @@ const agent = async (prompt, n) => {
 
 const startedAt = Date.now();
 say(`the agent starts: ${MODEL}, thinking ${THINKING}, pictures by ${pictures?.model ?? 'muse-image-1.0'}, limits ${limits.minutes} min and $${limits.usd}${sandbox ? ', sandboxed' : ''}`);
+/** The independent check; one that crashes is a failed check, so the run is still written down below. */
+async function checkSafely(out) {
+  try {
+    return await check(game, { out });
+  } catch (err) {
+    const failure = `The check itself stopped: ${String(err?.message ?? err).slice(0, 400)}`;
+    return { ok: false, failures: [failure], warnings: [], text: `- ${failure}`, played: [], steps: 0, moves: 0 };
+  }
+}
+
 // The skill goes in with the request, so its order of work is in context from the first turn.
 const first = freeform ? `Build this XR app exactly as it is specified here:\n\n${request}` : `Make this VR learning game: ${request}`;
 let ended = await agent(continuing ? [request] : ['@.agents/skills/xr-game-studio/SKILL.md', first], firstN);
 say(`the agent stopped after ${(ended.seconds / 60).toFixed(1)} min (${ended.stopped ?? stats.stopReason ?? `exit ${ended.code}`}); checking the game ...`);
-let checked = await check(game, { out: join(run, `check-${firstN}`) });
+let checked = await checkSafely(join(run, `check-${firstN}`));
 let followUps = 0;
 while (!checked.ok && followUps < limits.followUps && !ended.stopped && agentSeconds / 60 < limits.minutes && spentUsd() < limits.usd) {
   followUps += 1;
   say(`the check failed; follow-up ${followUps} continues the same session:\n${checked.text}`);
   ended = await agent([`An independent check replayed the game from a fresh reload and found this:\n${checked.text}\n\nFix these in the game as it is (do not start over), verify with hands as before, and stop when typecheck, build and the playtest.json replay pass.`], firstN + followUps);
-  checked = await check(game, { out: join(run, `check-${firstN + followUps}`) });
+  checked = await checkSafely(join(run, `check-${firstN + followUps}`));
 }
 
 // ---- what happened, written down ----

@@ -44,7 +44,10 @@ canvas_check afterwards.
 const readJson = (file) => JSON.parse(readFileSync(file, 'utf8'));
 const writeJson = (file, value) => { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`); };
 export const canvasDir = (game) => join(game, 'canvas');
-export const boardFile = (game, id) => join(game, 'canvas', 'boards', `${id}.json`);
+export const boardFile = (game, id) => {
+  if (typeof id !== 'string' || !ID.test(id)) throw new Error(`"${id}" is not a board id: letters, digits, _ and - only.`);
+  return join(game, 'canvas', 'boards', `${id}.json`);
+};
 export const readIndex = (game) => readJson(join(game, 'canvas', 'index.json'));
 export const readBoard = (game, id) => readJson(boardFile(game, id));
 export const writeBoard = (game, board) => writeJson(boardFile(game, board.id), board);
@@ -57,7 +60,7 @@ export function initializeCanvas(game) {
   if (!existsSync(join(dir, 'AGENTS.md'))) writeFileSync(join(dir, 'AGENTS.md'), CANVAS_AGENTS);
   if (!existsSync(join(dir, 'index.json'))) writeJson(join(dir, 'index.json'), { version: 1, boards: [{ id: 'main', name: 'Design' }], documents: [] });
   const index = readIndex(game);
-  for (const board of index.boards) {
+  for (const board of (index.boards ?? []).filter((item) => typeof item?.id === 'string' && ID.test(item.id))) {
     if (!existsSync(boardFile(game, board.id))) writeBoard(game, { id: board.id, version: 1, viewport: { width: 1920, height: 1080 }, nodes: [], edges: [] });
   }
   if (!existsSync(join(dir, 'assets.json'))) writeJson(join(dir, 'assets.json'), { version: 1, assets: {} });
@@ -77,7 +80,7 @@ export function mainDocument(game) {
   if (!existsSync(join(game, 'canvas', 'index.json'))) return null;
   let index;
   try { index = readIndex(game); } catch { return null; }
-  if (!index.mainDocumentId) return null;
+  if (typeof index.mainDocumentId !== 'string' || !ID.test(index.mainDocumentId)) return null;
   const file = join(game, 'canvas', 'documents', `${index.mainDocumentId}.md`);
   return existsSync(file) ? { id: index.mainDocumentId, file, text: readFileSync(file, 'utf8') } : null;
 }

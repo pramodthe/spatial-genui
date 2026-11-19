@@ -28,7 +28,9 @@ async function studio(path: string, body: object, signal: AbortSignal | undefine
   for (;;) {
     await sleep(Date.now() - began < 20000 ? 1000 : 5000);
     signal?.throwIfAborted();
-    const job = (await (await fetch(`${URL_BASE}/job/${id}`, { headers, signal })).json()) as { state: string; result?: { text: string }; error?: string };
+    const reply = await fetch(`${URL_BASE}/job/${id}`, { headers, signal });
+    if (!reply.ok) throw new Error(`The studio service lost the job (${reply.status}); ask for it again.`);
+    const job = (await reply.json()) as { state: string; result?: { text: string }; error?: string };
     if (job.state === 'done') return { content: [{ type: 'text' as const, text: job.result?.text ?? 'done' }], details: job.result ?? {} };
     if (job.state === 'failed') throw new Error(job.error ?? `${what} failed`);
     const seconds = Math.round((Date.now() - began) / 1000);

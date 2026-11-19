@@ -1,0 +1,18 @@
+{
+  "name": "pi-xr-trial",
+  "private": true,
+  "type": "module",
+  "description": "Trial: one continuous pi agent session builds a WebXR learning game as its own IWSDK project (README.md).",
+  "scripts": {
+    "template": "node runner/make-template.mjs",
+    "game": "node runner/run.mjs",
+    "check": "node runner/check.mjs",
+    "report": "node runner/report.mjs"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "1.5.2"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}

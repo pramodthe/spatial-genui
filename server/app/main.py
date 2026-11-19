@@ -11,7 +11,7 @@ from urllib.parse import unquote
 
 import uvicorn
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from app import library
@@ -24,7 +24,7 @@ from app.pipeline import design
 from app.pipeline.coder.agent import set_checkpointer as set_coder_checkpointer
 from app.pipeline.lesson import run_lesson, set_checkpointer
 from app.pipeline.prompts import EXAMPLE_MODULE
-from app.services import courses, games, live, media, studio
+from app.services import courses, games, live, media, pi_build, studio
 from app.services.voice import transcribe, voice_agent_token
 
 MAX_BODY = 200_000
@@ -400,6 +400,43 @@ async def get_game(game_id: str) -> JSONResponse:
         return JSONResponse({"error": "Unknown game"}, status_code=404)
     games.retry_game(game)
     return JSONResponse(game)
+
+
+# A game built by the pi runner is a page of its own. It lives under /api/ so the headset's dev server forwards it
+# with the rest of the API, and it is served from the same origin as the Lab.
+BACK_TO_LAB = (
+    '<a href="/" style="position:fixed;left:16px;top:16px;z-index:2147483647;padding:10px 16px;border-radius:999px;'
+    'background:rgba(20,20,28,.82);color:#fff;font:600 16px/1.2 system-ui,sans-serif;text-decoration:none">'
+    "&larr; Back to the Lab</a>"
+)
+
+
+@app.get("/api/play/{game_id}")
+async def play_root(game_id: str) -> Response:
+    return RedirectResponse(f"/api/play/{game_id}/", status_code=301)  # its pages load their files relative to the slash
+
+
+@app.get("/api/play/{game_id}/{path:path}")
+async def play(game_id: str, path: str) -> Response:
+    if not _HEX.fullmatch(game_id):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    game = games.get_game(game_id)
+    if game is None or not game.get("url"):
+        return JSONResponse({"error": "Unknown game"}, status_code=404)
+    root = pi_build.dist_dir(game_id).resolve()
+    file = (root / unquote(path)).resolve() if path else root
+    if not file.is_relative_to(root):
+        return JSONResponse({"error": "Forbidden"}, status_code=403)
+    if file.is_dir():
+        file = file / "index.html"
+    if not file.is_file():
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    if file.name == "index.html":
+        page = file.read_text(encoding="utf-8")
+        page = page.replace("</body>", f"{BACK_TO_LAB}</body>", 1) if "</body>" in page else page + BACK_TO_LAB
+        return HTMLResponse(page, headers={"cache-control": "no-cache"})
+    return FileResponse(file, media_type=CONTENT_TYPES.get(file.suffix.lower(), "application/octet-stream"),
+                        headers={"cache-control": "no-cache"})
 
 
 @app.get("/{full_path:path}")

@@ -17,6 +17,9 @@ export type GameSummary = {
   live?: LiveSummary;
   /** Its card picture exists (GET /api/games/<id>/picture): the game as it opens. */
   picture?: boolean;
+  /** Built by the pi runner (the server's GAME_MODE=pi): a page of its own at this address, not a module. */
+  url?: string;
+  builder?: 'pi';
 };
 export type Game = GameSummary & { code?: string };
 
@@ -54,7 +57,12 @@ export async function createGame(prompt: string): Promise<GameSummary> {
   return data as GameSummary;
 }
 
-/** A game with its code when it is ready. Asking for one that failed writes it again. */
+/** Leave the Lab for a game that is a page of its own; its page has a way back. */
+export function openGamePage(url: string): void {
+  window.location.assign(url);
+}
+
+/** A game with its code when it is ready. Asking for one that failed writes it again (not a pi-built one). */
 export async function fetchGame(id: string): Promise<Game> {
   const res = await fetch(`/api/games/${id}`);
   if (!res.ok) throw new Error(res.statusText || `HTTP ${res.status}`);

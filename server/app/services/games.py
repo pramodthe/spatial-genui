@@ -1,4 +1,7 @@
-"""Saved games. One is written at a time, on its own queue, apart from course lessons."""
+"""Saved games. One is written at a time, on its own queue, apart from course lessons.
+
+A game started with GAME_MODE=pi is built by the pi runner (services/pi_build.py) and is a page of its own, served
+at its `url`. Such a build is not repeated without being asked for: a failed or interrupted one stays failed."""
 
 from __future__ import annotations
 
@@ -13,7 +16,7 @@ from app.core.clock import js_round, now_iso
 from app.core.db import load_games, save_game
 from app.core.guard import attempt_calls, record_spend
 from app.pipeline.game import run_game
-from app.services import live, studio
+from app.services import live, pi_build, studio
 
 MAX_GAMES = 200
 _PANEL = re.compile(r"""kit\.panel\(\s*ui\s*,\s*\{[\s\S]{0,600}?\btitle:\s*(['"`])([^'"`\n]{2,40})\1""")
@@ -56,7 +59,10 @@ def load() -> None:
     _loaded = True
     for game in load_games():
         _games[game["id"]] = game
-        if game.get("status") == "writing":
+        if game.get("status") == "writing" and game.get("builder") == "pi":
+            game.update(status="failed", error="The server restarted while this game was being built. Ask for it again.")
+            save_game(game)
+        elif game.get("status") == "writing":
             queue(game)
 
 
@@ -81,6 +87,8 @@ def start_game(request: str) -> dict[str, Any]:
         "status": "writing",
         "createdAt": now_iso(),
     }
+    if pi_build.enabled():
+        game["builder"] = "pi"
     _games[game["id"]] = game
     save_game(game)
     queue(game)
@@ -88,7 +96,7 @@ def start_game(request: str) -> dict[str, Any]:
 
 
 def retry_game(game: dict[str, Any]) -> bool:
-    if game.get("status") != "failed":
+    if game.get("status") != "failed" or game.get("builder") == "pi":
         return False
     game["status"] = "writing"
     game.pop("error", None)
@@ -120,12 +128,21 @@ async def write(game: dict[str, Any]) -> None:
     try:
         with live.watching(live.game_key(game["id"])) as watcher:
             watcher.set_stage("designing")
-            result = await run_game(game["request"], thread_id=game["id"])
-        await record_spend(attempt_calls(result))
-        if not result.get("ok") or not result.get("code"):
-            raise RuntimeError(result.get("error") or "The game could not be written.")
-        game.update(status="ready", code=result["code"], model=result["model"], title=panel_title(result["code"]) or game["title"])
-        studio.keep_picture(f"game-{game['id']}", result.get("id"))
+            if game.get("builder") == "pi":
+                result = await pi_build.build(game, watcher)
+            else:
+                result = await run_game(game["request"], thread_id=game["id"])
+        if game.get("builder") == "pi":
+            await record_spend([{"model": result["model"], "usd": result["usd"]}])
+            if not result.get("ok"):
+                raise RuntimeError(result.get("error") or "The game could not be built.")
+            game.update(status="ready", url=result["url"], model=result["model"], title=result.get("title") or game["title"])
+        else:
+            await record_spend(attempt_calls(result))
+            if not result.get("ok") or not result.get("code"):
+                raise RuntimeError(result.get("error") or "The game could not be written.")
+            game.update(status="ready", code=result["code"], model=result["model"], title=panel_title(result["code"]) or game["title"])
+            studio.keep_picture(f"game-{game['id']}", result.get("id"))
     except Exception as exc:
         game.update(status="failed", error=str(exc)[:300])
     game["seconds"] = js_round((time.time() * 1000 - started) / 1000)

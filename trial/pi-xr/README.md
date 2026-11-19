@@ -84,6 +84,19 @@ node runner/report.mjs
 `run.mjs` leaves the game running in the emulator window; `node runner/show.mjs <name>` puts another built game
 there. One game at a time: the next run takes the last game's runtime down.
 
+## In the app
+
+With `GAME_MODE=pi` in `.env`, a game asked for in Muse's Lab is built by this runner instead of the app's own
+pipeline (`server/app/services/pi_build.py`), one at a time on the app's game queue, with the app's model and
+reasoning level. Its files go under `server/data/pi/` (`PI_XR_ARCHIVE`), so make the starter there once:
+
+```bash
+PI_XR_ARCHIVE=server/data/pi node trial/pi-xr/runner/make-template.mjs
+```
+
+A finished game is served at `/api/play/<id>/` and opens as a page of its own from the Play shelf. A failed or
+interrupted build stays failed until it is asked for again. Unset, the app builds as before.
+
 ## On a headset
 
 ```bash

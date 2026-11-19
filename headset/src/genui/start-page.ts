@@ -2,7 +2,7 @@ import { VisibilityState, type World } from '@iwsdk/core';
 import { APP_NAME, CARD_COLORS, COLORS, MASCOT_NAME } from './brand';
 import { isFolder, myCards, readyCards, type Card } from './cards';
 import { fetchCourseLesson, listCourses, type CourseSummary } from './courses';
-import { EXAMPLE_GAMES, createGame, fetchGame, listGames, loadExampleGame, type GameSummary } from './games';
+import { EXAMPLE_GAMES, createGame, fetchGame, listGames, loadExampleGame, openGamePage, type GameSummary } from './games';
 import { EXAMPLE_LESSONS } from './lessons';
 import { createMuseCanvas } from './muse-canvas';
 import { onChromeHidden, onLessonStatus, openWritten, startLesson, type LessonStatus } from './overlay';
@@ -434,6 +434,10 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
   async function openGame(id: string) {
     try {
       const game = await fetchGame(id);
+      if (game.status === 'ready' && game.url) {
+        openGamePage(game.url);
+        return;
+      }
       if (game.status === 'ready' && game.code) {
         preview(true);
         await openWritten(game.code, game.request, 'game');

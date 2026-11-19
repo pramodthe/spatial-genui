@@ -19,15 +19,28 @@ import { componentValues, consoleErrors, enterXR, pageLoads, reload, runSequence
 const hash = (file) => createHash('sha256').update(readFileSync(file)).digest('hex').slice(0, 16);
 const tail = (text, n = 500) => String(text ?? '').trim().slice(-n);
 
+export const COMPARISONS = ['gte', 'gt', 'lte', 'lt', 'ne'];
+/** A step's expected value, if it is malformed: a comparison object may only use the five comparisons. */
+export function badExpectation(wanted) {
+  if (wanted === null || typeof wanted !== 'object') return null;
+  if (Array.isArray(wanted)) return 'a list is not an expected value';
+  const keys = Object.keys(wanted);
+  const unknown = keys.filter((key) => !COMPARISONS.includes(key));
+  if (keys.length === 0) return 'an empty comparison';
+  return unknown.length ? `unknown comparison ${unknown.map((key) => `"${key}"`).join(', ')} (use ${COMPARISONS.join(', ')})` : null;
+}
+
 /** Does a GameState value meet what a step expects? A plain value must equal it; {gte|gt|lte|lt|ne} compare. */
 export function meets(actual, wanted) {
   if (wanted !== null && typeof wanted === 'object') {
+    if (badExpectation(wanted)) return false;
     return Object.entries(wanted).every(([op, v]) => (
-      op === 'gte' ? actual >= v : op === 'gt' ? actual > v : op === 'lte' ? actual <= v : op === 'lt' ? actual < v : op === 'ne' ? actual !== v : false));
+      op === 'gte' ? actual >= v : op === 'gt' ? actual > v : op === 'lte' ? actual <= v : op === 'lt' ? actual < v : actual !== undefined && actual !== v));
   }
   return typeof actual === 'number' && typeof wanted === 'number' ? Math.abs(actual - wanted) < 1e-6 : actual === wanted;
 }
-export const unmet = (state, expect = {}) => Object.entries(expect).filter(([key, wanted]) => !meets(state?.[key], wanted)).map(([key, wanted]) => `${key} is ${JSON.stringify(state?.[key])}, expected ${JSON.stringify(wanted)}`);
+export const unmet = (state, expect = {}) => Object.entries(expect).filter(([key, wanted]) => !meets(state?.[key], wanted)).map(([key, wanted]) => (
+  badExpectation(wanted) ? `${key}: ${badExpectation(wanted)}` : `${key} is ${JSON.stringify(state?.[key])}, expected ${JSON.stringify(wanted)}`));
 
 /** The rows of the design's Moves table (section 3): one hand step each. */
 export function movesOf(design) {
@@ -142,7 +155,8 @@ function staticChecks(game) {
   }
   const stampFile = join(game, '.pi-xr-template.json');
   if (existsSync(stampFile)) {
-    const stamp = JSON.parse(readFileSync(stampFile, 'utf8'));
+    let stamp = {};
+    try { stamp = JSON.parse(readFileSync(stampFile, 'utf8')); } catch { failures.push('.pi-xr-template.json was changed; it is fixed by the harness. Put it back as it was.'); }
     if (hash(join(game, 'package.json')) !== stamp.packageJson) failures.push('package.json was changed; it is fixed by the harness. Put it back as it was.');
     if (hash(join(game, 'vite.config.ts')) !== stamp.viteConfig) failures.push('vite.config.ts was changed; it is fixed by the harness. Put it back as it was.');
   }

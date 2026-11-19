@@ -13,6 +13,7 @@ import { TRIAL } from './paths.mjs';
 
 const IMAGE_MODEL = 'muse-image-1.0';
 const IMAGE_USD = 0.01; // Meta's price per picture (dev.meta.ai/docs/pricing-rate-limits, Nov 2026)
+const MODEL_HOLD_USD = 0.3; // what a 3D model is held at while it is made: a cold start's GPU time
 const GPU_USD_PER_S = 0.000842; // Modal's RTX PRO 6000, the GPU the TRELLIS app runs on: an estimate from wall time
 const SIZES = { '1:1': '1024x1024', '16:9': '1280x720', '9:16': '720x1280', '4:3': '1152x864', '3:4': '864x1152' };
 // OpenAI's image models, used as a quality reference: sides are multiples of 16, and a picture is priced by the
@@ -58,13 +59,25 @@ export async function startStudio({ game, run, key, limits = { images: 8, models
   const jobs = new Map();
   const ledger = [...previous]; // what the game's build already made counts against the same budget
   const used = (kind) => ledger.filter((row) => row.kind === kind && row.ok).length;
-  const spent = () => ({ images: used('image'), models: used('model-3d'), usd: +ledger.reduce((sum, row) => sum + (row.usd ?? 0), 0).toFixed(4), rows: ledger });
+  // Generations started and not yet recorded: they count against the limits from the moment they start, so two
+  // at once (a background job and a foreground one) cannot both pass. Each holds an estimate until it is recorded.
+  const pending = [];
+  const reserve = (kind, usd) => {
+    const hold = { kind, usd };
+    pending.push(hold);
+    return () => pending.splice(pending.indexOf(hold), 1);
+  };
+  const spent = () => ({
+    images: used('image'), models: used('model-3d'), usd: +ledger.reduce((sum, row) => sum + (row.usd ?? 0), 0).toFixed(4),
+    pendingUsd: +pending.reduce((sum, hold) => sum + hold.usd, 0).toFixed(4), rows: ledger,
+  });
   const record = (row) => { ledger.push(row); appendFileSync(ledgerFile, `${JSON.stringify(row)}\n`); };
   const overBudget = (kind) => {
     const now = spent();
-    if (kind === 'image' && now.images >= limits.images) return `This game has made ${now.images} pictures, the most it may. Use the ones it has, or shapes built in code.`;
-    if (kind === 'model-3d' && now.models >= limits.models) return `This game has made ${now.models} 3D models, the most it may. Build the rest from shapes in code.`;
-    if (now.usd >= limits.usd) return `This game's media budget ($${limits.usd}) is used. Build the rest from what exists and shapes in code.`;
+    const started = pending.filter((hold) => hold.kind === kind).length;
+    if (kind === 'image' && now.images + started >= limits.images) return `This game has made ${now.images} pictures, the most it may. Use the ones it has, or shapes built in code.`;
+    if (kind === 'model-3d' && now.models + started >= limits.models) return `This game has made ${now.models} 3D models, the most it may. Build the rest from shapes in code.`;
+    if (now.usd + now.pendingUsd >= limits.usd) return `This game's media budget ($${limits.usd}) is used. Build the rest from what exists and shapes in code.`;
     return null;
   };
   const inProject = (path) => {
@@ -77,6 +90,15 @@ export async function startStudio({ game, run, key, limits = { images: 8, models
     if (!ASPECT_RATIOS.includes(aspectRatio)) throw new Error(`aspectRatio is one of ${ASPECT_RATIOS.join(', ')}.`);
     const refused = overBudget('image');
     if (refused) throw new Error(refused);
+    const release = reserve('image', images?.provider === 'openai' ? OPENAI_USD.unknown : IMAGE_USD);
+    try {
+      return await drawImage({ prompt, aspectRatio, name, purpose });
+    } finally {
+      release();
+    }
+  }
+
+  async function drawImage({ prompt, aspectRatio, name, purpose }) {
     const id = slug(name) || `image-${ledger.length + 1}`;
     const started = Date.now();
     const reply = images?.provider === 'openai'
@@ -119,6 +141,15 @@ export async function startStudio({ game, run, key, limits = { images: 8, models
   async function makeModel({ imagePath, name, targetPolycount = 20000, texture = true }) {
     const refused = overBudget('model-3d');
     if (refused) throw new Error(refused);
+    const release = reserve('model-3d', MODEL_HOLD_USD);
+    try {
+      return await buildModel({ imagePath, name, targetPolycount, texture });
+    } finally {
+      release();
+    }
+  }
+
+  async function buildModel({ imagePath, name, targetPolycount, texture }) {
     const asked = inProject(imagePath);
     // The full-size original gives a better model than the 1024 copy.
     const original = join(dirname(asked), 'originals', basename(asked));

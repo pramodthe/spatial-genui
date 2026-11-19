@@ -92,7 +92,11 @@ export function runPi({ game, run, key, prompt, n = 0, sessionId = null, skills 
   // stopped, the agent must not go on working with nobody keeping its limits.
   const onSignal = (signal) => {
     try { process.kill(-child.pid, 'SIGTERM'); } catch { /* gone already */ }
-    process.exit(signal === 'SIGINT' ? 130 : 143);
+    // Whatever ignores SIGTERM (a shell, an MCP server, a build) is killed before the runner goes.
+    setTimeout(() => {
+      try { process.kill(-child.pid, 'SIGKILL'); } catch { /* gone already */ }
+      process.exit(signal === 'SIGINT' ? 130 : 143);
+    }, 3000);
   };
   for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.once(signal, onSignal);
   child.stdout.setEncoding('utf8');

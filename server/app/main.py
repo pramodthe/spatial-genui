@@ -416,8 +416,34 @@ async def play_root(game_id: str) -> Response:
     return RedirectResponse(f"/api/play/{game_id}/", status_code=301)  # its pages load their files relative to the slash
 
 
+_HOST = re.compile(r"^[A-Za-z0-9.\-]+(:\d{1,5})?$|^\[[0-9A-Fa-f:.]+\](:\d{1,5})?$")
+GAME_CDNS = "https://unpkg.com https://cdn.jsdelivr.net"  # where IWSDK's own code fetches fonts and decoders
+
+
+def _game_policy(request: Request, game_id: str) -> str:
+    """A game page is written by an agent and served beside the Lab: it may load and fetch its own files and the CDNs
+    IWSDK uses, not the Lab's API. Its own folder is named with the host the browser asked for and no scheme, which
+    matches both the headset's dev server (HTTPS, forwarding to this one) and a direct request."""
+    host = request.headers.get("host", "")
+    own = f"{host}/api/play/{game_id}/" if _HOST.fullmatch(host) else "'none'"
+    sources = f"{own} {GAME_CDNS}"
+    return "; ".join([
+        f"default-src {sources} blob: data:",
+        f"script-src {sources} blob: 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'",
+        f"worker-src {own} blob:",
+        f"connect-src {sources} blob: data:",
+        f"img-src {sources} https://api.dicebear.com blob: data:",
+        f"style-src {sources} 'unsafe-inline'",
+        f"font-src {sources} data:",
+        f"media-src {own} blob: data:",
+        "base-uri 'none'",
+        "form-action 'none'",
+        "frame-ancestors 'self'",
+    ])
+
+
 @app.get("/api/play/{game_id}/{path:path}")
-async def play(game_id: str, path: str) -> Response:
+async def play(game_id: str, path: str, request: Request) -> Response:
     if not _HEX.fullmatch(game_id):
         return JSONResponse({"error": "Not found"}, status_code=404)
     game = games.get_game(game_id)
@@ -434,7 +460,7 @@ async def play(game_id: str, path: str) -> Response:
     if file.name == "index.html":
         page = file.read_text(encoding="utf-8")
         page = page.replace("</body>", f"{BACK_TO_LAB}</body>", 1) if "</body>" in page else page + BACK_TO_LAB
-        return HTMLResponse(page, headers={"cache-control": "no-cache"})
+        return HTMLResponse(page, headers={"cache-control": "no-cache", "content-security-policy": _game_policy(request, game_id)})
     return FileResponse(file, media_type=CONTENT_TYPES.get(file.suffix.lower(), "application/octet-stream"),
                         headers={"cache-control": "no-cache"})
 

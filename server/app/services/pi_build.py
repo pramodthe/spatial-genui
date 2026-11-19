@@ -26,6 +26,7 @@ from app.services.live import Live
 RUNNER = REPO_ROOT / "trial" / "pi-xr" / "runner" / "run.mjs"
 # The runner stops itself well before this (its own minutes and dollars); this only ends a process that hangs.
 HUNG_S = 3 * 3600
+STOP_WAIT_S = 15.0  # how long a stopped runner gets to end its agent and write its results, before SIGKILL
 _PROGRESS = re.compile(r"\] ([\d.]+) min, (\d+) turns, (\d+) tool calls, \$([\d.]+)")
 _HEADING = re.compile(r"^#\s+(.+?)(?:\s+[-—–]\s+Design)?\s*$", re.MULTILINE)
 _PLAIN = re.compile(r"^[\x20-\x7e]{2,40}$")
@@ -110,6 +111,17 @@ def _title(game_id: str) -> str | None:
     return None
 
 
+async def _stop(process: asyncio.subprocess.Process) -> None:
+    """End the runner and everything it started, and wait for it: its results are final before they are read, and
+    nothing it started goes on spending."""
+    for sig, wait_s in ((signal.SIGTERM, STOP_WAIT_S), (signal.SIGKILL, None)):
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(process.pid, sig)
+        with contextlib.suppress(asyncio.TimeoutError):
+            await asyncio.wait_for(process.wait(), timeout=wait_s)
+            return
+
+
 async def build(game: dict[str, Any], watcher: Live) -> dict[str, Any]:
     """Build one game with the runner. { ok, url?, title?, error?, model, usd }."""
     if not (archive() / "template" / ".pi-xr-template.json").exists():
@@ -146,8 +158,7 @@ async def build(game: dict[str, Any], watcher: Live) -> dict[str, Any]:
         await asyncio.wait_for(follow(), timeout=HUNG_S)
     finally:
         if process.returncode is None:  # hung, or the server is stopping: the runner and its agent stop too
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(process.pid, signal.SIGTERM)
+            await _stop(process)
     row = _result(game["id"])
     usd = float(row["usd"]) if row and row.get("usd") is not None else 0.0
     if row and (row.get("check") or {}).get("ok") and dist_dir(game["id"]).joinpath("index.html").exists():

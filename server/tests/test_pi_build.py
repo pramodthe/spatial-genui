@@ -17,9 +17,13 @@ from app.services import games, pi_build
 
 # What the real runner leaves behind for a game: a production build, a design document, and a results row.
 STAND_IN = r'''
-import json, os, sys
+import json, os, signal, sys, time
 from pathlib import Path
 game_id = sys.argv[1]
+if os.environ.get("STAND_IN_HANG") == "1":  # a runner that hangs and ignores SIGTERM
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    print(f"[{game_id}] 1.0 min, 4 turns, 6 tool calls, $0.010 (0 pictures, 0 models), last tool: bash", flush=True)
+    time.sleep(120)
 archive = Path(os.environ["PI_XR_ARCHIVE"])
 assert Path(sys.argv[3]).read_text() == os.environ["STAND_IN_REQUEST"]
 passed = os.environ.get("STAND_IN_FAIL") != "1"
@@ -140,6 +144,8 @@ def test_the_game_page_is_served_with_a_way_back(pi_mode: Path) -> None:
         page = client.get(game["url"])
         assert page.status_code == 200
         assert "Back to the Lab" in page.text and "./assets/app.js" in page.text
+        policy = page.headers["content-security-policy"]
+        assert f"connect-src testserver/api/play/{game['id']}/ " in policy and "'self'" not in policy.split("frame-ancestors")[0]
         script = client.get(f"{game['url']}assets/app.js")
         assert script.status_code == 200 and "javascript" in script.headers["content-type"]
         assert client.get(f"/api/play/{game['id']}", follow_redirects=False).headers["location"] == game["url"]
@@ -170,3 +176,13 @@ def test_the_runner_gets_the_apps_model_and_reasoning_level(monkeypatch: pytest.
     assert pi_build.stage_of("Write canvas design doc as requirements checklist") == "designing"
     assert pi_build.stage_of("Implement painting studio core") == "building"
     assert json.loads(json.dumps(pi_build.play_url("abcd1242"))) == "/api/play/abcd1242/"
+
+
+@pytest.mark.asyncio
+async def test_a_hung_runner_that_ignores_sigterm_is_killed_and_the_game_fails(pi_mode: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("STAND_IN_HANG", "1")
+    monkeypatch.setattr(pi_build, "HUNG_S", 1.5)
+    monkeypatch.setattr(pi_build, "STOP_WAIT_S", 0.5)
+    game = await _built()
+    assert game["status"] == "failed"
+    assert game["seconds"] < 30

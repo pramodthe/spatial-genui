@@ -439,10 +439,7 @@ class LessonPickerSystem extends createSystem({
       if (!now) return { failed: 'the game is gone' };
       if (now.status === 'failed') return { failed: now.error ?? 'the game could not be made' };
       if (now.status !== 'ready') return null;
-      if (now.url) {
-        openGamePage(now.url);
-        return null;
-      }
+      if (now.url) return { page: now.url }; // the watch ends and the page opens, once
       const game = await fetchGame(row.id);
       if (game.code) this.titles.set(game.request, game.title);
       return game.code ? { code: game.code } : null;

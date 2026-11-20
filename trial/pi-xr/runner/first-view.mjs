@@ -12,6 +12,7 @@ export const VIEW = {
   panelSide: 45, panelUp: 25, panelDown: 35, // every corner of a panel inside this
   panelWide: 0.7, panelNear: 0.6, panelFar: 2.5, panelTurn: 60, // metres; degrees between its face and the player
   thingSide: 50, thingUp: 20, thingDown: 40, thingFar: 2, // a thing the hands must touch
+  labelGap: 0.2, // metres from a control the player presses to the words that say what it does
 };
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -46,14 +47,21 @@ export function panelAssets(game) {
 
 const round = (n) => Math.round(n);
 
+/** Metres from a point to a panel's rectangle (its face is its local XY plane, centred on its position). */
+function gapTo(board, point) {
+  const local = turn(sub(point, board.position), inverse(board.quaternion));
+  return Math.hypot(Math.max(0, Math.abs(local[0]) - board.wide / 2), Math.max(0, Math.abs(local[1]) - board.tall / 2), local[2]);
+}
+
 /**
- * Measure the first view. `touched` is the names the play-test's hand sequences target.
- * { failures: [text], panels: [...], things: [...] }
+ * Measure the first view. `touched` is the names the play-test's hand sequences target, `pressed` the ones it
+ * presses. { failures: [text], panels: [...], things: [...] }
  */
-export function firstView(game, touched = []) {
+export function firstView(game, touched = [], pressed = []) {
   const failures = [];
   const head = headPose(game);
   const panels = [];
+  const boards = []; // each panel's place and whether it shows words, for the controls below
   const assets = panelAssets(game);
   for (const node of sceneNodes(game).filter((n) => n.assetId && assets.has(n.assetId) && n.entityIndex !== null)) {
     const place = nodeTransform(game, node.nodeId);
@@ -76,6 +84,7 @@ export function firstView(game, touched = []) {
     const highest = Math.max(...corners.map((c) => c.up));
     const lowest = Math.min(...corners.map((c) => c.up));
     panels.push({ name, wide: +wide.toFixed(2), tall: +tall.toFixed(2), away: +centre.away.toFixed(2), side: round(centre.side), up: round(centre.up), facing: round(facing), clipped });
+    boards.push({ name, position: place.position, quaternion: place.quaternion, wide, tall, words: panel.elements.some((e) => e.state?.displayed !== false && String(e.text ?? '').trim()) });
     const where = `the panel "${name}" (${wide.toFixed(2)} m wide, ${centre.away.toFixed(2)} m away, ${Math.abs(round(centre.side))} degrees to the ${centre.side < 0 ? 'left' : 'right'})`;
     if (side > VIEW.panelSide) failures.push(`First view: ${where} reaches ${round(side)} degrees to the side, out of the first view (at most ${VIEW.panelSide}). Move it nearer the middle, beside the main thing, or make it smaller.`);
     if (highest > VIEW.panelUp || lowest < -VIEW.panelDown) failures.push(`First view: ${where} reaches from ${round(lowest)} to ${round(highest)} degrees up, outside the first view (${-VIEW.panelDown} to ${VIEW.panelUp}). Put its centre a little below eye height.`);
@@ -87,7 +96,8 @@ export function firstView(game, touched = []) {
 
   const things = [];
   const wanted = new Set(touched);
-  for (const target of targets(game)) {
+  const found = targets(game);
+  for (const target of found) {
     if (!wanted.has(target.name)) continue;
     const seen = seenFrom(head, [target.position.x, target.position.y, target.position.z]);
     things.push({ name: target.name, side: round(seen.side), up: round(seen.up), away: +seen.away.toFixed(2) });
@@ -97,5 +107,17 @@ export function firstView(game, touched = []) {
     else if (seen.away > VIEW.thingFar) failures.push(`First view: ${where}: a thing the hands must touch is within ${VIEW.thingFar} m.`);
   }
   for (const name of wanted) if (!things.some((t) => t.name === name)) things.push({ name, missing: true });
+
+  // A control says what it does. The Nov 20 seesaw's replay pressed four coloured boxes by name and passed; on the
+  // headset nobody could tell Start from Test, because none had a word on it.
+  for (const name of new Set(pressed)) {
+    const target = found.find((t) => t.name === name);
+    if (!target) continue;
+    const point = [target.position.x, target.position.y, target.position.z];
+    const near = boards.filter((b) => b.words).map((b) => ({ name: b.name, gap: gapTo(b, point) })).sort((a, b) => a.gap - b.gap)[0];
+    const thing = things.find((t) => t.name === name);
+    if (thing) thing.wordsAway = near ? +near.gap.toFixed(2) : null;
+    if (!near || near.gap > VIEW.labelGap) failures.push(`Controls: "${name}" is pressed but has no words on it or beside it (the nearest panel text is ${near ? `${near.gap.toFixed(2)} m away, on "${near.name}"` : 'nowhere'}). Every control says what it does in a word or two of UIKitML, on the control or within ${VIEW.labelGap} m of it; show only the controls that apply now.`);
+  }
   return { failures, panels, things };
 }

@@ -183,7 +183,9 @@ async function waitFor(game, component, wanted, timeoutMs) {
 }
 
 /** The names a play-test's hand sequences aim at: the things the player must be able to see and reach. */
-export const touchedBy = (playtest) => [...new Set((playtest.steps ?? []).flatMap((step) => (step.sequence?.steps ?? []).map((s) => (typeof s.target === 'string' ? s.target : s.target?.name)).filter(Boolean)))];
+export const touchedBy = (playtest, only = () => true) => [...new Set((playtest.steps ?? []).flatMap((step) => (step.sequence?.steps ?? []).filter(only).map((s) => (typeof s.target === 'string' ? s.target : s.target?.name)).filter(Boolean)))];
+/** The names it presses: the game's controls. */
+export const pressedBy = (playtest) => touchedBy(playtest, (s) => s.press !== undefined);
 
 /** Replay a play-test from a fresh reload, as a player with hands only. { failures, played, view, ... }
  * A page reload the replay did not ask for (a late reload after a build or a saved file) ends the XR session and
@@ -217,7 +219,7 @@ async function replayOnce(game, playtest, out) {
   if (state === null) return { failures: [...failures, `No entity has a ${component} component: the game's state cannot be read (the GameState contract).`], played, opening, targets: names };
   const first = state;
   // What the player sees before touching anything: measured here, while the game is as it opens.
-  const view = firstView(game, touchedBy(playtest));
+  const view = firstView(game, touchedBy(playtest), pressedBy(playtest));
   failures.push(...view.failures);
 
   for (const [i, step] of playtest.steps.entries()) {

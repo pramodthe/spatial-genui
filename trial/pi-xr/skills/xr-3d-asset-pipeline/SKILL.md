@@ -10,7 +10,7 @@ Use this skill for the art that ships in the game, not for scene structure or ga
 ## What to generate, and what to build in code
 
 - **Generate a 3D model** for the hero and at most two props that carry the idea (the beaver, the watering can, the gear). These are what the player looks at and holds.
-- **Generate a picture** for a ground or wall texture, a sign, a panel background, or a backdrop.
+- **Generate a picture** for a texture on a 3D surface (ground, wall, table top) or a sign the game needs. Never a backdrop, poster or picture standing as scenery: in a headset it reads as a board, not a place.
 - **Build in code** everything simple or changing: boxes, logs, water surfaces, markers, particles, gauges, anything whose shape the game animates.
 - **Take sounds from the library** (`../xr-game-studio/references/sounds.md`).
 

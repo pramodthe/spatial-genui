@@ -141,7 +141,8 @@ After the agent stops, `check.mjs` judges the game by IWSDK's command line, from
 3. The app loads with no console error of its own and enters XR with hands.
 4. The first view is measured from where the headset starts (`first-view.mjs`): every panel is wholly within 45
    degrees of straight ahead, at most 0.7 m wide, 0.6 to 2.5 m away, turned to the player, with no cut-off text;
-   every thing the play-test touches is within 50 degrees to the side and between 40 degrees down and 20 up.
+   every thing the play-test touches is within 50 degrees to the side and between 40 degrees down and 20 up;
+   every control it presses has panel text (what the control does) within 0.2 m of it.
 5. `playtest.json` (the hand steps the agent recorded with `playtest_record` as they worked) is replayed: every sequence completes,
    `GameState` changes at every step, there is a step for each move of the design, and the last state is a result
    with at least one star.

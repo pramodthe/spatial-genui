@@ -5,6 +5,7 @@ import { fetchCourseLesson, listCourses, type CourseSummary } from './courses';
 import { EXAMPLE_GAMES, SHOWCASE_GAMES, createGame, fetchGame, listGames, loadExampleGame, openGamePage, showcaseUrl, type GameSummary } from './games';
 import { EXAMPLE_LESSONS } from './lessons';
 import { createMuseCanvas } from './muse-canvas';
+import { playMuseIntro } from './muse-intro';
 import { onChromeHidden, onLessonStatus, openWritten, startLesson, type LessonStatus } from './overlay';
 import { askForMicrophone, microphoneState, type MicrophoneState } from './voice';
 
@@ -34,6 +35,7 @@ const STYLE = `
 .sp-wrap { max-width: 1160px; margin: 0 auto; padding: 22px 24px 56px; }
 .sp-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .sp-logo { display: block; height: 78px; width: auto; }
+.sp-logo-btn { appearance: none; border: 0; background: none; padding: 0; cursor: pointer; border-radius: 18px; }
 .sp-top-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 
 /* Buttons: toys you press. A hard shadow under each, which they sink into. */
@@ -242,7 +244,7 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
   page.innerHTML = `
     <div class="sp-wrap">
       <div class="sp-top">
-        <img class="sp-logo" src="${import.meta.env.BASE_URL}logo.png" alt="${APP_NAME}" />
+        <button class="sp-logo-btn" data-id="logo" type="button" title="Say hi to ${MASCOT_NAME} again"><img class="sp-logo" src="${import.meta.env.BASE_URL}logo.png" alt="${APP_NAME}" /></button>
         <div class="sp-top-actions">
           <button class="sp-btn" data-id="mic">${icon(ICONS.mic)}<span data-id="mic-text">Turn on my microphone</span></button>
           <button class="sp-btn sp-primary" data-id="enter">${icon(ICONS.goggles)}<span>Play in my room</span></button>
@@ -274,6 +276,37 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
   page.querySelector('.sp-dev')!.appendChild(developerTools);
   const muse = createMuseCanvas();
   find('muse').appendChild(muse.element);
+
+  // Muse says hello: big in the middle, then home to its face on the logo (muse-intro.ts). Once a visit, and again
+  // from the logo; never with reduced motion. The Muse beside the question waits out of sight, then waves.
+  const logo = find<HTMLButtonElement>('logo');
+  const logoPicture = logo.querySelector('img')!;
+  const hello = () => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || !logoPicture.complete || !logoPicture.width) return;
+    muse.element.style.visibility = 'hidden';
+    playMuseIntro(logoPicture, () => {
+      muse.element.style.visibility = '';
+      muse.wave();
+    });
+  };
+  logo.addEventListener('click', hello);
+  let greeted = false;
+  try {
+    greeted = sessionStorage.getItem('muse-hello') === '1';
+    sessionStorage.setItem('muse-hello', '1');
+  } catch {
+    // no storage (a private window): say hello anyway
+  }
+  if (!greeted) {
+    if (logoPicture.complete) hello();
+    else logoPicture.addEventListener('load', hello, { once: true });
+  }
+
+  // Muse watches the question box while the player types, and nods along.
+  const askInput = find<HTMLInputElement>('ask-input');
+  askInput.addEventListener('focus', () => muse.attend(askInput));
+  askInput.addEventListener('blur', () => muse.attend(null));
+  askInput.addEventListener('input', () => muse.nod());
 
   // While a game is previewed on this screen, the page folds into a bar at the top.
   const bar = el('div');
@@ -357,6 +390,7 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
     find('ask-message').textContent = `Asking ${MASCOT_NAME} for "${idea}"...`;
     try {
       await createGame(idea);
+      muse.cheer();
       input.value = '';
       find('ask-message').textContent = `${MASCOT_NAME} is making your game. Its card is under Your games, below; it takes 15 to 45 minutes.`;
       await refresh();

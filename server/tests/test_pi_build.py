@@ -146,6 +146,7 @@ def test_the_game_page_is_served_with_a_way_back(pi_mode: Path) -> None:
         assert "Back to the Lab" in page.text and "./assets/app.js" in page.text
         policy = page.headers["content-security-policy"]
         assert f"connect-src testserver/api/play/{game['id']}/ " in policy and "'self'" not in policy.split("frame-ancestors")[0]
+        assert f"worker-src testserver/api/play/{game['id']}/ blob: data:" in policy  # walking and turning in XR
         script = client.get(f"{game['url']}assets/app.js")
         assert script.status_code == 200 and "javascript" in script.headers["content-type"]
         assert client.get(f"/api/play/{game['id']}", follow_redirects=False).headers["location"] == game["url"]

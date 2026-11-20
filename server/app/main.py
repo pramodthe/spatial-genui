@@ -430,7 +430,7 @@ def _game_policy(request: Request, game_id: str) -> str:
     return "; ".join([
         f"default-src {sources} blob: data:",
         f"script-src {sources} blob: 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'",
-        f"worker-src {own} blob:",
+        f"worker-src {own} blob: data:",  # IWSDK starts its locomotion worker from a data: address
         f"connect-src {sources} blob: data:",
         f"img-src {sources} https://api.dicebear.com blob: data:",
         f"style-src {sources} 'unsafe-inline'",

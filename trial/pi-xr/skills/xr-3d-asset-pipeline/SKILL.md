@@ -9,12 +9,12 @@ Use this skill for the art that ships in the game, not for scene structure or ga
 
 ## What to generate, and what to build in code
 
-- **Generate a 3D model** for the hero and at most two props that carry the idea (the beaver, the watering can, the gear). These are what the player looks at and holds.
+- **Generate a 3D model** only for a thing whose shape a few boxes, cylinders, spheres and wedges cannot make: the beaver, the watering can, a tree. A block, a plank, a wedge, a ball or a table is built in code even when it is the main thing; give it a generated texture instead.
 - **Generate a picture** for a texture on a 3D surface (ground, wall, table top) or a sign the game needs. Never a backdrop, poster or picture standing as scenery: in a headset it reads as a board, not a place.
 - **Build in code** everything simple or changing: boxes, logs, water surfaces, markers, particles, gauges, anything whose shape the game animates.
 - **Take sounds from the library** (`../xr-game-studio/references/sounds.md`).
 
-Each picture and each model costs money and time (a model takes one to five minutes), and the game has a budget for both: plan them from the design's asset list and generate each once.
+Each picture and each model costs money and time (a picture takes seconds; a model one to ten minutes, the longest when the generator has to start), and the game has a budget for both: plan them from the design's asset list, generate each once, and leave what the game does not need unspent.
 
 ## A model from a picture
 

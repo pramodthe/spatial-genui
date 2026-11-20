@@ -1,5 +1,5 @@
 import type { CourseSummary, LiveSummary } from './courses';
-import { EXAMPLE_GAMES, type GameSummary } from './games';
+import { EXAMPLE_GAMES, SHOWCASE_GAMES, type GameSummary } from './games';
 import { EXAMPLE_LESSONS } from './lessons';
 
 /**
@@ -16,6 +16,7 @@ export type CardSource =
   | { kind: 'level'; courseId: string; index: number }
   | { kind: 'course'; id: string }
   | { kind: 'example-game'; index: number }
+  | { kind: 'example-page'; index: number }
   | { kind: 'example-lesson'; index: number };
 export type Card = {
   key: string;
@@ -137,6 +138,10 @@ export function readyCards(base: string): Card[] {
     ...EXAMPLE_GAMES.map((game, index): Card => ({
       key: `example-game-${game.saved}`, title: game.title, sub: game.sub, state: 'ready', mark: first(game.title),
       picture: `${base}games/${game.saved}.jpg`, source: { kind: 'example-game', index },
+    })),
+    ...SHOWCASE_GAMES.map((game, index): Card => ({
+      key: `example-page-${game.page}`, title: game.title, sub: game.sub, state: 'ready', mark: first(game.title),
+      picture: `${base}games/${game.page}.jpg`, source: { kind: 'example-page', index },
     })),
     ...EXAMPLE_LESSONS.map((lesson, index): Card => ({
       key: `example-lesson-${lesson.saved}`, title: lesson.title, sub: lesson.sub, state: 'ready', mark: first(lesson.title),

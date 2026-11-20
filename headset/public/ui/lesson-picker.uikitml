@@ -12,7 +12,7 @@
   bottom under a rolling wave with an ink edge (picker.ts sets the fill's height and rolls the wave), with how long is
   left on its yellow tag. The z-indexes keep the dots under the colour and the letter and tag above it. Colours are the app's (brand.ts); the font is the panel font,
   Inter. Sizes are design pixels: picker.ts scales the panel with setTargetDimensions and fills in the text, the
-  pictures and the states. Card slots: 8 ready-made, 12 of the player's own (the newest).
+  pictures and the states. Card slots: 12 ready-made, 12 of the player's own (the newest).
 -->
 <style>
   .dash {
@@ -749,6 +749,86 @@
             </div>
             <span id="ready-7-title" class="card-title">Game</span>
             <span id="ready-7-sub" class="card-sub">...</span>
+          </div>
+        </div>
+        <div id="ready-8" class="card tilt-0" style="display: none">
+          <div id="ready-8-face" class="card-face">
+            <div class="card-frame">
+              <div id="ready-8-block" class="card-block">
+                <img id="ready-8-dots" class="card-dots" src="ui/cards/dots.png" style="display: none" />
+                <div id="ready-8-fill" class="card-fill" style="display: none">
+                  <img id="ready-8-wave" class="card-wave" src="ui/cards/wave-green.png" />
+                </div>
+                <img id="ready-8-letter" class="card-letter" src="ui/cards/mark-A.png" style="display: none" />
+                <span id="ready-8-mark" class="card-mark">?</span>
+              </div>
+              <img id="ready-8-pic" class="card-pic" src="ui/muse.svg" object-fit="cover" style="display: none" />
+              <div id="ready-8-chip" class="card-chip" style="display: none">
+                <span id="ready-8-chip-label" class="card-chip-label">Being made</span>
+              </div>
+            </div>
+            <span id="ready-8-title" class="card-title">Game</span>
+            <span id="ready-8-sub" class="card-sub">...</span>
+          </div>
+        </div>
+        <div id="ready-9" class="card tilt-1" style="display: none">
+          <div id="ready-9-face" class="card-face">
+            <div class="card-frame">
+              <div id="ready-9-block" class="card-block">
+                <img id="ready-9-dots" class="card-dots" src="ui/cards/dots.png" style="display: none" />
+                <div id="ready-9-fill" class="card-fill" style="display: none">
+                  <img id="ready-9-wave" class="card-wave" src="ui/cards/wave-green.png" />
+                </div>
+                <img id="ready-9-letter" class="card-letter" src="ui/cards/mark-A.png" style="display: none" />
+                <span id="ready-9-mark" class="card-mark">?</span>
+              </div>
+              <img id="ready-9-pic" class="card-pic" src="ui/muse.svg" object-fit="cover" style="display: none" />
+              <div id="ready-9-chip" class="card-chip" style="display: none">
+                <span id="ready-9-chip-label" class="card-chip-label">Being made</span>
+              </div>
+            </div>
+            <span id="ready-9-title" class="card-title">Game</span>
+            <span id="ready-9-sub" class="card-sub">...</span>
+          </div>
+        </div>
+        <div id="ready-10" class="card tilt-2" style="display: none">
+          <div id="ready-10-face" class="card-face">
+            <div class="card-frame">
+              <div id="ready-10-block" class="card-block">
+                <img id="ready-10-dots" class="card-dots" src="ui/cards/dots.png" style="display: none" />
+                <div id="ready-10-fill" class="card-fill" style="display: none">
+                  <img id="ready-10-wave" class="card-wave" src="ui/cards/wave-green.png" />
+                </div>
+                <img id="ready-10-letter" class="card-letter" src="ui/cards/mark-A.png" style="display: none" />
+                <span id="ready-10-mark" class="card-mark">?</span>
+              </div>
+              <img id="ready-10-pic" class="card-pic" src="ui/muse.svg" object-fit="cover" style="display: none" />
+              <div id="ready-10-chip" class="card-chip" style="display: none">
+                <span id="ready-10-chip-label" class="card-chip-label">Being made</span>
+              </div>
+            </div>
+            <span id="ready-10-title" class="card-title">Game</span>
+            <span id="ready-10-sub" class="card-sub">...</span>
+          </div>
+        </div>
+        <div id="ready-11" class="card tilt-3" style="display: none">
+          <div id="ready-11-face" class="card-face">
+            <div class="card-frame">
+              <div id="ready-11-block" class="card-block">
+                <img id="ready-11-dots" class="card-dots" src="ui/cards/dots.png" style="display: none" />
+                <div id="ready-11-fill" class="card-fill" style="display: none">
+                  <img id="ready-11-wave" class="card-wave" src="ui/cards/wave-green.png" />
+                </div>
+                <img id="ready-11-letter" class="card-letter" src="ui/cards/mark-A.png" style="display: none" />
+                <span id="ready-11-mark" class="card-mark">?</span>
+              </div>
+              <img id="ready-11-pic" class="card-pic" src="ui/muse.svg" object-fit="cover" style="display: none" />
+              <div id="ready-11-chip" class="card-chip" style="display: none">
+                <span id="ready-11-chip-label" class="card-chip-label">Being made</span>
+              </div>
+            </div>
+            <span id="ready-11-title" class="card-title">Game</span>
+            <span id="ready-11-sub" class="card-sub">...</span>
           </div>
         </div>
       </div>

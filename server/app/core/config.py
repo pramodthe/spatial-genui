@@ -44,6 +44,7 @@ class Config:
     real_size_cache: Path
     checkpoint_db: Path
     static_dir: Path | None
+    showcase_dir: Path
     rate_limit_per_10_min: int
     daily_budget_usd: float
     course_build_all: bool
@@ -76,6 +77,8 @@ def load_config() -> Config:
         real_size_cache=_path("REAL_SIZE_CACHE", REPO_ROOT / "server" / "data" / "real-sizes.json"),
         checkpoint_db=_path("CHECKPOINT_DB", REPO_ROOT / "server" / "data" / "langgraph.sqlite"),
         static_dir=_path("STATIC_DIR", Path()) if os.environ.get("STATIC_DIR") else None,
+        # Ready-made pages for the Lab's showcase tiles, one folder each (built games; not in git).
+        showcase_dir=_path("SHOWCASE_DIR", REPO_ROOT / "server" / "data" / "showcase"),
         rate_limit_per_10_min=int(os.environ.get("RATE_LIMIT_PER_10_MIN") or 6),
         daily_budget_usd=float(os.environ.get("DAILY_BUDGET_USD") or 15),
         course_build_all=os.environ.get("COURSE_BUILD_ALL") == "1",

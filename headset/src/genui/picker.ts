@@ -15,7 +15,7 @@ import {
 import { CARD_COLORS, COLORS, MASCOT_NAME } from './brand';
 import { isFolder, myCards, readyCards, type Card } from './cards';
 import { createCourse, fetchCourse, fetchCourseLesson, listCourses, polishCourseLesson, type CourseSummary } from './courses';
-import { EXAMPLE_GAMES, createGame, fetchGame, listGames, loadExampleGame, openGamePage, type GameSummary } from './games';
+import { EXAMPLE_GAMES, SHOWCASE_GAMES, createGame, fetchGame, listGames, loadExampleGame, openGamePage, showcaseUrl, type GameSummary } from './games';
 import { makeCardGrabbable, type CardGrab } from './grab';
 import { boxAround, worldYaw } from './handle';
 import { capture, floorHeight, lessonCardsCentre, lessonModelBox, lessonPosition, roomFrame, zoomGame } from './host';
@@ -73,7 +73,7 @@ const PICKER_FALLBACK_HALF_HEIGHT_M = 0.3;
 const PICKER_LESSON_GAP_M = 0.08;
 const PICKER_MAX_DISTANCE_M = 1.0;
 // Card slots in the panel: all the ready-made ones, and the player's newest.
-const SLOTS: Record<Shelf, number> = { ready: 8, mine: 12 };
+const SLOTS: Record<Shelf, number> = { ready: 12, mine: 12 };
 // A controller's thumbstick scrolls the list this fast at full tilt (design pixels a second), past a small dead zone.
 const STICK_PX_PER_S = 1100;
 const STICK_DEADZONE = 0.2;
@@ -380,6 +380,7 @@ class LessonPickerSystem extends createSystem({
     if (!card) return;
     const source = card.source;
     if (source.kind === 'example-game') await this.openExampleGame(source.index);
+    else if (source.kind === 'example-page') openGamePage(showcaseUrl(SHOWCASE_GAMES[source.index].page));
     else if (source.kind === 'example-lesson') {
       const lesson = EXAMPLE_LESSONS[source.index];
       this.titles.set(lesson.prompt, lesson.title);
@@ -666,6 +667,8 @@ class LessonPickerSystem extends createSystem({
       this.tutor.stop();
       return;
     }
+    // Its sound is made now, in the pinch, before anything is awaited: made after the network it starts paused.
+    this.tutor.wake();
     // The browser can't ask for the microphone inside XR: it has to be turned on on the start page first.
     const allowed = await microphoneState();
     if (allowed === 'prompt' || allowed === 'denied') {
@@ -678,7 +681,7 @@ class LessonPickerSystem extends createSystem({
       await this.tutor.start(await this.tutorContext());
     } catch (err) {
       this.tutor.stop();
-      this.setVoice(err instanceof TutorUnavailable && err.permanent ? `${MASCOT_NAME} can't talk here yet. Use Make a game.` : `${MASCOT_NAME} didn't answer. Pinch to try again.`, 'off');
+      this.setVoice(err instanceof TutorUnavailable ? (err.permanent ? `${MASCOT_NAME} can't talk here yet. Use Make a game.` : ascii(err.message)) : `${MASCOT_NAME} didn't answer. Pinch to try again.`, 'off');
     } finally {
       this.voiceBusy = false;
     }

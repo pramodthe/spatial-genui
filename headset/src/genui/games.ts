@@ -24,16 +24,31 @@ export type GameSummary = {
 export type Game = GameSummary & { code?: string };
 
 /**
- * Example games, offered as tiles in the Play section: four learning games written by the app's pipeline (design,
+ * Example games, offered as tiles in the Play section: four games written by the app's pipeline (design,
  * planning pictures, the coder, the gate) and played on a Quest 3. `saved` names the ready-made module in
  * public/games/<saved>.json, so a tile opens at once.
  */
 export const EXAMPLE_GAMES = [
-  { title: 'Doodle Distance', sub: 'Fold a plane that flies far', saved: 'paper-plane' },
+  { title: 'Paper dart', sub: 'Fold a plane that flies far', saved: 'paper-plane' },
   { title: 'Fernbank Dam', sub: 'Deep water pushes harder', saved: 'river-dam' },
   { title: 'Windwoven Heights', sub: 'Tilt a kite into the wind', saved: 'kite-hill' },
-  { title: 'Grain by Grain', sub: 'Water and grit carve rock', saved: 'desert-canyon' },
+  { title: 'Tiny Rex Run', sub: 'Pinch to jump the cacti', saved: 'dino-runner' },
 ] as const;
+
+/**
+ * Showcase games, offered as tiles after the examples: games built as full pages of their own by the pi runner
+ * (trial/pi-xr). Their built files are not in git: the server serves each from its SHOWCASE_DIR at
+ * /api/showcase/<page>/ (showcaseUrl), and public/games/<page>.jpg is its tile's picture.
+ */
+export const SHOWCASE_GAMES = [
+  { title: 'Bramble Crossing', sub: 'Build a path home for a fox', page: 'bramble-crossing' },
+  { title: 'Atelier Solaire', sub: 'Paint a canvas with your hands', page: 'atelier-solaire' },
+  { title: 'Pixie Dust', sub: 'A superpower in your hands', page: 'pixie-dust' },
+] as const;
+
+export function showcaseUrl(page: string): string {
+  return `/api/showcase/${page}/`;
+}
 
 /** A ready-made game file (public/games/<id>.json). */
 export type SavedGame = { id: string; title: string; request: string; model: string; generatedAt: string; code: string };

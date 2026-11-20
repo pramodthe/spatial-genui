@@ -331,3 +331,48 @@ def test_a_fix_cut_off_by_a_restart_gives_back_the_game_as_it_was(pi_mode: Path)
     assert "fixing" not in game
     assert pi_build.dist_dir("abcd1246").joinpath("index.html").read_text() == "as it was"
     assert games._tail is None
+
+
+def test_without_the_runner_a_game_page_has_no_fix_box(pi_mode: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GAME_MODE")  # a server that cannot run the fix, such as the deployed one
+    game = {"id": "abcd1248", "request": "pump", "title": "Pump", "status": "ready", "createdAt": now_iso(),
+            "builder": "pi", "url": pi_build.play_url("abcd1248")}
+    save_game(game)
+    dist = pi_build.dist_dir(game["id"])
+    dist.mkdir(parents=True)
+    (dist / "index.html").write_text("<html><body>game</body></html>")
+    db.close_db()
+    from app.main import app
+
+    with TestClient(app) as client:
+        page = client.get(game["url"])
+        assert page.status_code == 200 and "Back to the Lab" in page.text
+        assert "lab-fix" not in page.text and "Tell Muse" not in page.text
+        assert "/api/games/" not in page.headers["content-security-policy"]
+
+
+def test_a_showcase_page_is_served_with_a_way_back_and_nothing_to_fix(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import dataclasses
+
+    from app.core import config as config_mod
+
+    showcase = tmp_path / "showcase"
+    (showcase / "fox-trail" / "assets").mkdir(parents=True)
+    (showcase / "fox-trail" / "index.html").write_text("<html><body><script src='./assets/app.js'></script></body></html>")
+    (showcase / "fox-trail" / "assets" / "app.js").write_text("console.log('fox')")
+    (tmp_path / "secret.txt").write_text("not served")
+    monkeypatch.setattr(config_mod, "config", dataclasses.replace(config_mod.config, showcase_dir=showcase))
+    db.close_db()
+    from app.main import app
+
+    with TestClient(app) as client:
+        page = client.get("/api/showcase/fox-trail/")
+        assert page.status_code == 200 and "Back to the Lab" in page.text and "lab-fix" not in page.text
+        policy = page.headers["content-security-policy"]
+        assert "connect-src testserver/api/showcase/fox-trail/ " in policy and "/api/games/" not in policy
+        script = client.get("/api/showcase/fox-trail/assets/app.js")
+        assert script.status_code == 200 and "javascript" in script.headers["content-type"]
+        assert client.get("/api/showcase/fox-trail", follow_redirects=False).headers["location"] == "/api/showcase/fox-trail/"
+        assert client.get("/api/showcase/no-such-game/").status_code == 404
+        assert client.get("/api/showcase/Fox_Trail/").status_code == 404
+        assert client.get("/api/showcase/fox-trail/..%2F..%2Fsecret.txt").status_code in (403, 404)

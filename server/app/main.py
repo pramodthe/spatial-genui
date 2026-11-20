@@ -481,16 +481,18 @@ _FIX_SCRIPT = """<script>(() => {
 })();</script>"""
 
 
-def _lab_bar(game_id: str) -> str:
-    """On a game page: the way back to the Lab, and a box to tell Muse what is wrong. The player is on this page when
-    they leave the game, so the fix is asked for here, about this game; the box follows the fix and offers the fixed
-    game when it is ready."""
+def _lab_bar(game_id: str | None = None) -> str:
+    """On a game page: the way back to the Lab, and for a game this server can fix (`game_id`), a box to tell Muse
+    what is wrong. The player is on this page when they leave the game, so the fix is asked for here, about this game;
+    the box follows the fix and offers the fixed game when it is ready."""
+    back = f'<a href="/" style="{_LINK}">&larr; Back to the Lab</a>'
+    if game_id is None:
+        return f'<div style="position:fixed;left:16px;top:16px;z-index:2147483647;display:flex;gap:8px">{back}</div>'
     return (
         "<style>#lab-fix[hidden]{display:none!important}</style>"  # its own display:flex would show it while hidden
         '<div style="position:fixed;left:16px;top:16px;z-index:2147483647;display:flex;flex-direction:column;'
         'align-items:flex-start;gap:8px">'
-        '<div style="display:flex;gap:8px;flex-wrap:wrap">'
-        f'<a href="/" style="{_LINK}">&larr; Back to the Lab</a>'
+        f'<div style="display:flex;gap:8px;flex-wrap:wrap">{back}'
         f'<button type="button" id="lab-fix-open" style="{_LINK}">Something wrong? Tell Muse</button></div>'
         f'<form id="lab-fix" hidden style="{_PANEL}">'
         '<label for="lab-fix-text" style="font-weight:700">What is wrong in this game?</label>'
@@ -513,18 +515,15 @@ _HOST = re.compile(r"^[A-Za-z0-9.\-]+(:\d{1,5})?$|^\[[0-9A-Fa-f:.]+\](:\d{1,5})?
 GAME_CDNS = "https://unpkg.com https://cdn.jsdelivr.net"  # where IWSDK's own code fetches fonts and decoders
 
 
-def _game_policy(request: Request, game_id: str) -> str:
-    """A game page is written by an agent and served beside the Lab: it may load and fetch its own files and the CDNs
-    IWSDK uses, and of the Lab's API only its own record, fix and live line. Its own folder is named with the host the browser asked for and no scheme, which
+def _page_policy(request: Request, folder: str, lab: tuple[str, ...] = ()) -> str:
+    """A game page is written by an agent and served beside the Lab: it may load and fetch its own files (`folder`)
+    and the CDNs IWSDK uses, and of the Lab's API only the paths in `lab` (a fixable game's record, fix and live line,
+    for the box on the page). Its own folder is named with the host the browser asked for and no scheme, which
     matches both the headset's dev server (HTTPS, forwarding to this one) and a direct request."""
     host = request.headers.get("host", "")
-    own = f"{host}/api/play/{game_id}/" if _HOST.fullmatch(host) else "'none'"
+    own = f"{host}/{folder}" if _HOST.fullmatch(host) else "'none'"
     sources = f"{own} {GAME_CDNS}"
-    # Of the Lab's API, only this game's own record, its fix and its live line, for the box on the page (_lab_bar).
-    record = (
-        f"{host}/api/games/{game_id} {host}/api/games/{game_id}/fix {host}/api/live/game-{game_id} "
-        if _HOST.fullmatch(host) else ""
-    )
+    record = "".join(f"{host}/{path} " for path in lab) if _HOST.fullmatch(host) else ""
     return "; ".join([
         f"default-src {sources} blob: data:",
         f"script-src {sources} blob: 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'",
@@ -540,14 +539,10 @@ def _game_policy(request: Request, game_id: str) -> str:
     ])
 
 
-@app.get("/api/play/{game_id}/{path:path}")
-async def play(game_id: str, path: str, request: Request) -> Response:
-    if not _HEX.fullmatch(game_id):
-        return JSONResponse({"error": "Not found"}, status_code=404)
-    game = games.get_game(game_id)
-    if game is None or not game.get("url"):
-        return JSONResponse({"error": "Unknown game"}, status_code=404)
-    root = pi_build.dist_dir(game_id).resolve()
+def _page_file(root: Path, path: str, policy: str, bar: str) -> Response:
+    """A file of a page that lives in `root`: its index.html with the Lab's bar and the page's policy, any other file
+    as it is. Nothing outside `root` is served."""
+    root = root.resolve()
     file = (root / unquote(path)).resolve() if path else root
     if not file.is_relative_to(root):
         return JSONResponse({"error": "Forbidden"}, status_code=403)
@@ -557,11 +552,44 @@ async def play(game_id: str, path: str, request: Request) -> Response:
         return JSONResponse({"error": "Not found"}, status_code=404)
     if file.name == "index.html":
         page = file.read_text(encoding="utf-8")
-        links = _lab_bar(game_id)  # game_id is hex: safe in the page
-        page = page.replace("</body>", f"{links}</body>", 1) if "</body>" in page else page + links
-        return HTMLResponse(page, headers={"cache-control": "no-cache", "content-security-policy": _game_policy(request, game_id)})
+        page = page.replace("</body>", f"{bar}</body>", 1) if "</body>" in page else page + bar
+        return HTMLResponse(page, headers={"cache-control": "no-cache", "content-security-policy": policy})
     return FileResponse(file, media_type=CONTENT_TYPES.get(file.suffix.lower(), "application/octet-stream"),
                         headers={"cache-control": "no-cache"})
+
+
+@app.get("/api/play/{game_id}/{path:path}")
+async def play(game_id: str, path: str, request: Request) -> Response:
+    if not _HEX.fullmatch(game_id):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    game = games.get_game(game_id)
+    if game is None or not game.get("url"):
+        return JSONResponse({"error": "Unknown game"}, status_code=404)
+    # The fix box only where this server can run the fix (GAME_MODE=pi on the machine with the runner).
+    fixable = pi_build.enabled()
+    lab = (f"api/games/{game_id}", f"api/games/{game_id}/fix", f"api/live/game-{game_id}") if fixable else ()
+    policy = _page_policy(request, f"api/play/{game_id}/", lab)
+    return _page_file(pi_build.dist_dir(game_id), path, policy, _lab_bar(game_id if fixable else None))  # hex: safe in the page
+
+
+_SHOWCASE = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")
+
+
+@app.get("/api/showcase/{name}")
+async def showcase_root(name: str) -> Response:
+    if not _SHOWCASE.fullmatch(name):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    return RedirectResponse(f"/api/showcase/{name}/", status_code=301)  # its files load relative to the slash
+
+
+@app.get("/api/showcase/{name}/{path:path}")
+async def showcase(name: str, path: str, request: Request) -> Response:
+    """A ready-made page for one of the Lab's showcase tiles (SHOWCASE_DIR/<name>/, a built game): served as a game
+    page is, with its policy and the way back, and nothing to fix."""
+    root = config_mod.config.showcase_dir / name
+    if not _SHOWCASE.fullmatch(name) or not (root / "index.html").is_file():
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    return _page_file(root, path, _page_policy(request, f"api/showcase/{name}/"), _lab_bar())
 
 
 @app.get("/{full_path:path}")

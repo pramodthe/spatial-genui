@@ -2,7 +2,7 @@ import { VisibilityState, type World } from '@iwsdk/core';
 import { APP_NAME, CARD_COLORS, COLORS, MASCOT_NAME } from './brand';
 import { isFolder, myCards, readyCards, type Card } from './cards';
 import { fetchCourseLesson, listCourses, type CourseSummary } from './courses';
-import { EXAMPLE_GAMES, createGame, fetchGame, listGames, loadExampleGame, openGamePage, type GameSummary } from './games';
+import { EXAMPLE_GAMES, SHOWCASE_GAMES, createGame, fetchGame, listGames, loadExampleGame, openGamePage, showcaseUrl, type GameSummary } from './games';
 import { EXAMPLE_LESSONS } from './lessons';
 import { createMuseCanvas } from './muse-canvas';
 import { onChromeHidden, onLessonStatus, openWritten, startLesson, type LessonStatus } from './overlay';
@@ -376,6 +376,8 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
     } else if (source.kind === 'example-lesson') {
       preview(true);
       void startLesson(EXAMPLE_LESSONS[source.index].prompt);
+    } else if (source.kind === 'example-page') {
+      openGamePage(showcaseUrl(SHOWCASE_GAMES[source.index].page));
     } else if (source.kind === 'example-game') {
       void (async () => {
         try {

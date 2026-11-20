@@ -614,7 +614,7 @@ class LessonPickerSystem extends createSystem({
         this.courses = [course, ...this.courses.filter((c) => c.id !== course.id)];
         this.listCards();
         this.pollSoon();
-        return { ok: true, title: course.title, note: 'Planned. Its levels are being made now, each as a card under Your games; the first takes about 15 minutes.' };
+        return { ok: true, title: course.title, note: 'Planned. Its levels are being made now, each as a card under Your games; the first takes about 10 minutes.' };
       },
       listCourses: async () => {
         await this.refreshCourses();
@@ -627,7 +627,7 @@ class LessonPickerSystem extends createSystem({
         const lesson = course.lessons[number - 1];
         if (!lesson) return { ok: false, error: `"${course.title}" has ${course.lessons.length} levels.` };
         await this.openLevel(course.id, number - 1);
-        return { ok: true, course: course.title, lesson: lesson.title, state: lesson.status === 'ready' ? 'opened in the room' : 'being made; it takes about 15 minutes' };
+        return { ok: true, course: course.title, lesson: lesson.title, state: lesson.status === 'ready' ? 'opened in the room' : 'being made; it takes about 10 minutes' };
       },
       currentLesson: () => {
         const prompt = this.status.prompt;

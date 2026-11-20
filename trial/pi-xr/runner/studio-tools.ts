@@ -9,6 +9,7 @@
 //   generate_3d_asset      one 3D model from a generated picture (TRELLIS.2)
 //   playtest_record        run one hand sequence and, when it worked, write it into playtest.json
 //   playtest_replay        replay playtest.json from a fresh reload, as the independent check does
+//   playtest_view          the first view only, from a fresh reload: the quick layout check
 import { Type } from 'typebox';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 
@@ -100,7 +101,7 @@ export default function studioTools(pi: ExtensionAPI): void {
     promptSnippet: 'Run one hand sequence and record it as a step of playtest.json when it worked',
     promptGuidelines: [
       'Write playtest.json only through playtest_record, one step per move in order, then Start and the round: the tool keeps the file in the format the independent check replays.',
-      'Run playtest_replay before finishing: it reloads the page and replays playtest.json exactly as the independent check will, and reports the first view (panel size and place).',
+      'Check the layout with playtest_view after placing or moving things (about 15 s). Run playtest_replay once the game is complete (about 40 s): it reloads the page and replays playtest.json exactly as the independent check will; run it again only after fixing what it reported.',
     ],
     parameters: Type.Object({
       id: Type.String({ minLength: 1, maxLength: 40, description: 'The step\'s id: lower-case letters, digits and dashes, such as "move-1", "start", "round".' }),
@@ -123,6 +124,15 @@ export default function studioTools(pi: ExtensionAPI): void {
     promptSnippet: 'Replay playtest.json from a fresh reload, as the independent check does',
     parameters: Type.Object({}),
     execute: (_id, input, signal, onUpdate) => studio('/playtest/replay', input, signal, onUpdate, 'replaying the game'),
+  });
+
+  pi.registerTool({
+    name: 'playtest_view',
+    label: 'Check First View',
+    description: 'Reload the page, enter XR with hands and measure only the first view, without playing: each panel\'s size, distance and angle, where each thing to touch is, and whether every control has words beside it, with the same limits as the independent check. About 15 seconds. The page is left reloaded.',
+    promptSnippet: 'Measure the first view (layout only) from a fresh reload, in about 15 seconds',
+    parameters: Type.Object({}),
+    execute: (_id, input, signal, onUpdate) => studio('/playtest/view', input, signal, onUpdate, 'measuring the first view'),
   });
 
   pi.registerTool({

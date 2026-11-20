@@ -148,7 +148,8 @@ After the agent stops, `check.mjs` judges the game by IWSDK's command line, from
    with at least one star.
 
 Generated art the game does not load is reported as a note. When the check fails, the same pi session gets the
-failures as its next message, up to twice. The agent can run the same replay itself with `playtest_replay`.
+failures as its next message, up to twice. The agent can run the same replay itself with `playtest_replay`, and
+measure only the first view with `playtest_view` (about 15 s, nothing played) while it places things.
 
 ## Safety
 

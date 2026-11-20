@@ -14,7 +14,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkCanvas, mainDocument, readAssets } from './canvas.mjs';
 import { firstView } from './first-view.mjs';
-import { componentValues, consoleErrors, enterXR, pageLoads, reload, runSequence, screenshot, settled, sleep, targets, up, xrStatus } from './iwsdk.mjs';
+import { componentValues, consoleErrors, enterXR, pageLoads, ready, reload, runSequence, screenshot, settled, sleep, targets, up, xrStatus } from './iwsdk.mjs';
 
 const hash = (file) => createHash('sha256').update(readFileSync(file)).digest('hex').slice(0, 16);
 const tail = (text, n = 500) => String(text ?? '').trim().slice(-n);
@@ -189,20 +189,30 @@ export const pressedBy = (playtest) => touchedBy(playtest, (s) => s.press !== un
 
 /** Replay a play-test from a fresh reload, as a player with hands only. { failures, played, view, ... }
  * A page reload the replay did not ask for (a late reload after a build or a saved file) ends the XR session and
- * resets the game under it; that says nothing about the game, so the file is then played once more from the start. */
-export async function replay(game, playtest, out) {
-  const first = await replayOnce(game, playtest, out);
+ * resets the game under it; that says nothing about the game, so the file is then played once more from the start.
+ * `viewOnly` stops after the first view, measuring every target the runtime lists as well as the file's: the
+ * agent's quick layout check (about 15 s; the whole replay takes about 40). `start: false` is for the agent's
+ * tools: the harness owns the runtime, so a page that is not ready is reported after 15 s instead of started. */
+export async function replay(game, playtest, out, { viewOnly = false, start = true } = {}) {
+  const first = await replayOnce(game, playtest, out, viewOnly, start);
   if (!first.pageReloaded) return first;
-  const second = await replayOnce(game, playtest, out);
+  const second = await replayOnce(game, playtest, out, viewOnly, start);
   if (second.pageReloaded) second.failures.push('The page reloaded by itself during the replay, twice: something keeps reloading the app (a file written while it runs, or a dev-server restart).');
   return { ...second, restarted: true };
 }
 
-async function replayOnce(game, playtest, out) {
+async function readyWithin(game, ms) {
+  for (const end = Date.now() + ms; Date.now() < end; await sleep(1500)) if (ready(game)) return true;
+  return false;
+}
+
+async function replayOnce(game, playtest, out, viewOnly = false, start = true) {
   const failures = [];
   const played = [];
   const component = playtest.state || 'GameState';
-  if (!(await up(game))) return { failures: ['The dev runtime is not ready (iwsdk dev status).'], played };
+  if (start ? !(await up(game)) : !(await readyWithin(game, 15000))) {
+    return { failures: [start ? 'The dev runtime is not ready (iwsdk dev status).' : 'The page is not ready: it may not compile, or it is still loading. Run npm run typecheck, read browser_get_console_logs, then try again.'], played };
+  }
   const since = Date.now();
   if (!(await reload(game))) return { failures: ['The app did not come back after a reload.'], played };
   await settled(game);
@@ -219,8 +229,9 @@ async function replayOnce(game, playtest, out) {
   if (state === null) return { failures: [...failures, `No entity has a ${component} component: the game's state cannot be read (the GameState contract).`], played, opening, targets: names };
   const first = state;
   // What the player sees before touching anything: measured here, while the game is as it opens.
-  const view = firstView(game, touchedBy(playtest), pressedBy(playtest));
+  const view = firstView(game, viewOnly ? [...new Set([...touchedBy(playtest), ...names])] : touchedBy(playtest), pressedBy(playtest));
   failures.push(...view.failures);
+  if (viewOnly) return { failures, played, opening, targets: names, view: { panels: view.panels, things: view.things }, firstState: first };
 
   for (const [i, step] of playtest.steps.entries()) {
     const label = `step ${i + 1} (${step.id ?? 'no id'})`;

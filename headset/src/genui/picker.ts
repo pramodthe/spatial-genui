@@ -15,7 +15,7 @@ import {
 import { CARD_COLORS, COLORS, MASCOT_NAME } from './brand';
 import { isFolder, myCards, readyCards, type Card } from './cards';
 import { createCourse, fetchCourse, fetchCourseLesson, listCourses, polishCourseLesson, type CourseSummary } from './courses';
-import { EXAMPLE_GAMES, createGame, fetchGame, listGames, loadExampleGame, openGamePage, type GameSummary } from './games';
+import { EXAMPLE_GAMES, SHOWCASE_GAMES, createGame, fetchGame, listGames, loadExampleGame, openGamePage, showcaseUrl, type GameSummary } from './games';
 import { makeCardGrabbable, type CardGrab } from './grab';
 import { boxAround, worldYaw } from './handle';
 import { capture, floorHeight, lessonCardsCentre, lessonModelBox, lessonPosition, roomFrame, zoomGame } from './host';
@@ -73,7 +73,7 @@ const PICKER_FALLBACK_HALF_HEIGHT_M = 0.3;
 const PICKER_LESSON_GAP_M = 0.08;
 const PICKER_MAX_DISTANCE_M = 1.0;
 // Card slots in the panel: all the ready-made ones, and the player's newest.
-const SLOTS: Record<Shelf, number> = { ready: 8, mine: 12 };
+const SLOTS: Record<Shelf, number> = { ready: 12, mine: 12 };
 // A controller's thumbstick scrolls the list this fast at full tilt (design pixels a second), past a small dead zone.
 const STICK_PX_PER_S = 1100;
 const STICK_DEADZONE = 0.2;
@@ -380,6 +380,7 @@ class LessonPickerSystem extends createSystem({
     if (!card) return;
     const source = card.source;
     if (source.kind === 'example-game') await this.openExampleGame(source.index);
+    else if (source.kind === 'example-page') openGamePage(showcaseUrl(SHOWCASE_GAMES[source.index].page));
     else if (source.kind === 'example-lesson') {
       const lesson = EXAMPLE_LESSONS[source.index];
       this.titles.set(lesson.prompt, lesson.title);

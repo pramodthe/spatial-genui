@@ -161,7 +161,7 @@ const ICONS = {
 const icon = (paths: string) =>
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
 
-const WAIT = 'Muse turns it into a game in about 15 minutes. Play one of these while you wait.';
+const WAIT = 'Muse turns it into a game in 15 to 45 minutes. Play one of these while you wait.';
 const MIC_TEXT: Record<MicrophoneState, string> = {
   granted: 'Microphone on',
   prompt: 'Turn on my microphone',
@@ -358,7 +358,7 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
     try {
       await createGame(idea);
       input.value = '';
-      find('ask-message').textContent = `${MASCOT_NAME} is making your game. Its card is under Your games, below; it takes about 15 minutes.`;
+      find('ask-message').textContent = `${MASCOT_NAME} is making your game. Its card is under Your games, below; it takes 15 to 45 minutes.`;
       await refresh();
     } catch (err) {
       find('ask-message').textContent = `That didn't work: ${(err as Error).message}`;

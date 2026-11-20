@@ -42,6 +42,8 @@ const plank = createScenePrimitiveObject({ geometry: { type: 'box', size: [1.8, 
 
 Geometry: `box` (`size` [x, y, z]), `roundedBox` (`size`, `radius`), `sphere` (`radius`), `cylinder` (`radius`, `height`, or `radiusTop` and `radiusBottom`), `cone` (`radius`, `height`), `capsule` (`radius`, `length`), `plane` (`size` [x, y]), `torus` (`radius`, `tube`, `arcDeg`), `extrude` (`points`, `depth`), `lathe` (`profile`), `tube` (`points`, `radius`). The origin is the shape's centre.
 
+Which way a tilt goes: three.js turns counter-clockwise as the player sees it, so `rotation.z > 0` tips a part's top to the left (−x) and `rotation.z < 0` to the right. An A-frame's left leg (at −x) leans in with a negative `rotation.z`, its right leg with a positive one; the other way round the legs make a V. Check a tilted part by its ends: its top is at x − sin(rotation.z) × half its height.
+
 ## A generated texture on a shape
 
 Copy it to `public/textures/`, register it in `src/assets.ts` (`'wood-grain': { url: publicAssetUrl('textures/wood-grain.png'), type: AssetType.Texture }`), and apply it in a system once the world is up. Build the URL from `import.meta.env.BASE_URL`: the game is served from a sub-folder.

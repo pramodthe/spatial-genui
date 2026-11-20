@@ -26,11 +26,12 @@ Read the picture. Take from it the layout (what is where, what is big), the colo
 - Protect the space between the player's eyes and the main thing: no panel, sign or effect in front of it.
 - The player starts at the origin with their eyes 1.6 m up, looking along -Z. Put the work surface about 1.05 m up and the things to touch 0.6 to 0.7 m in front, so each is within 50 degrees to the side and no more than 40 degrees below straight ahead. A table 0.9 m up puts everything on the bottom edge of the view.
 - The panel stands beside the playfield, 0.8 to 1.2 m from the player, at or just below eye height (1.2 to 1.5 m up), turned to face them. It is never above the head, behind the player or at the far side of the scene.
-- The whole panel is within 45 degrees of straight ahead: with its centre 1 m away and 25 degrees to one side, a 0.6 m panel fits. `playtest_replay` measures this and the things to touch, and the independent check fails a game that breaks it.
+- The whole panel is within 45 degrees of straight ahead: with its centre 1 m away and 25 degrees to one side, a 0.6 m panel fits. `playtest_view` measures this and the things to touch in about 15 seconds; the replay and the independent check fail a game that breaks it.
 - Keep it small: a panel or a sign is at most 0.6 m wide and 0.4 m tall. Nothing wider than 0.5 m stands within 1 m of the player except the main thing of the game. A big board close to the eyes hides the game it describes.
 - All of a panel's text sits inside it with a margin. Long lines are cut, not shrunk: see it in a screenshot before trusting it.
 - Show only what the player needs now: the goal in one sentence, then one `why` at a time, the measure during the round, the stars after it. No walls of instructions.
 - Text is large: a line of body text at least 3 cm tall at 1 m. Prefer a number with its unit to a sentence.
+- Use only plain keyboard characters in panel text (letters, digits, basic punctuation): the panel font draws a box for others, such as the "·" in "N·m". Write "N m".
 - Use the scene itself for feedback before the panel: a glow on the next thing to touch, a part that moves, a colour that changes.
 - Do not cover the view with blur, vignettes or head-locked overlays.
 

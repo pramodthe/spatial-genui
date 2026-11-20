@@ -267,6 +267,7 @@ export async function startStudio({ game, run, key, limits = { images: 8, models
   const routes = {
     '/playtest/record': (body) => playtest('record', body),
     '/playtest/replay': () => playtest('replay'),
+    '/playtest/view': () => playtest('view'),
     '/plan': async (body) => {
       const steps = (body.plan ?? []).map((s) => ({ step: String(s.step ?? '').trim(), status: s.status }));
       if (!steps.length || steps.some((s) => !s.step)) throw new Error('A plan is a list of { step, status }; steps cannot be blank.');

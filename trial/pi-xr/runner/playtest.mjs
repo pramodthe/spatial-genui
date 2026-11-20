@@ -60,7 +60,7 @@ export async function replayAll(game) {
   if (!existsSync(file)) throw new Error('There is no playtest.json yet: record each working step with playtest_record.');
   const playtest = JSON.parse(readFileSync(file, 'utf8'));
   if (!Array.isArray(playtest.steps) || playtest.steps.length === 0) throw new Error('playtest.json has no steps: record each working step with playtest_record.');
-  const result = await replay(game, playtest, null);
+  const result = await replay(game, playtest, null, { start: false });
   const lines = result.played.map((p) => `step ${p.step} (${p.id}): ${p.ok ? 'ok' : 'FAILED'} ${JSON.stringify(p.state)}`);
   const view = (result.view?.panels ?? []).map((p) => `panel "${p.name}": ${p.wide} m wide, ${p.away} m away, ${p.side} degrees to the side`).join('; ');
   const text = [
@@ -72,11 +72,27 @@ export async function replayAll(game) {
   return { text, passed: result.failures.length === 0 };
 }
 
+/** Measure the first view only: reload, enter XR, panels and the things to touch, no hand steps. */
+export async function viewOnly(game) {
+  const file = join(game, 'playtest.json');
+  const playtest = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : { steps: [] };
+  const result = await replay(game, playtest, null, { viewOnly: true, start: false });
+  const panels = (result.view?.panels ?? []).map((p) => `panel "${p.name}": ${p.wide} m wide, ${p.away} m away, ${p.side} degrees to the side, ${p.up} up`);
+  const things = (result.view?.things ?? []).filter((t) => !t.missing).map((t) => `"${t.name}": ${t.side} degrees to the side, ${t.up} up, ${t.away} m away`);
+  const text = [
+    `${result.failures.length ? 'FIRST VIEW FAILED' : 'First view passed'} (layout only; nothing was played).`,
+    panels.length ? `Panels: ${panels.join('; ')}.` : '', things.length ? `Things to touch: ${things.join('; ')}.` : '',
+    ...result.failures.map((f) => `- ${f}`),
+    'The page was reloaded: enter XR and set hand mode again before more hand work.',
+  ].filter(Boolean).join('\n');
+  return { text, passed: result.failures.length === 0 };
+}
+
 const [folder, action, payload] = process.argv.slice(2);
 if (folder && action) {
   try {
     const game = resolve(folder);
-    const result = action === 'record' ? await recordStep(game, JSON.parse(payload ?? '{}')) : await replayAll(game);
+    const result = action === 'record' ? await recordStep(game, JSON.parse(payload ?? '{}')) : action === 'view' ? await viewOnly(game) : await replayAll(game);
     console.log(JSON.stringify({ ok: true, ...result }));
   } catch (err) {
     console.log(JSON.stringify({ ok: false, error: String(err?.message ?? err) }));

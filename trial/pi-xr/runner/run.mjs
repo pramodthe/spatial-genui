@@ -181,6 +181,7 @@ const row = {
   firstTypecheckPassMin: stats.firstTypecheckPassS === null ? null : +(stats.firstTypecheckPassS / 60).toFixed(1),
   firstSequenceMin: stats.firstSequenceS === null ? null : +(stats.firstSequenceS / 60).toFixed(1),
   followUps, stop: ended.stopped ?? stats.stopReason ?? `exit ${ended.code}`,
+  answer: stats.lastSaid.slice(0, 1200),
   check: { ok: checked.ok, failures: checked.failures, warnings: checked.warnings ?? [], moves: checked.moves, steps: checked.steps, played: (checked.played ?? []).filter((p) => p.ok).length, lastState: checked.lastState ?? null },
   changed: git('diff', '--cached', '--shortstat', 'HEAD').stdout.trim(),
   othersUntouched: { 8081: listening(8081) === others[8081], 8787: listening(8787) === others[8787] }, game, run, urls,

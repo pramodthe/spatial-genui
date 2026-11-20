@@ -282,7 +282,8 @@ const LIVE_POLL_MS = 1000;
 
 type LiveView = { line: string; stage: string; detail: string; parts: string[]; seq: number; meshes: number; done: boolean; ok: boolean; code?: string };
 /** Where the shelf has the lesson or game: its code once it is written, or why it failed. */
-export type LiveOutcome = { code?: string; failed?: string } | null;
+/** What the shelf has once the writer is done: the module, a page of its own (a pi-built game), or why it failed. */
+export type LiveOutcome = { code?: string; page?: string; failed?: string } | null;
 
 /**
  * Watch a course lesson or a game while the server writes it (GET /api/live/<key>, the server's live.py): the
@@ -333,6 +334,13 @@ export async function watchLive(key: string, prompt: string, kind: LessonKind, o
           liveWatch++;
           streaming = false;
           await mountWritten(shelf.code);
+          return state;
+        }
+        if (shelf?.page) {
+          liveWatch++;
+          streaming = false;
+          setStatus('Opening the game…');
+          window.location.assign(shelf.page);
           return state;
         }
         if (shelf?.failed) {

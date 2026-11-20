@@ -15,7 +15,7 @@ import {
 import { CARD_COLORS, COLORS, MASCOT_NAME } from './brand';
 import { isFolder, myCards, readyCards, type Card } from './cards';
 import { createCourse, fetchCourse, fetchCourseLesson, listCourses, polishCourseLesson, type CourseSummary } from './courses';
-import { EXAMPLE_GAMES, createGame, fetchGame, listGames, loadExampleGame, type GameSummary } from './games';
+import { EXAMPLE_GAMES, createGame, fetchGame, listGames, loadExampleGame, openGamePage, type GameSummary } from './games';
 import { makeCardGrabbable, type CardGrab } from './grab';
 import { boxAround, worldYaw } from './handle';
 import { capture, floorHeight, lessonCardsCentre, lessonModelBox, lessonPosition, roomFrame, zoomGame } from './host';
@@ -414,9 +414,14 @@ class LessonPickerSystem extends createSystem({
       this.watchGame(row);
       return;
     }
+    if (row.status === 'ready' && row.url) {
+      openGamePage(row.url);
+      return;
+    }
     try {
       const game = await fetchGame(row.id);
-      if (game.status === 'ready' && game.code) {
+      if (game.status === 'ready' && game.url) openGamePage(game.url);
+      else if (game.status === 'ready' && game.code) {
         this.titles.set(game.request, game.title);
         handlers?.open(game.code, game.request, 'game');
       }
@@ -434,6 +439,7 @@ class LessonPickerSystem extends createSystem({
       if (!now) return { failed: 'the game is gone' };
       if (now.status === 'failed') return { failed: now.error ?? 'the game could not be made' };
       if (now.status !== 'ready') return null;
+      if (now.url) return { page: now.url }; // the watch ends and the page opens, once
       const game = await fetchGame(row.id);
       if (game.code) this.titles.set(game.request, game.title);
       return game.code ? { code: game.code } : null;

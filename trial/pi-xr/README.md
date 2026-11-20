@@ -84,6 +84,30 @@ node runner/report.mjs
 `run.mjs` leaves the game running in the emulator window; `node runner/show.mjs <name>` puts another built game
 there. One game at a time: the next run takes the last game's runtime down.
 
+## In the app
+
+With `GAME_MODE=pi` in `.env`, a game asked for in Muse's Lab is built by this runner instead of the app's own
+pipeline (`server/app/services/pi_build.py`), one at a time on the app's game queue, with the app's model and
+reasoning level. Its files go under `server/data/pi/` (`PI_XR_ARCHIVE`), so make the starter there once:
+
+```bash
+PI_XR_ARCHIVE=server/data/pi node trial/pi-xr/runner/make-template.mjs
+```
+
+A finished game is served at `/api/play/<id>/` and opens as a page of its own from the Play shelf. A failed or
+interrupted build stays failed until it is asked for again. Unset, the app builds as before.
+
+A ready game can be fixed by saying what is wrong, the way Google's XR Blocks apps are fixed by chatting. Its own
+page has "Something wrong? Tell Muse": the player leaves the game, says what is wrong in a sentence, and the box sends
+it (`POST /api/games/<id>/fix`). The runner continues the game's own session with that sentence (`--continue`). The
+agent cannot see what the player saw, so it is asked to look first (`playtest_view` and a screenshot from where the
+player stands), then fix, look again and replay. While it works, the box says what it is doing now (looking,
+changing, building, playing to check: the last tool in its event stream). The build it had is kept
+(`dist-previous/`) until the fix passes the check again; then the box shows the agent's last message, in plain words,
+and offers the fixed game. A fix that fails or is cut off leaves the game as it was, with a note saying why. A
+precise sentence ("the stand's legs make a V") took under 3 minutes and $0.02; a vague one ("fix seesaw") 5.6
+minutes and $0.04, and the agent chose what to change.
+
 ## On a headset
 
 ```bash

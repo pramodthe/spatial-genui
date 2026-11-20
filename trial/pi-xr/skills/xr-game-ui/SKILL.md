@@ -34,9 +34,16 @@ Read the picture. Take from it the layout (what is where, what is big), the colo
 - Use the scene itself for feedback before the panel: a glow on the next thing to touch, a part that moves, a colour that changes.
 - Do not cover the view with blur, vignettes or head-locked overlays.
 
+## Controls
+
+- Every control says what it does: a word or two of UIKitML on it or right beside it ("Start", "Check", "Next level"). A coloured box with no words is not a button; a child cannot guess what it does. The replay fails a pressed control with no panel text within 0.2 m of it.
+- Show only the controls that apply now: Start before the round, Check during it, Try again and Next level after it. Hide the others.
+- Keep the controls on the panel or beside it, so the sentence that explains the step and the button that ends it are read together.
+
 ## Panel and sign art
 
-- Use generated pictures for theme-specific signs, labels and panel backgrounds when they add to the place; keep the changing text, numbers and buttons in UIKitML, set from code.
+- Never stand a generated picture up as scenery: no backdrop board, poster or framed painting behind the game. In a headset a flat picture reads as a board, not as a place. Pictures go on 3D surfaces as textures (a wood grain, a tiled floor, a painted crate), and on a sign only when the game needs that sign.
+- Keep the changing text, numbers and buttons in UIKitML, set from code.
 - A picture used as a panel background or a sign needs calm areas where text sits; ask for that in the prompt.
 - Simple bars, dials and markers are built in code.
 

@@ -1,0 +1,25 @@
+{
+  "defaultProjectTrust": "never",
+  "defaultThinkingLevel": "max",
+  "quietStartup": true,
+  "enableInstallTelemetry": false,
+  "shellCommandPrefix": "unset META_API_KEY OPENAI_API_KEY PI_XR_STUDIO_TOKEN; ",
+  "compaction": {
+    "enabled": true,
+    "keepRecentTokens": 30000,
+    "modelOverrides": {
+      "meta/muse-ember-1.0": {
+        "reserveTokens": 880000
+      },
+      "meta/muse-spark-1.3-contributor": {
+        "reserveTokens": 880000
+      },
+      "openai/gpt-6.2-astra": {
+        "reserveTokens": 880000
+      }
+    }
+  },
+  "retry": {
+    "maxRetries": 3
+  }
+}

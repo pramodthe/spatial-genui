@@ -49,11 +49,14 @@ CREATE TABLE IF NOT EXISTS games (
   seconds INTEGER,
   created_at TEXT NOT NULL,
   builder TEXT,
-  url TEXT
+  url TEXT,
+  fixing TEXT,
+  fixes INTEGER,
+  note TEXT
 );
 """
 # Columns added after the first release, with their types: a database made before them gets them when it opens.
-LATER_COLUMNS = {"games": {"builder": "TEXT", "url": "TEXT"}}
+LATER_COLUMNS = {"games": {"builder": "TEXT", "url": "TEXT", "fixing": "TEXT", "fixes": "INTEGER", "note": "TEXT"}}
 
 _conn: sqlite3.Connection | None = None
 
@@ -186,6 +189,9 @@ def load_games() -> list[dict[str, Any]]:
             "seconds": row["seconds"],
             "builder": row["builder"],
             "url": row["url"],
+            "fixing": row["fixing"],
+            "fixes": row["fixes"],
+            "note": row["note"],
         }))
         games.append(game)
     return games
@@ -193,12 +199,14 @@ def load_games() -> list[dict[str, Any]]:
 
 def save_game(game: dict[str, Any]) -> None:
     open_db().execute(
-        """INSERT INTO games (id, request, title, status, error, code, model, seconds, created_at, builder, url)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """INSERT INTO games (id, request, title, status, error, code, model, seconds, created_at, builder, url, fixing, fixes, note)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET title = excluded.title, status = excluded.status, error = excluded.error,
-             code = excluded.code, model = excluded.model, seconds = excluded.seconds, url = excluded.url""",
+             code = excluded.code, model = excluded.model, seconds = excluded.seconds, url = excluded.url,
+             fixing = excluded.fixing, fixes = excluded.fixes, note = excluded.note""",
         (
             game["id"], game["request"], game["title"], game["status"], game.get("error"), game.get("code"),
             game.get("model"), game.get("seconds"), game["createdAt"], game.get("builder"), game.get("url"),
+            game.get("fixing"), game.get("fixes"), game.get("note"),
         ),
     )

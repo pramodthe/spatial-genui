@@ -20,6 +20,12 @@ export type GameSummary = {
   /** Built by the pi runner (the server's GAME_MODE=pi): a page of its own at this address, not a module. */
   url?: string;
   builder?: 'pi';
+  /** While its own session fixes what a player said (fixGame): what they said. */
+  fixing?: string;
+  /** How many fixes have worked. */
+  fixes?: number;
+  /** Why the last fix left the game as it was. */
+  note?: string;
 };
 export type Game = GameSummary & { code?: string };
 
@@ -57,7 +63,15 @@ export async function createGame(prompt: string): Promise<GameSummary> {
   return data as GameSummary;
 }
 
-/** Leave the Lab for a game that is a page of its own; its page has a way back. */
+/** Tell Muse what is wrong with a ready game that is a page of its own; its session fixes it in a few minutes. */
+export async function fixGame(id: string, text: string): Promise<GameSummary> {
+  const res = await fetch(`/api/games/${id}/fix`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? res.statusText);
+  return data as GameSummary;
+}
+
+/** Leave the Lab for a game that is a page of its own; its page has a way back, and a way to ask for a fix. */
 export function openGamePage(url: string): void {
   window.location.assign(url);
 }

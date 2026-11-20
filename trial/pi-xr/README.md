@@ -97,6 +97,12 @@ PI_XR_ARCHIVE=server/data/pi node trial/pi-xr/runner/make-template.mjs
 A finished game is served at `/api/play/<id>/` and opens as a page of its own from the Play shelf. A failed or
 interrupted build stays failed until it is asked for again. Unset, the app builds as before.
 
+A ready game can be fixed by saying what is wrong, the way Google's XR Blocks apps are fixed by chatting: its page
+has "Tell Muse what to fix", which opens the Lab with its box asking what to fix (`POST /api/games/<id>/fix`). The
+runner continues the game's own session with that sentence (`--continue`), checks the game again, and keeps the
+build it had (`dist-previous/`) until the fix passes; a fix that fails or is cut off leaves the game as it was, with
+a note. The first one, "the stand's legs make a V", took under 3 minutes and $0.02.
+
 ## On a headset
 
 ```bash

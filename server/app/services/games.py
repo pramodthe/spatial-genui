@@ -1,7 +1,9 @@
 """Saved games. One is written at a time, on its own queue, apart from course lessons.
 
 A game started with GAME_MODE=pi is built by the pi runner (services/pi_build.py) and is a page of its own, served
-at its `url`. Such a build is not repeated without being asked for: a failed or interrupted one stays failed."""
+at its `url`. Such a build is not repeated without being asked for: a failed or interrupted one stays failed. A ready
+one can be fixed by saying what is wrong (fix_game): its own session changes it, and a fix that does not work leaves
+the game as it was."""
 
 from __future__ import annotations
 
@@ -59,7 +61,12 @@ def load() -> None:
     _loaded = True
     for game in load_games():
         _games[game["id"]] = game
-        if game.get("status") == "writing" and game.get("builder") == "pi":
+        if game.get("status") == "writing" and game.get("builder") == "pi" and game.get("fixing"):
+            pi_build.restore_build(game["id"])
+            game.pop("fixing", None)
+            game.update(status="ready", note="The server restarted while this game was being fixed; it is as it was before.")
+            save_game(game)
+        elif game.get("status") == "writing" and game.get("builder") == "pi":
             game.update(status="failed", error="The server restarted while this game was being built. Ask for it again.")
             save_game(game)
         elif game.get("status") == "writing":
@@ -105,6 +112,17 @@ def retry_game(game: dict[str, Any]) -> bool:
     return True
 
 
+def fix_game(game: dict[str, Any], text: str) -> bool:
+    """Ask the game's own session to fix what a player says is wrong. Only a ready game built by the pi runner."""
+    if game.get("builder") != "pi" or game.get("status") != "ready":
+        return False
+    game.update(status="writing", fixing=text)
+    game.pop("note", None)
+    save_game(game)
+    queue(game)
+    return True
+
+
 def queue(game: dict[str, Any]) -> None:
     global _tail
     previous = _tail
@@ -125,15 +143,24 @@ def queue(game: dict[str, Any]) -> None:
 
 async def write(game: dict[str, Any]) -> None:
     started = time.time() * 1000
+    fix = game.get("fixing") if game.get("builder") == "pi" else None
     try:
         with live.watching(live.game_key(game["id"])) as watcher:
-            watcher.set_stage("designing")
+            watcher.set_stage("fixing" if fix else "designing")
             if game.get("builder") == "pi":
-                result = await pi_build.build(game, watcher)
+                result = await pi_build.build(game, watcher, follow_up=fix)
             else:
                 result = await run_game(game["request"], thread_id=game["id"])
         if game.get("builder") == "pi":
             await record_spend([{"model": result["model"], "usd": result["usd"]}])
+            if fix is not None:
+                game.pop("fixing", None)
+                if result.get("ok"):
+                    game.update(status="ready", fixes=int(game.get("fixes") or 0) + 1)
+                else:
+                    game.update(status="ready", note=f"The fix did not work, so the game is as it was: {result.get('error')}"[:300])
+                save_game(game)  # its seconds stay the build's
+                return
             if not result.get("ok"):
                 raise RuntimeError(result.get("error") or "The game could not be built.")
             game.update(status="ready", url=result["url"], model=result["model"], title=result.get("title") or game["title"])
@@ -144,6 +171,12 @@ async def write(game: dict[str, Any]) -> None:
             game.update(status="ready", code=result["code"], model=result["model"], title=panel_title(result["code"]) or game["title"])
             studio.keep_picture(f"game-{game['id']}", result.get("id"))
     except Exception as exc:
+        if fix is not None:  # the game had a build before the fix: it keeps it
+            pi_build.restore_build(game["id"])
+            game.pop("fixing", None)
+            game.update(status="ready", note=f"The fix did not work, so the game is as it was: {exc}"[:300])
+            save_game(game)
+            return
         game.update(status="failed", error=str(exc)[:300])
     game["seconds"] = js_round((time.time() * 1000 - started) / 1000)
     save_game(game)

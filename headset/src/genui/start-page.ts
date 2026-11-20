@@ -2,7 +2,7 @@ import { VisibilityState, type World } from '@iwsdk/core';
 import { APP_NAME, CARD_COLORS, COLORS, MASCOT_NAME } from './brand';
 import { isFolder, myCards, readyCards, type Card } from './cards';
 import { fetchCourseLesson, listCourses, type CourseSummary } from './courses';
-import { EXAMPLE_GAMES, createGame, fetchGame, listGames, loadExampleGame, openGamePage, type GameSummary } from './games';
+import { EXAMPLE_GAMES, createGame, fetchGame, fixGame, listGames, loadExampleGame, openGamePage, type GameSummary } from './games';
 import { EXAMPLE_LESSONS } from './lessons';
 import { createMuseCanvas } from './muse-canvas';
 import { onChromeHidden, onLessonStatus, openWritten, startLesson, type LessonStatus } from './overlay';
@@ -251,10 +251,11 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
       <section class="sp-hero">
         <div class="sp-muse" data-id="muse"></div>
         <div class="sp-say">
-          <h1 class="sp-h1">What do you wonder about?</h1>
+          <h1 class="sp-h1" data-id="ask-title">What do you wonder about?</h1>
           <form class="sp-ask" data-id="ask-form">
             <div class="sp-bubble"><input class="sp-input" data-id="ask-input" maxlength="200" aria-label="What do you wonder about?" placeholder="Why do boats float?" /></div>
-            <button class="sp-btn sp-primary sp-big" type="submit">Make a game</button>
+            <button class="sp-btn sp-primary sp-big" data-id="ask-submit" type="submit">Make a game</button>
+            <button class="sp-btn" data-id="ask-cancel" type="button" hidden>Make a new game instead</button>
           </form>
           <p class="sp-message" data-id="ask-message">${WAIT}</p>
         </div>
@@ -348,17 +349,45 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
   void microphoneState().then(showMic);
   micButton.addEventListener('click', async () => showMic(await askForMicrophone()));
 
-  // Ask for a game by typing (in the headset, by voice too). Its card appears at once, being made.
+  // A game page's "Tell Muse what to fix" opens the Lab with ?fix=<id>: the box then asks what to fix in that game.
+  // Offered once, when the player's games have loaded.
+  let askedToFix = new URLSearchParams(window.location.search).get('fix');
+  let fixing: { id: string; title: string } | null = null;
+  // The game whose fix was asked for here: when it is ready again, say how the fix went.
+  let fixAsked: string | null = null;
+  const fixMode = (game: { id: string; title: string } | null) => {
+    fixing = game;
+    const input = find<HTMLInputElement>('ask-input');
+    find('ask-title').textContent = game ? `What should ${MASCOT_NAME} fix in ${game.title}?` : 'What do you wonder about?';
+    input.placeholder = game ? 'The stand is upside down' : 'Why do boats float?';
+    input.setAttribute('aria-label', find('ask-title').textContent ?? '');
+    find('ask-submit').textContent = game ? 'Fix it' : 'Make a game';
+    find('ask-cancel').hidden = !game;
+    find('ask-message').textContent = game ? 'Say what looks or works wrong, in one sentence. The game stays as it is until the fix works.' : WAIT;
+    if (!game && window.location.search) window.history.replaceState(null, '', window.location.pathname);
+    if (game) input.focus();
+  };
+  find('ask-cancel').addEventListener('click', () => fixMode(null));
+
+  // Ask for a game by typing (in the headset, by voice too), or for a fix to one. Its card shows it being made.
   find<HTMLFormElement>('ask-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     const input = find<HTMLInputElement>('ask-input');
     const idea = input.value.trim();
     if (!idea) return;
-    find('ask-message').textContent = `Asking ${MASCOT_NAME} for "${idea}"...`;
+    const fix = fixing;
+    find('ask-message').textContent = fix ? `Asking ${MASCOT_NAME} to fix ${fix.title}...` : `Asking ${MASCOT_NAME} for "${idea}"...`;
     try {
-      await createGame(idea);
+      if (fix) await fixGame(fix.id, idea);
+      else await createGame(idea);
       input.value = '';
-      find('ask-message').textContent = `${MASCOT_NAME} is making your game. Its card is under Your games, below; it takes about 15 minutes.`;
+      if (fix) {
+        fixMode(null);
+        fixAsked = fix.id;
+        find('ask-message').textContent = `${MASCOT_NAME} is fixing ${fix.title}. Its card shows it being fixed; it takes a few minutes.`;
+      } else {
+        find('ask-message').textContent = `${MASCOT_NAME} is making your game. Its card is under Your games, below; it takes about 15 minutes.`;
+      }
       await refresh();
     } catch (err) {
       find('ask-message').textContent = `That didn't work: ${(err as Error).message}`;
@@ -400,6 +429,16 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
     try {
       [courses, games] = await Promise.all([listCourses(), listGames()]);
       if (renderMine()) wait = 4000;
+      if (askedToFix) {
+        const game = games.find((g) => g.id === askedToFix);
+        askedToFix = null;
+        if (game?.builder === 'pi' && game.status === 'ready') fixMode({ id: game.id, title: game.title });
+      }
+      const fixed = fixAsked ? games.find((g) => g.id === fixAsked) : undefined;
+      if (fixed && fixed.status === 'ready') {
+        fixAsked = null;
+        find('ask-message').textContent = fixed.note ?? `${MASCOT_NAME} fixed ${fixed.title}. Tap its card to play it.`;
+      }
     } catch {
       wait = 8000; // the server may be restarting
     } finally {

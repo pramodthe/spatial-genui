@@ -386,6 +386,26 @@ async def post_game(request: Request) -> JSONResponse:
     return JSONResponse(games.summary(games.start_game(prompt)))
 
 
+@app.post("/api/games/{game_id}/fix")
+async def post_game_fix(game_id: str, request: Request) -> JSONResponse:
+    """A player says what is wrong with a ready game (one the pi runner built); its own session fixes it."""
+    if not _HEX.fullmatch(game_id):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    game = games.get_game(game_id)
+    if game is None:
+        return JSONResponse({"error": "Unknown game"}, status_code=404)
+    body = await _json(request)
+    text = body["text"].strip() if isinstance(body.get("text"), str) else ""
+    if not text or len(text) > 500:
+        return JSONResponse({"error": 'Send { "text": "…" } (1–500 characters).'}, status_code=400)
+    refusal = await guard.admit(_visitor(request), text)
+    if refusal:
+        return JSONResponse({"ok": False, "error": refusal["error"], "reason": refusal["reason"]}, status_code=refusal["status"])
+    if not games.fix_game(game, text):
+        return JSONResponse({"error": "Only a ready game that Muse built as its own page can be fixed."}, status_code=409)
+    return JSONResponse(games.summary(game))
+
+
 @app.get("/api/games")
 async def get_games() -> JSONResponse:
     return JSONResponse({"games": games.list_games()})
@@ -404,11 +424,19 @@ async def get_game(game_id: str) -> JSONResponse:
 
 # A game built by the pi runner is a page of its own. It lives under /api/ so the headset's dev server forwards it
 # with the rest of the API, and it is served from the same origin as the Lab.
-BACK_TO_LAB = (
-    '<a href="/" style="position:fixed;left:16px;top:16px;z-index:2147483647;padding:10px 16px;border-radius:999px;'
-    'background:rgba(20,20,28,.82);color:#fff;font:600 16px/1.2 system-ui,sans-serif;text-decoration:none">'
-    "&larr; Back to the Lab</a>"
+_LINK = (
+    "padding:10px 16px;border-radius:999px;background:rgba(20,20,28,.82);color:#fff;"
+    "font:600 16px/1.2 system-ui,sans-serif;text-decoration:none"
 )
+
+
+def _lab_links(game_id: str) -> str:
+    """On a game page: the way back to the Lab, and the way to tell Muse what to fix (the Lab opens with its box)."""
+    return (
+        '<div style="position:fixed;left:16px;top:16px;z-index:2147483647;display:flex;gap:8px">'
+        f'<a href="/" style="{_LINK}">&larr; Back to the Lab</a>'
+        f'<a href="/?fix={game_id}" style="{_LINK}">Tell Muse what to fix</a></div>'
+    )
 
 
 @app.get("/api/play/{game_id}")
@@ -459,7 +487,8 @@ async def play(game_id: str, path: str, request: Request) -> Response:
         return JSONResponse({"error": "Not found"}, status_code=404)
     if file.name == "index.html":
         page = file.read_text(encoding="utf-8")
-        page = page.replace("</body>", f"{BACK_TO_LAB}</body>", 1) if "</body>" in page else page + BACK_TO_LAB
+        links = _lab_links(game_id)  # game_id is hex: safe in the page
+        page = page.replace("</body>", f"{links}</body>", 1) if "</body>" in page else page + links
         return HTMLResponse(page, headers={"cache-control": "no-cache", "content-security-policy": _game_policy(request, game_id)})
     return FileResponse(file, media_type=CONTENT_TYPES.get(file.suffix.lower(), "application/octet-stream"),
                         headers={"cache-control": "no-cache"})

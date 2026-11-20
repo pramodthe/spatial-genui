@@ -14,6 +14,7 @@ import contextlib
 import json
 import os
 import re
+import shutil
 import signal
 from pathlib import Path
 from typing import Any
@@ -30,6 +31,12 @@ STOP_WAIT_S = 15.0  # how long a stopped runner gets to end its agent and write 
 _PROGRESS = re.compile(r"\] ([\d.]+) min, (\d+) turns, (\d+) tool calls, \$([\d.]+)")
 _HEADING = re.compile(r"^#\s+(.+?)(?:\s+[-—–]\s+Design)?\s*$", re.MULTILINE)
 _PLAIN = re.compile(r"^[\x20-\x7e]{2,40}$")
+_ERROR = re.compile(r"\b(?:\w*Error|error):")
+# A fix continues the game's own session (the runner's --continue), as a player's message would.
+FIX_PROMPT = (
+    "A player tried this game on the headset and says:\n\n{text}\n\n"
+    "Fix that in the game. Keep everything that already works, then run playtest_replay before you finish."
+)
 
 
 def enabled() -> bool:
@@ -49,8 +56,30 @@ def play_url(game_id: str) -> str:
     return f"/api/play/{game_id}/"
 
 
-def runner_command(game_id: str, request_file: Path) -> list[str]:
-    return ["node", str(RUNNER), game_id, "--request-file", str(request_file), "--down"]
+def runner_command(game_id: str, request_file: Path, follow_up: bool = False) -> list[str]:
+    return ["node", str(RUNNER), game_id, *(["--continue"] if follow_up else []), "--request-file", str(request_file), "--down"]
+
+
+def _previous_dir(game_id: str) -> Path:
+    return archive() / "games" / game_id / "dist-previous"
+
+
+def keep_build(game_id: str) -> None:
+    """A copy of the game's current build, so a fix that fails leaves it as it was."""
+    previous = _previous_dir(game_id)
+    shutil.rmtree(previous, ignore_errors=True)
+    if dist_dir(game_id).is_dir():
+        shutil.copytree(dist_dir(game_id), previous)
+
+
+def restore_build(game_id: str) -> bool:
+    """Put the kept build back; False when there is none."""
+    previous = _previous_dir(game_id)
+    if not previous.joinpath("index.html").exists():
+        return False
+    shutil.rmtree(dist_dir(game_id), ignore_errors=True)
+    previous.rename(dist_dir(game_id))
+    return True
 
 
 def pi_model() -> tuple[str, str]:
@@ -122,8 +151,9 @@ async def _stop(process: asyncio.subprocess.Process) -> None:
             return
 
 
-async def build(game: dict[str, Any], watcher: Live) -> dict[str, Any]:
-    """Build one game with the runner. { ok, url?, title?, error?, model, usd }."""
+async def build(game: dict[str, Any], watcher: Live, follow_up: str | None = None) -> dict[str, Any]:
+    """Build one game with the runner, or with `follow_up` fix a built one in its own session. A fix that does not
+    pass the check leaves the game's build as it was. { ok, url?, title?, error?, model, usd }."""
     if not (archive() / "template" / ".pi-xr-template.json").exists():
         raise RuntimeError(
             "The pi runner has no starter project: run trial/pi-xr/runner/make-template.mjs once, "
@@ -132,11 +162,19 @@ async def build(game: dict[str, Any], watcher: Live) -> dict[str, Any]:
     model, effort = pi_model()
     requests = archive() / "requests"
     requests.mkdir(parents=True, exist_ok=True)
-    request_file = requests / f"{game['id']}.txt"
-    request_file.write_text(game["request"], encoding="utf-8")
+    fixing = follow_up is not None
+    if fixing:
+        request_file = requests / f"{game['id']}-fix-{int(game.get('fixes') or 0) + 1}.txt"
+        request_file.write_text(FIX_PROMPT.format(text=follow_up), encoding="utf-8")
+        before = _result(game["id"])
+        keep_build(game["id"])
+    else:
+        request_file = requests / f"{game['id']}.txt"
+        request_file.write_text(game["request"], encoding="utf-8")
+        before = None
     env = {**os.environ, "PI_XR_ARCHIVE": str(archive()), "PI_XR_MODEL": model, "PI_XR_THINKING": effort}
     process = await asyncio.create_subprocess_exec(
-        *runner_command(game["id"], request_file), cwd=str(RUNNER.parent.parent), env=env,
+        *runner_command(game["id"], request_file, follow_up=fixing), cwd=str(RUNNER.parent.parent), env=env,
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, start_new_session=True,
     )
     tail: list[str] = []
@@ -151,7 +189,7 @@ async def build(game: dict[str, Any], watcher: Live) -> dict[str, Any]:
                 watcher.set_stage("checking")
             elif progress:
                 step = _plan_step(game["id"])
-                watcher.set_stage(stage_of(step) if step else "building", step or "")
+                watcher.set_stage("fixing" if fixing else stage_of(step) if step else "building", step or "")
         await process.wait()
 
     try:
@@ -160,9 +198,19 @@ async def build(game: dict[str, Any], watcher: Live) -> dict[str, Any]:
         if process.returncode is None:  # hung, or the server is stopping: the runner and its agent stop too
             await _stop(process)
     row = _result(game["id"])
+    if row is not None and before is not None and row.get("started") == before.get("started"):
+        row = None  # the fix wrote no results of its own
     usd = float(row["usd"]) if row and row.get("usd") is not None else 0.0
+    if row is not None and before is not None:
+        # A follow-up's media ledger carries the build's art too: count only what this fix made.
+        usd = max(0.0, usd - float((before.get("media") or {}).get("usd") or 0.0))
     if row and (row.get("check") or {}).get("ok") and dist_dir(game["id"]).joinpath("index.html").exists():
+        shutil.rmtree(_previous_dir(game["id"]), ignore_errors=True)
         return {"ok": True, "url": play_url(game["id"]), "title": _title(game["id"]), "model": model, "usd": usd}
+    if fixing:
+        restore_build(game["id"])
     failures = (row.get("check") or {}).get("failures") if row else None
-    error = failures[0] if failures else next((line for line in reversed(tail) if line.strip()), "the runner stopped")
+    said = [line for line in reversed(tail) if line.strip()]
+    # A runner that stopped with an exception ends its output with Node's version: name the error line instead.
+    error = failures[0] if failures else next((line for line in said if _ERROR.search(line)), said[0] if said else "the runner stopped")
     return {"ok": False, "error": str(error), "model": model, "usd": usd}

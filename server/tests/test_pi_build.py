@@ -15,27 +15,37 @@ from app.core.clock import now_iso
 from app.core.db import save_game
 from app.services import games, pi_build
 
-# What the real runner leaves behind for a game: a production build, a design document, and a results row.
+# What the real runner leaves behind for a game: a production build, a design document, and a results row. With
+# --continue it is a follow-up in the game's session: it builds again, and its row's art total includes the build's.
 STAND_IN = r'''
 import json, os, signal, sys, time
 from pathlib import Path
-game_id = sys.argv[1]
+args = sys.argv[1:]
+game_id, continuing = args[0], "--continue" in args
+request = Path(args[args.index("--request-file") + 1]).read_text()
 if os.environ.get("STAND_IN_HANG") == "1":  # a runner that hangs and ignores SIGTERM
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
     print(f"[{game_id}] 1.0 min, 4 turns, 6 tool calls, $0.010 (0 pictures, 0 models), last tool: bash", flush=True)
     time.sleep(120)
+if os.environ.get("STAND_IN_CRASH") == "1":  # the runner throws before it starts: Node prints the error, then its version
+    print("file:///runner/run.mjs:69\nthrow new Error(`Port 8091 is taken`);\n^\n\nError: Port 8091 is taken by another process: the trial's runtime cannot start.\n    at run.mjs:69:33\n\nNode.js v22.20.0", flush=True)
+    sys.exit(1)
 archive = Path(os.environ["PI_XR_ARCHIVE"])
-assert Path(sys.argv[3]).read_text() == os.environ["STAND_IN_REQUEST"]
+if continuing:
+    assert os.environ["STAND_IN_FIX"] in request and "playtest_replay" in request, request
+else:
+    assert request == os.environ["STAND_IN_REQUEST"]
 passed = os.environ.get("STAND_IN_FAIL") != "1"
 print(f"[{game_id}] 1.0 min, 4 turns, 6 tool calls, $0.010 (0 pictures, 0 models), last tool: write", flush=True)
 print(f"[{game_id}] the agent stopped after 2.0 min (stop); checking the game ...", flush=True)
 game = archive / "games" / game_id
-(game / "dist" / "assets").mkdir(parents=True)
-(game / "dist" / "index.html").write_text("<html><body><script src='./assets/app.js'></script></body></html>")
+(game / "dist" / "assets").mkdir(parents=True, exist_ok=True)
+(game / "dist" / "index.html").write_text(f"<html><body>{'fixed' if continuing else 'first'}<script src='./assets/app.js'></script></body></html>")
 (game / "dist" / "assets" / "app.js").write_text("console.log('game')")
-(game / "canvas" / "documents").mkdir(parents=True)
+(game / "canvas" / "documents").mkdir(parents=True, exist_ok=True)
 (game / "canvas" / "documents" / "design.md").write_text("# Pump It Up - Design\n\nA bike pump.\n")
-row = {"name": game_id, "model": os.environ["PI_XR_MODEL"], "thinking": os.environ["PI_XR_THINKING"], "usd": 0.25,
+row = {"name": game_id, "continued": continuing, "started": f"{time.time():.6f}", "model": os.environ["PI_XR_MODEL"],
+       "thinking": os.environ["PI_XR_THINKING"], "usd": 0.15 if continuing else 0.25, "media": {"usd": 0.10},
        "check": {"ok": passed, "failures": [] if passed else ["Replay step 1 (move-1): GameState did not change."]}}
 with open(archive / "results.jsonl", "a") as rows:
     rows.write(json.dumps(row) + "\n")
@@ -53,7 +63,8 @@ def pi_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("GAME_MODE", "pi")
     monkeypatch.setenv("PI_XR_ARCHIVE", str(archive))
     monkeypatch.setenv("STAND_IN_REQUEST", "teach me how a bike pump works")
-    monkeypatch.setattr(pi_build, "runner_command", lambda game_id, request_file: [sys.executable, str(script), game_id, "--request-file", str(request_file)])
+    monkeypatch.setattr(pi_build, "runner_command", lambda game_id, request_file, follow_up=False: [
+        sys.executable, str(script), game_id, *(["--continue"] if follow_up else []), "--request-file", str(request_file)])
     return archive
 
 
@@ -144,6 +155,7 @@ def test_the_game_page_is_served_with_a_way_back(pi_mode: Path) -> None:
         page = client.get(game["url"])
         assert page.status_code == 200
         assert "Back to the Lab" in page.text and "./assets/app.js" in page.text
+        assert f'href="/?fix={game["id"]}"' in page.text and "Tell Muse what to fix" in page.text
         policy = page.headers["content-security-policy"]
         assert f"connect-src testserver/api/play/{game['id']}/ " in policy and "'self'" not in policy.split("frame-ancestors")[0]
         assert f"worker-src testserver/api/play/{game['id']}/ blob: data:" in policy  # walking and turning in XR
@@ -165,7 +177,7 @@ def test_a_database_from_before_gets_the_new_columns(tmp_path: Path) -> None:
     conn.close()
     opened = db._connect(old)
     columns = {row["name"] for row in opened.execute("PRAGMA table_info(games)")}
-    assert {"builder", "url"} <= columns
+    assert {"builder", "url", "fixing", "fixes", "note"} <= columns
     assert opened.execute("SELECT code FROM games WHERE id = 'abcd1241'").fetchone()["code"] == "code"
     opened.close()
 
@@ -187,3 +199,96 @@ async def test_a_hung_runner_that_ignores_sigterm_is_killed_and_the_game_fails(p
     game = await _built()
     assert game["status"] == "failed"
     assert game["seconds"] < 30
+
+
+@pytest.mark.asyncio
+async def test_a_runner_that_throws_fails_with_its_error_not_nodes_version(pi_mode: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("STAND_IN_CRASH", "1")
+    game = await _built()
+    assert game["status"] == "failed"
+    assert "Port 8091 is taken" in game["error"] and "Node.js" not in game["error"]
+
+
+async def _fixed(game: dict, text: str) -> dict:
+    assert games.fix_game(game, text) is True
+    assert game["status"] == "writing" and game["fixing"] == text
+    assert games._tail is not None
+    await games._tail
+    fixed = games.get_game(game["id"])
+    assert fixed is not None
+    return fixed
+
+
+@pytest.mark.asyncio
+async def test_a_fix_continues_the_games_session_and_keeps_its_page(pi_mode: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    game = await _built()
+    text = "The stand's legs make a V; they should lean in like an A."
+    monkeypatch.setenv("STAND_IN_FIX", text)
+    before = guard.spend_today()["usd"]
+    fixed = await _fixed(game, text)
+    assert fixed["status"] == "ready" and fixed["fixes"] == 1
+    assert "fixing" not in fixed and "note" not in fixed
+    assert fixed["url"] == pi_build.play_url(game["id"])
+    assert "fixed" in pi_build.dist_dir(game["id"]).joinpath("index.html").read_text()
+    assert not (pi_mode / "games" / game["id"] / "dist-previous").exists()
+    assert text in (pi_mode / "requests" / f"{game['id']}-fix-1.txt").read_text()
+    # The follow-up's row counts the build's art again; only what the fix spent is recorded.
+    assert guard.spend_today()["usd"] == pytest.approx(before + 0.05, abs=0.005)
+    games.reset()
+    again = games.get_game(game["id"])
+    assert again is not None and again["status"] == "ready" and again["fixes"] == 1
+
+
+@pytest.mark.asyncio
+async def test_a_fix_that_fails_leaves_the_game_as_it_was(pi_mode: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    game = await _built()
+    first = pi_build.dist_dir(game["id"]).joinpath("index.html").read_text()
+    monkeypatch.setenv("STAND_IN_FIX", "make the plank longer")
+    monkeypatch.setenv("STAND_IN_FAIL", "1")
+    fixed = await _fixed(game, "make the plank longer")
+    assert fixed["status"] == "ready"
+    assert "did not work" in fixed["note"] and "GameState did not change" in fixed["note"]
+    assert pi_build.dist_dir(game["id"]).joinpath("index.html").read_text() == first
+    assert not fixed.get("fixes")
+
+
+@pytest.mark.asyncio
+async def test_only_a_ready_pi_game_can_be_fixed(pi_mode: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("STAND_IN_FAIL", "1")
+    failed = await _built()
+    assert games.fix_game(failed, "anything") is False and failed["status"] == "failed"
+    usual = {"id": "abcd1244", "request": "pong", "title": "Pong", "status": "ready", "createdAt": now_iso(), "code": "x"}
+    assert games.fix_game(usual, "anything") is False
+
+
+def test_the_fix_route_refuses_what_it_cannot_fix(pi_mode: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    save_game({"id": "abcd1245", "request": "pump", "title": "Pump", "status": "failed", "createdAt": now_iso(), "builder": "pi"})
+    db.close_db()
+    from app.main import app
+
+    async def _admit(_visitor: str, _text: str) -> None:
+        return None
+
+    monkeypatch.setattr(guard, "admit", _admit)
+    with TestClient(app) as client:
+        assert client.post("/api/games/abcd1245/fix", json={"text": "fix it"}).status_code == 409
+        assert client.post("/api/games/abcd1245/fix", json={"text": "  "}).status_code == 400
+        assert client.post("/api/games/abcd1245/fix", json={"text": "x" * 501}).status_code == 400
+        assert client.post("/api/games/00000000/fix", json={"text": "fix it"}).status_code == 404
+        assert client.post("/api/games/not-hex!/fix", json={"text": "fix it"}).status_code == 404
+
+
+def test_a_fix_cut_off_by_a_restart_gives_back_the_game_as_it_was(pi_mode: Path) -> None:
+    save_game({"id": "abcd1246", "request": "pump", "title": "Pump", "status": "writing", "createdAt": now_iso(),
+               "builder": "pi", "url": pi_build.play_url("abcd1246"), "fixing": "longer plank"})
+    games_dir = pi_mode / "games" / "abcd1246"
+    (games_dir / "dist").mkdir(parents=True)
+    (games_dir / "dist" / "index.html").write_text("half built")
+    (games_dir / "dist-previous").mkdir()
+    (games_dir / "dist-previous" / "index.html").write_text("as it was")
+    games.load()
+    game = games.get_game("abcd1246")
+    assert game is not None and game["status"] == "ready" and "restarted" in game["note"]
+    assert "fixing" not in game
+    assert pi_build.dist_dir("abcd1246").joinpath("index.html").read_text() == "as it was"
+    assert games._tail is None

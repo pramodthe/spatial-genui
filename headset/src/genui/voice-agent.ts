@@ -5,12 +5,15 @@
  * token from our server (/api/voice-agent/token), so the Deepgram key never reaches the browser.
  *
  * Audio: the microphone is resampled to 16 kHz 16-bit PCM in an AudioWorklet and streamed; the agent's 24 kHz
- * PCM replies are queued for playback, and cut off when the learner starts talking over them.
+ * PCM replies are queued for playback, and cut off when the learner starts talking over them. Both go through one
+ * AudioContext, made at the pinch (wake): a browser starts one made later, after the network, paused, and a paused
+ * context neither plays the agent nor runs the microphone tap, so Deepgram hears nothing and hangs up.
  */
 
 const AGENT_URL = 'wss://agent.deepgram.com/v1/agent/converse';
 const INPUT_RATE = 16000;
 const OUTPUT_RATE = 24000;
+const WAKE_MS = 1500; // how long a paused AudioContext gets to start before the tutor says sound is blocked
 
 export type TutorActions = {
   /** Plan a course; returns what to tell the learner. */
@@ -106,6 +109,15 @@ export class VoiceTutor {
     return this.socket !== null;
   }
 
+  /**
+   * Make the audio now and ask it to start, while the gesture that asked for the tutor still counts: call it first
+   * thing in that gesture's handler, before anything is awaited. start() uses this context.
+   */
+  wake() {
+    if (!this.audio || this.audio.state === 'closed') this.audio = new AudioContext();
+    if (this.audio.state === 'suspended') void this.audio.resume().catch(() => {});
+  }
+
   async start(context: string) {
     if (this.socket || this.starting) return;
     this.starting = true;
@@ -125,21 +137,18 @@ export class VoiceTutor {
     if (!res.ok || !grant.token) throw new TutorUnavailable(grant.error ?? `The voice tutor is not available (HTTP ${res.status}).`, res.status === 501);
     if (run !== this.generation) return;
 
-    const audio = new AudioContext();
-    let stream: MediaStream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-    } catch (err) {
-      void audio.close();
-      throw err;
-    }
+    this.wake();
+    const audio = this.audio!;
+    if (audio.state !== 'running') await Promise.race([audio.resume(), new Promise((done) => setTimeout(done, WAKE_MS))]).catch(() => {});
+    if (run !== this.generation) return;
+    if (audio.state !== 'running') throw new TutorUnavailable('The browser kept the sound off. Pinch again to try once more.', false);
+    // A failure here reaches the caller, whose stop() closes the audio.
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
     if (run !== this.generation) {
       // Stopped while the microphone was starting.
       stream.getTracks().forEach((track) => track.stop());
-      void audio.close();
       return;
     }
-    this.audio = audio;
     this.stream = stream;
     const socket = new WebSocket(AGENT_URL, ['bearer', grant.token]);
     socket.binaryType = 'arraybuffer';

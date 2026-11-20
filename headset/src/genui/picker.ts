@@ -666,6 +666,8 @@ class LessonPickerSystem extends createSystem({
       this.tutor.stop();
       return;
     }
+    // Its sound is made now, in the pinch, before anything is awaited: made after the network it starts paused.
+    this.tutor.wake();
     // The browser can't ask for the microphone inside XR: it has to be turned on on the start page first.
     const allowed = await microphoneState();
     if (allowed === 'prompt' || allowed === 'denied') {
@@ -678,7 +680,7 @@ class LessonPickerSystem extends createSystem({
       await this.tutor.start(await this.tutorContext());
     } catch (err) {
       this.tutor.stop();
-      this.setVoice(err instanceof TutorUnavailable && err.permanent ? `${MASCOT_NAME} can't talk here yet. Use Make a game.` : `${MASCOT_NAME} didn't answer. Pinch to try again.`, 'off');
+      this.setVoice(err instanceof TutorUnavailable ? (err.permanent ? `${MASCOT_NAME} can't talk here yet. Use Make a game.` : ascii(err.message)) : `${MASCOT_NAME} didn't answer. Pinch to try again.`, 'off');
     } finally {
       this.voiceBusy = false;
     }

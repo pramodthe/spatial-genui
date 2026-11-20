@@ -426,16 +426,81 @@ async def get_game(game_id: str) -> JSONResponse:
 # with the rest of the API, and it is served from the same origin as the Lab.
 _LINK = (
     "padding:10px 16px;border-radius:999px;background:rgba(20,20,28,.82);color:#fff;"
-    "font:600 16px/1.2 system-ui,sans-serif;text-decoration:none"
+    "font:600 16px/1.2 system-ui,sans-serif;text-decoration:none;border:0;cursor:pointer"
 )
+_PANEL = (
+    "display:flex;flex-direction:column;gap:8px;padding:14px;border-radius:16px;background:rgba(20,20,28,.9);color:#fff;"
+    "font:500 16px/1.35 system-ui,sans-serif;width:min(420px,calc(100vw - 32px));box-sizing:border-box"
+)
+_FIELD = "padding:10px 12px;border-radius:10px;border:0;font:500 16px system-ui,sans-serif;color:#14141c;background:#fff"
+_GO = "padding:10px 16px;border-radius:999px;border:0;background:#ffd21f;color:#14141c;font:700 16px system-ui,sans-serif;cursor:pointer"
+# The box asks the game's own record whether a fix is going on, its live line what Muse is doing now, and shows Muse's
+# answer in its own words when it is done (as text, never HTML).
+_FIX_SCRIPT = """<script>(() => {
+  const id = "__GAME__";
+  const $ = (name) => document.getElementById("lab-fix" + name);
+  const form = $(""), text = $("-text"), go = $("-go"), play = $("-play"), say = $("-say");
+  let fixes = null;
+  const busy = (on) => { text.disabled = go.disabled = on; };
+  $("-open").addEventListener("click", () => { form.hidden = !form.hidden; if (!form.hidden) text.focus(); });
+  play.addEventListener("click", () => location.reload());
+  const look = async () => {
+    const game = await (await fetch("/api/games/" + id, { cache: "no-store" })).json();
+    if (game.status === "writing" && game.fixing) {
+      if (fixes === null) fixes = game.fixes || 0;
+      form.hidden = false; busy(true); play.hidden = true; text.value = game.fixing;
+      const live = await fetch("/api/live/game-" + id, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      const now = !live ? "Starting" : live.stage === "checking" ? "Playing the whole game once more to check it" : live.detail || "Looking at the game";
+      const min = live ? Math.floor(live.seconds / 60) : 0;
+      say.textContent = `Muse is fixing it. Now: ${now} (${min ? min + " min so far" : "just started"}). It takes a few minutes; until then the game stays as it is.`;
+      setTimeout(() => look().catch(() => setTimeout(look, 3000)), 3000);
+      return;
+    }
+    busy(false);
+    if (fixes !== null) {
+      text.value = "";
+      say.textContent = game.note || "";
+      play.hidden = (game.fixes || 0) <= fixes;
+      fixes = null;
+    }
+  };
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const words = text.value.trim();
+    if (!words) return;
+    busy(true); say.textContent = "Sending it to Muse...";
+    try {
+      const res = await fetch("/api/games/" + id + "/fix", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: words }) });
+      const game = await res.json();
+      if (!res.ok) throw new Error(game.error || res.statusText);
+      fixes = game.fixes || 0;
+      await look();
+    } catch (err) { busy(false); say.textContent = "That didn't work: " + err.message; }
+  });
+  look().catch(() => {});
+})();</script>"""
 
 
-def _lab_links(game_id: str) -> str:
-    """On a game page: the way back to the Lab, and the way to tell Muse what to fix (the Lab opens with its box)."""
+def _lab_bar(game_id: str) -> str:
+    """On a game page: the way back to the Lab, and a box to tell Muse what is wrong. The player is on this page when
+    they leave the game, so the fix is asked for here, about this game; the box follows the fix and offers the fixed
+    game when it is ready."""
     return (
-        '<div style="position:fixed;left:16px;top:16px;z-index:2147483647;display:flex;gap:8px">'
+        "<style>#lab-fix[hidden]{display:none!important}</style>"  # its own display:flex would show it while hidden
+        '<div style="position:fixed;left:16px;top:16px;z-index:2147483647;display:flex;flex-direction:column;'
+        'align-items:flex-start;gap:8px">'
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">'
         f'<a href="/" style="{_LINK}">&larr; Back to the Lab</a>'
-        f'<a href="/?fix={game_id}" style="{_LINK}">Tell Muse what to fix</a></div>'
+        f'<button type="button" id="lab-fix-open" style="{_LINK}">Something wrong? Tell Muse</button></div>'
+        f'<form id="lab-fix" hidden style="{_PANEL}">'
+        '<label for="lab-fix-text" style="font-weight:700">What is wrong in this game?</label>'
+        f'<input id="lab-fix-text" maxlength="500" autocomplete="off" placeholder="The stand is upside down" style="{_FIELD}">'
+        '<div style="display:flex;gap:8px">'
+        f'<button id="lab-fix-go" style="{_GO}">Fix it</button>'
+        f'<button type="button" id="lab-fix-play" hidden style="{_GO}">Play the fixed game</button></div>'
+        '<p id="lab-fix-say" style="margin:0">Muse opens this game, looks at it from where you stand, fixes what you '
+        "say and plays it again: a few minutes. Until then the game stays as it is.</p></form></div>"
+        + _FIX_SCRIPT.replace("__GAME__", game_id)
     )
 
 
@@ -450,16 +515,21 @@ GAME_CDNS = "https://unpkg.com https://cdn.jsdelivr.net"  # where IWSDK's own co
 
 def _game_policy(request: Request, game_id: str) -> str:
     """A game page is written by an agent and served beside the Lab: it may load and fetch its own files and the CDNs
-    IWSDK uses, not the Lab's API. Its own folder is named with the host the browser asked for and no scheme, which
+    IWSDK uses, and of the Lab's API only its own record, fix and live line. Its own folder is named with the host the browser asked for and no scheme, which
     matches both the headset's dev server (HTTPS, forwarding to this one) and a direct request."""
     host = request.headers.get("host", "")
     own = f"{host}/api/play/{game_id}/" if _HOST.fullmatch(host) else "'none'"
     sources = f"{own} {GAME_CDNS}"
+    # Of the Lab's API, only this game's own record, its fix and its live line, for the box on the page (_lab_bar).
+    record = (
+        f"{host}/api/games/{game_id} {host}/api/games/{game_id}/fix {host}/api/live/game-{game_id} "
+        if _HOST.fullmatch(host) else ""
+    )
     return "; ".join([
         f"default-src {sources} blob: data:",
         f"script-src {sources} blob: 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'",
         f"worker-src {own} blob: data:",  # IWSDK starts its locomotion worker from a data: address
-        f"connect-src {sources} blob: data:",
+        f"connect-src {sources} {record}blob: data:",
         f"img-src {sources} https://api.dicebear.com blob: data:",
         f"style-src {sources} 'unsafe-inline'",
         f"font-src {sources} data:",
@@ -487,7 +557,7 @@ async def play(game_id: str, path: str, request: Request) -> Response:
         return JSONResponse({"error": "Not found"}, status_code=404)
     if file.name == "index.html":
         page = file.read_text(encoding="utf-8")
-        links = _lab_links(game_id)  # game_id is hex: safe in the page
+        links = _lab_bar(game_id)  # game_id is hex: safe in the page
         page = page.replace("</body>", f"{links}</body>", 1) if "</body>" in page else page + links
         return HTMLResponse(page, headers={"cache-control": "no-cache", "content-security-policy": _game_policy(request, game_id)})
     return FileResponse(file, media_type=CONTENT_TYPES.get(file.suffix.lower(), "application/octet-stream"),

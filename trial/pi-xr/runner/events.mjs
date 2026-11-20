@@ -8,6 +8,7 @@ export function newStats() {
     turns: 0, toolCalls: 0, failedCalls: 0, tools: {}, imageReads: 0, compactions: 0, retries: 0,
     input: 0, output: 0, cacheRead: 0, usd: 0, largestRequest: 0,
     firstTypecheckPassS: null, firstSequenceS: null, stopReason: null, settled: false, aborted: false, models: {},
+    lastSaid: '', // the agent's last words: for a fix, what it tells the player it changed
   };
 }
 
@@ -29,6 +30,7 @@ export function count(stats, record, sinceS = 0) {
       stats.usd += u.cost?.total ?? 0;
       stats.largestRequest = Math.max(stats.largestRequest, (u.input ?? 0) + (u.cacheRead ?? 0));
       stats.stopReason = m.stopReason ?? stats.stopReason;
+      if (text(m).trim()) stats.lastSaid = text(m).trim();
       if (m.provider || m.model) stats.models[`${m.provider ?? '?'}/${m.model ?? '?'}`] = (stats.models[`${m.provider ?? '?'}/${m.model ?? '?'}`] ?? 0) + 1;
       break;
     }

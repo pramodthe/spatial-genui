@@ -2,8 +2,8 @@
 
 A game started with GAME_MODE=pi is built by the pi runner (services/pi_build.py) and is a page of its own, served
 at its `url`. Such a build is not repeated without being asked for: a failed or interrupted one stays failed. A ready
-one can be fixed by saying what is wrong (fix_game): its own session changes it, and a fix that does not work leaves
-the game as it was."""
+one can be fixed by saying what is wrong on its page (fix_game): its own session looks at it and changes it, its `note`
+says what Muse changed, and a fix that does not work leaves the game as it was."""
 
 from __future__ import annotations
 
@@ -155,8 +155,8 @@ async def write(game: dict[str, Any]) -> None:
             await record_spend([{"model": result["model"], "usd": result["usd"]}])
             if fix is not None:
                 game.pop("fixing", None)
-                if result.get("ok"):
-                    game.update(status="ready", fixes=int(game.get("fixes") or 0) + 1)
+                if result.get("ok"):  # its note is what Muse says it changed, for the player
+                    game.update(status="ready", fixes=int(game.get("fixes") or 0) + 1, note=result.get("answer") or "Muse fixed it.")
                 else:
                     game.update(status="ready", note=f"The fix did not work, so the game is as it was: {result.get('error')}"[:300])
                 save_game(game)  # its seconds stay the build's

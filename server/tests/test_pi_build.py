@@ -32,7 +32,7 @@ if os.environ.get("STAND_IN_CRASH") == "1":  # the runner throws before it start
     sys.exit(1)
 archive = Path(os.environ["PI_XR_ARCHIVE"])
 if continuing:
-    assert os.environ["STAND_IN_FIX"] in request and "playtest_replay" in request, request
+    assert os.environ["STAND_IN_FIX"] in request and "screenshot" in request and "playtest_replay" in request, request
 else:
     assert request == os.environ["STAND_IN_REQUEST"]
 passed = os.environ.get("STAND_IN_FAIL") != "1"
@@ -46,7 +46,8 @@ game = archive / "games" / game_id
 (game / "canvas" / "documents" / "design.md").write_text("# Pump It Up - Design\n\nA bike pump.\n")
 row = {"name": game_id, "continued": continuing, "started": f"{time.time():.6f}", "model": os.environ["PI_XR_MODEL"],
        "thinking": os.environ["PI_XR_THINKING"], "usd": 0.15 if continuing else 0.25, "media": {"usd": 0.10},
-       "check": {"ok": passed, "failures": [] if passed else ["Replay step 1 (move-1): GameState did not change."]}}
+       "check": {"ok": passed, "failures": [] if passed else ["Replay step 1 (move-1): GameState did not change."]},
+       "answer": "The legs made a V,\nso I turned them into an A." if continuing else "Built it."}
 with open(archive / "results.jsonl", "a") as rows:
     rows.write(json.dumps(row) + "\n")
 sys.exit(0 if passed else 1)
@@ -155,9 +156,14 @@ def test_the_game_page_is_served_with_a_way_back(pi_mode: Path) -> None:
         page = client.get(game["url"])
         assert page.status_code == 200
         assert "Back to the Lab" in page.text and "./assets/app.js" in page.text
-        assert f'href="/?fix={game["id"]}"' in page.text and "Tell Muse what to fix" in page.text
+        assert 'id="lab-fix"' in page.text and "Something wrong? Tell Muse" in page.text
+        assert "#lab-fix[hidden]{display:none!important}" in page.text  # closed until its button opens it
+        assert f'const id = "{game["id"]}"' in page.text  # the box asks about this game, on its own page
         policy = page.headers["content-security-policy"]
         assert f"connect-src testserver/api/play/{game['id']}/ " in policy and "'self'" not in policy.split("frame-ancestors")[0]
+        # Of the Lab's API, the page reaches only its own record and fix.
+        assert f" testserver/api/games/{game['id']} testserver/api/games/{game['id']}/fix testserver/api/live/game-{game['id']} " in policy
+        assert "testserver/api/games/ " not in policy and "testserver/api/ " not in policy
         assert f"worker-src testserver/api/play/{game['id']}/ blob: data:" in policy  # walking and turning in XR
         script = client.get(f"{game['url']}assets/app.js")
         assert script.status_code == 200 and "javascript" in script.headers["content-type"]
@@ -227,7 +233,7 @@ async def test_a_fix_continues_the_games_session_and_keeps_its_page(pi_mode: Pat
     before = guard.spend_today()["usd"]
     fixed = await _fixed(game, text)
     assert fixed["status"] == "ready" and fixed["fixes"] == 1
-    assert "fixing" not in fixed and "note" not in fixed
+    assert "fixing" not in fixed and fixed["note"] == "The legs made a V, so I turned them into an A."
     assert fixed["url"] == pi_build.play_url(game["id"])
     assert "fixed" in pi_build.dist_dir(game["id"]).joinpath("index.html").read_text()
     assert not (pi_mode / "games" / game["id"] / "dist-previous").exists()
@@ -237,6 +243,39 @@ async def test_a_fix_continues_the_games_session_and_keeps_its_page(pi_mode: Pat
     games.reset()
     again = games.get_game(game["id"])
     assert again is not None and again["status"] == "ready" and again["fixes"] == 1
+
+
+def test_a_fix_says_what_muse_is_doing_from_its_last_tool(pi_mode: Path) -> None:
+    assert pi_build.doing("playtest_view", {}) == "Looking at the game"
+    assert pi_build.doing("mcp__iwsdk_runtime__browser_screenshot", {}) == "Looking at the game"
+    assert pi_build.doing("read", {"path": "/tmp/shot.PNG"}) == "Looking at the game"
+    assert pi_build.doing("read", {"path": "src/systems/game.ts"}) == "Reading its code"
+    assert pi_build.doing("edit", {"path": "src/scene-assets/seesaw.ts"}) == "Changing the game"
+    assert pi_build.doing("bash", {"command": "npm run typecheck"}) == "Building it again"
+    assert pi_build.doing("bash", {"command": "cd src && grep -n tilt *.ts"}) == "Reading its code"
+    assert pi_build.doing("playtest_replay", {}) == "Playing it to check"
+    assert pi_build._doing("abcd1247") == ""  # no run yet
+    run = pi_mode / "runs" / "abcd1247-2026-11-20T00-00-00"
+    run.mkdir(parents=True)
+    picture = json.dumps({"type": "tool_execution_end", "result": {"content": [{"type": "image", "data": "x" * 70000}]}})
+    (run / "events-0.jsonl").write_text(json.dumps({"type": "tool_execution_start", "toolName": "edit", "args": {}}) + "\n")
+    (run / "events-1.jsonl").write_text("\n".join([
+        json.dumps({"type": "tool_execution_start", "toolName": "playtest_view", "args": {}}),
+        json.dumps({"type": "tool_execution_start", "toolName": "read", "args": {"path": "shot.png"}}),
+        picture,
+    ]) + "\n")
+    assert pi_build._doing("abcd1247") == ""  # the newest stream ends with a picture longer than its tail
+    (run / "events-1.jsonl").write_text((run / "events-1.jsonl").read_text() + json.dumps(
+        {"type": "tool_execution_start", "toolName": "edit", "args": {"path": "src/a.ts"}}) + "\n")
+    assert pi_build._doing("abcd1247") == "Changing the game"
+
+
+def test_the_answer_shown_to_the_player_is_one_short_line() -> None:
+    assert pi_build.answer({}) == ""
+    assert pi_build.answer({"answer": "  The plank was short.\n\nI made it longer. "}) == "The plank was short. I made it longer."
+    long = "The stand was upside down. " * 30
+    shown = pi_build.answer({"answer": long})
+    assert len(shown) <= pi_build.ANSWER_MAX and shown.endswith("down.")
 
 
 @pytest.mark.asyncio

@@ -32,11 +32,20 @@ _PROGRESS = re.compile(r"\] ([\d.]+) min, (\d+) turns, (\d+) tool calls, \$([\d.
 _HEADING = re.compile(r"^#\s+(.+?)(?:\s+[-—–]\s+Design)?\s*$", re.MULTILINE)
 _PLAIN = re.compile(r"^[\x20-\x7e]{2,40}$")
 _ERROR = re.compile(r"\b(?:\w*Error|error):")
-# A fix continues the game's own session (the runner's --continue), as a player's message would.
+# A fix continues the game's own session (the runner's --continue), as a player's message would. The agent cannot see
+# what the player saw, so it looks at the game first; its last message is shown to the player as it is.
 FIX_PROMPT = (
     "A player tried this game on the headset and says:\n\n{text}\n\n"
-    "Fix that in the game. Keep everything that already works, then run playtest_replay before you finish."
+    "You cannot see what they saw, so look before you change anything: run playtest_view, then take a screenshot "
+    "from where the player stands and read it. Find what they mean in the picture and in the code. Fix that, and keep "
+    "everything that already works. Take the same screenshot again to see that it is fixed, then run playtest_replay."
+    "\n\nYour last message is shown to the player as it is: one or two short sentences in plain words, with no code, "
+    "file names or numbers, saying what was wrong and what you changed. If you could not find what they mean, change "
+    "nothing and say what you looked at."
 )
+ANSWER_MAX = 400  # characters of the agent's last message shown to the player
+DOING_EVERY_S = 3.0  # how often a fix's live line is brought up to date with what the agent is doing
+_LOOK = re.compile(r"\s*(cd [^&]+&&\s*)?(ls|cat|grep|rg|find|sed|head|tail)\b")
 
 
 def enabled() -> bool:
@@ -54,6 +63,16 @@ def dist_dir(game_id: str) -> Path:
 
 def play_url(game_id: str) -> str:
     return f"/api/play/{game_id}/"
+
+
+def answer(row: dict[str, Any]) -> str:
+    """What the agent said last, on one line and short enough to show: after a fix, what it tells the player."""
+    said = " ".join(str(row.get("answer") or "").split())
+    if len(said) <= ANSWER_MAX:
+        return said
+    cut = said[:ANSWER_MAX]
+    end = max(cut.rfind(". "), cut.rfind("! "), cut.rfind("? "))
+    return cut[: end + 1] if end > 0 else cut.rstrip() + "..."
 
 
 def runner_command(game_id: str, request_file: Path, follow_up: bool = False) -> list[str]:
@@ -116,6 +135,46 @@ def _plan_step(game_id: str) -> str | None:
     return next((str(item.get("step")) for item in plan if item.get("status") == "in_progress"), None)
 
 
+def doing(tool: str, args: dict[str, Any]) -> str:
+    """What the agent is doing, in words a player understands, from the tool it started."""
+    name = tool.rsplit("__", 1)[-1]  # an IWSDK runtime tool is named mcp__iwsdk_runtime__<name>
+    command = str(args.get("command") or "")
+    if name in ("playtest_view", "browser_screenshot", "scene_screenshot") or (
+        name == "read" and re.search(r"\.(png|jpe?g)$", str(args.get("path") or ""), re.IGNORECASE)
+    ):
+        return "Looking at the game"
+    if name in ("playtest_replay", "playtest_record", "xr_run_sequence"):
+        return "Playing it to check"
+    if name in ("edit", "write"):
+        return "Changing the game"
+    if name == "bash" and re.search(r"typecheck|tsc|run build", command):
+        return "Building it again"
+    if name in ("read", "grep", "find", "ls") or (name == "bash" and _LOOK.match(command)):
+        return "Reading its code"
+    return "Working on it"
+
+
+def _doing(game_id: str) -> str:
+    """What the agent of the game's latest run is doing now: the last tool it started, from the end of its newest
+    event stream (a line too long to fit, such as a picture, is skipped)."""
+    runs = sorted((archive() / "runs").glob(f"{game_id}-2*"))
+    streams = sorted(runs[-1].glob("events-*.jsonl"), key=lambda p: int(p.stem.split("-")[1])) if runs else []
+    if not streams:
+        return ""
+    try:
+        with streams[-1].open("rb") as stream:
+            stream.seek(max(0, stream.seek(0, os.SEEK_END) - 65536))
+            lines = stream.read().decode("utf-8", "replace").splitlines()
+    except OSError:
+        return ""
+    for line in reversed(lines):
+        if '"tool_execution_start"' in line:
+            with contextlib.suppress(ValueError):
+                record = json.loads(line)
+                return doing(str(record.get("toolName") or ""), record.get("args") or {})
+    return ""
+
+
 def _result(game_id: str) -> dict[str, Any] | None:
     """The runner's results row for this game (results.jsonl in the archive), or None."""
     rows = archive() / "results.jsonl"
@@ -153,7 +212,7 @@ async def _stop(process: asyncio.subprocess.Process) -> None:
 
 async def build(game: dict[str, Any], watcher: Live, follow_up: str | None = None) -> dict[str, Any]:
     """Build one game with the runner, or with `follow_up` fix a built one in its own session. A fix that does not
-    pass the check leaves the game's build as it was. { ok, url?, title?, error?, model, usd }."""
+    pass the check leaves the game's build as it was. { ok, url?, title?, answer?, error?, model, usd }."""
     if not (archive() / "template" / ".pi-xr-template.json").exists():
         raise RuntimeError(
             "The pi runner has no starter project: run trial/pi-xr/runner/make-template.mjs once, "
@@ -187,14 +246,25 @@ async def build(game: dict[str, Any], watcher: Live, follow_up: str | None = Non
             progress = _PROGRESS.search(line)
             if "checking the game" in line:
                 watcher.set_stage("checking")
-            elif progress:
+            elif progress and not fixing:
                 step = _plan_step(game["id"])
-                watcher.set_stage("fixing" if fixing else stage_of(step) if step else "building", step or "")
+                watcher.set_stage(stage_of(step) if step else "building", step or "")
         await process.wait()
 
+    async def tell() -> None:
+        """While fixing, the live line says what the agent is doing now, for the box on the game's page."""
+        while True:
+            await asyncio.sleep(DOING_EVERY_S)
+            now = _doing(game["id"])
+            if now and watcher.stage == "fixing":
+                watcher.set_stage("fixing", now)
+
+    teller = asyncio.create_task(tell()) if fixing else None
     try:
         await asyncio.wait_for(follow(), timeout=HUNG_S)
     finally:
+        if teller is not None:
+            teller.cancel()
         if process.returncode is None:  # hung, or the server is stopping: the runner and its agent stop too
             await _stop(process)
     row = _result(game["id"])
@@ -206,7 +276,8 @@ async def build(game: dict[str, Any], watcher: Live, follow_up: str | None = Non
         usd = max(0.0, usd - float((before.get("media") or {}).get("usd") or 0.0))
     if row and (row.get("check") or {}).get("ok") and dist_dir(game["id"]).joinpath("index.html").exists():
         shutil.rmtree(_previous_dir(game["id"]), ignore_errors=True)
-        return {"ok": True, "url": play_url(game["id"]), "title": _title(game["id"]), "model": model, "usd": usd}
+        return {"ok": True, "url": play_url(game["id"]), "title": _title(game["id"]), "model": model, "usd": usd,
+                "answer": answer(row)}
     if fixing:
         restore_build(game["id"])
     failures = (row.get("check") or {}).get("failures") if row else None

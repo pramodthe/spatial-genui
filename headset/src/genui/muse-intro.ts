@@ -1,6 +1,7 @@
 import { OrthographicCamera, Scene, Vector3, WebGLRenderer } from 'three';
 import { MASCOT_NAME } from './brand';
-import { createMuse3D } from './muse3d';
+import { MUSE_HELLO_CLIP, createMuse3D } from './muse3d';
+import { playAppClip } from './sound';
 
 /**
  * The start page's hello: Muse rises big in the middle of the screen, lands with a squash, waves and says hi, then
@@ -62,6 +63,8 @@ export function playMuseIntro(logo: HTMLElement, onDone: () => void): void {
   skip.textContent = 'Tap to skip';
   root.append(veil, canvas, say, skip);
   document.body.appendChild(root);
+  // Said aloud as it lands, where the page may play sound (after a tap: the logo; not on a fresh load).
+  playAppClip(MUSE_HELLO_CLIP, 0.5);
 
   const W = window.innerWidth, H = window.innerHeight;
   let renderer: WebGLRenderer;

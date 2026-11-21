@@ -32,6 +32,12 @@ import { COLORS } from './brand';
 
 export type MuseMood = 'idle' | 'thinking' | 'cheer';
 
+/**
+ * Muse's spoken hello, "Hi! I'm Muse! What do you wonder about?": a clip made once with the voice tutor's voice
+ * (Deepgram Aura, aura-2-asteria-en), played by both hellos (muse-intro.ts and the room view's dashboard).
+ */
+export const MUSE_HELLO_CLIP = `${import.meta.env.BASE_URL}audio/muse-hello.mp3`;
+
 export type Muse3D = {
   object: Group;
   /** Advance by `dt` seconds; `look` is a world point the eyes follow (none: straight ahead). */

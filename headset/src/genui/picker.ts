@@ -20,7 +20,8 @@ import { makeCardGrabbable, type CardGrab } from './grab';
 import { boxAround, worldYaw } from './handle';
 import { capture, floorHeight, lessonCardsCentre, lessonModelBox, lessonPosition, roomFrame, zoomGame } from './host';
 import { EXAMPLE_LESSONS } from './lessons';
-import { createMuse3D, type Muse3D, type MuseMood } from './muse3d';
+import { MUSE_HELLO_CLIP, createMuse3D, type Muse3D, type MuseMood } from './muse3d';
+import { playAppClip } from './sound';
 import type { LessonKind, LessonStatus, LiveOutcome } from './overlay';
 import { cancelListening, isListening, microphoneState, startListening, stopAndTranscribe, voiceAvailable } from './voice';
 import { TutorUnavailable, VoiceTutor } from './voice-agent';
@@ -70,7 +71,7 @@ const SETTLE_FRAMES = 20;
 // landing, two waves while the heading says hi, a turn, three hops home to its spot, and a settle.
 const HELLO = { rise: 0.6, land: 0.85, wave: 2.4, turn: 2.7, run: 3.9, settle: 4.2 };
 const HELLO_HOPS = 3;
-const HELLO_SIZE = 5; // how many times its spot's height Muse stands at the front
+const HELLO_SIZE = 2.5; // how many times its spot's height Muse stands at the front
 const HEADING = 'What do you wonder about?';
 // The panel's lowest edge stays this far above the floor (its half height is a guess until it has laid out).
 const PICKER_FLOOR_CLEARANCE_M = 0.05;
@@ -294,6 +295,8 @@ class LessonPickerSystem extends createSystem({
     this.helloStart = performance.now();
     this.helloWaves = 0;
     this.document.getElementById('heading')?.setProperties({ text: `Hi! I'm ${MASCOT_NAME}!` });
+    // Said aloud as it lands ("Hi! I'm Muse! What do you wonder about?").
+    playAppClip(MUSE_HELLO_CLIP, 0.5);
   }
 
   /** The hello is over (or went wrong): Muse back on its spot, the heading back. */

@@ -86,15 +86,16 @@ there. One game at a time: the next run takes the last game's runtime down.
 
 ## In the app
 
-With `GAME_MODE=pi` in `.env`, a game asked for in Muse's Lab is built by this runner instead of the app's own
-pipeline (`server/app/services/pi_build.py`), one at a time on the app's game queue, with the app's model and
-reasoning level. Its files go under `server/data/pi/` (`PI_XR_ARCHIVE`), so make the starter there once:
+With `GAME_MODE=pi` in `.env`, a game asked for in Muse's Lab, and each level of a course, is built by this runner
+instead of the app's own pipeline (`server/app/services/pi_build.py`), one at a time (games and levels share the one
+emulator window), with the app's model and reasoning level. A level is named `<course>-<level>` here. Its files go under `server/data/pi/` (`PI_XR_ARCHIVE`), so make the starter there once:
 
 ```bash
 PI_XR_ARCHIVE=server/data/pi node trial/pi-xr/runner/make-template.mjs
 ```
 
-A finished game is served at `/api/play/<id>/` and opens as a page of its own from the Play shelf. A failed or
+A finished game is served at `/api/play/<id>/` and opens as a page of its own from the Play shelf; a level at
+`/api/learn/<course>/<level>/`, with a Next level button once the next one is ready. A failed or
 interrupted build stays failed until it is asked for again. Unset, the app builds as before.
 
 A ready game can be fixed by saying what is wrong, the way Google's XR Blocks apps are fixed by chatting. Its own

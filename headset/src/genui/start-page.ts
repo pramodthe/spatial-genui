@@ -486,7 +486,8 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
   async function openLesson(courseId: string, index: number) {
     try {
       const lesson = await fetchCourseLesson(courseId, index);
-      if (lesson.status === 'ready' && lesson.code) {
+      if (lesson.status === 'ready' && lesson.url) openGamePage(lesson.url);
+      else if (lesson.status === 'ready' && lesson.code) {
         preview(true);
         await openWritten(lesson.code, lesson.prompt);
       }

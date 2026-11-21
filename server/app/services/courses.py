@@ -1,4 +1,8 @@
-"""Saved courses: a plan of 3 to 5 levels, then the lessons one at a time."""
+"""Saved courses: a plan of 3 to 5 levels, then the lessons one at a time.
+
+With GAME_MODE=pi a level is built by the pi runner (services/pi_build.py) as a page of its own, served at its `url`
+(/api/learn/<course>/<index>/), as a pi game is, and a ready one can be fixed by saying what is wrong on its page
+(fix_lesson). Levels made before by the agent writer keep their code and open in the room."""
 
 from __future__ import annotations
 
@@ -18,7 +22,7 @@ from app.core.guard import attempt_calls, record_spend
 from app.core.json_reply import extract_json
 from app.pipeline import design
 from app.pipeline.lesson import run_lesson
-from app.services import live, studio
+from app.services import live, pi_build, studio
 
 PLANNER_PROMPT = """You plan a short learning adventure for a mixed-reality headset, for players from about 9 years old to adults. Each level is one learning game on the player's desk: the player does the real thing with their hands, one move at a time, each move says in one line why it matters, and the level ends with a challenge that measures the same idea (a distance, a time, a score) with stars and Try again. Like folding a paper plane fold by fold and then throwing it to see how far it flies. No video, no long reading, no typing.
 
@@ -39,6 +43,7 @@ STYLES = {
     "low-poly": "Low-poly", "circuit-city": "Circuit city",
 }
 
+OLD_LOOK = "\nDraw it in the "  # plan()'s look line for the agent writer, with its skill and scripts
 REMOVED_KIT = re.compile(r"\bkit\.(matchQuiz|flashcards)\b")
 MAX_COURSES = 200
 
@@ -105,8 +110,18 @@ def load() -> None:
         _import_legacy()
     for course in load_courses():
         resume_at: list[int] = []
+        cut_off = False
         for index, lesson in enumerate(course["lessons"]):
-            if lesson.get("status") == "generating":
+            if lesson.get("status") == "generating" and lesson.get("builder") == "pi":
+                # A pi build is not resumed (as for games): a fix gives back the level as it was, a build is failed and
+                # is built again when the level is opened.
+                cut_off = True
+                if lesson.pop("fixing", None) is not None:
+                    pi_build.restore_build(level_name(course["id"], index))
+                    lesson.update(status="ready", note="The server restarted while this level was being fixed; it is as it was before.")
+                else:
+                    lesson.update(status="failed", error="The server restarted while this level was being built. Open it to build it again.")
+            elif lesson.get("status") == "generating":
                 lesson["status"] = "pending"
                 resume_at.append(index)
             if lesson.get("polish") == "running":
@@ -121,7 +136,7 @@ def load() -> None:
             if course.get("status") == "building" and all(lesson.get("status") == "ready" for lesson in runnable):
                 course["status"] = "ready"
             save_course(course)
-        elif planning:
+        elif planning or cut_off:
             save_course(course)
         _courses[course["id"]] = course
         for index in resume_at:
@@ -165,6 +180,8 @@ def start_course(request: str) -> dict[str, Any]:
         "createdAt": now_iso(),
         "lessons": [],
     }
+    if pi_build.enabled():
+        course["builder"] = "pi"
     _courses[course["id"]] = course
     _spawn(_plan(course["id"]))
     return course
@@ -277,10 +294,85 @@ def queue(course: dict[str, Any], index: int, retry: bool = False) -> None:
         return
     lesson["status"] = "generating"
     lesson.pop("error", None)
+    if pi_build.enabled():
+        lesson["builder"] = "pi"
+    else:
+        lesson.pop("builder", None)
     _chain(build_lesson(course, lesson))
 
 
+def level_name(course_id: str, index: int) -> str:
+    """The pi runner's name for a level (its project, runs and results)."""
+    return f"{course_id}-{index}"
+
+
+def level_url(course_id: str, index: int) -> str:
+    return f"/api/learn/{course_id}/{index}/"
+
+
+def pi_request(lesson: dict[str, Any]) -> str:
+    """What the pi runner is asked to build for a level: its prompt, with the course's look said in plain words (the
+    look line plan() wrote, up to its colon) and without the agent writer's skill and scripts."""
+    prompt, _, look = lesson["prompt"].partition(OLD_LOOK)
+    return f"{prompt}{OLD_LOOK}{look.split(':', 1)[0].strip()}." if look else prompt
+
+
+def fix_lesson(course: dict[str, Any], index: int, text: str) -> bool:
+    """Ask a level's own session to fix what a player says is wrong (as games.fix_game). Only a ready level built by
+    the pi runner."""
+    lessons = course.get("lessons") or []
+    if index < 0 or index >= len(lessons):
+        return False
+    lesson = lessons[index]
+    if lesson.get("builder") != "pi" or lesson.get("status") != "ready" or not lesson.get("url"):
+        return False
+    lesson.update(status="generating", fixing=text)
+    lesson.pop("note", None)
+    save_course(course)
+    _chain(build_lesson(course, lesson))
+    return True
+
+
+async def _build_with_pi(course: dict[str, Any], lesson: dict[str, Any]) -> None:
+    """A level built, or with `fixing` fixed, by the pi runner, as games.write does for a pi game."""
+    started = time.time() * 1000
+    index = course["lessons"].index(lesson)
+    name = level_name(course["id"], index)
+    fix = lesson.get("fixing")
+    try:
+        with live.watching(live.lesson_key(course["id"], index)) as watcher:
+            watcher.set_stage("fixing" if fix else "designing")
+            result = await pi_build.build({"id": name, "request": pi_request(lesson), "fixes": lesson.get("fixes")}, watcher, follow_up=fix)
+        await record_spend([{"model": result["model"], "usd": result["usd"]}])
+        if fix is not None:
+            lesson.pop("fixing", None)
+            if result.get("ok"):  # its note is what Muse says it changed, for the player
+                lesson.update(status="ready", fixes=int(lesson.get("fixes") or 0) + 1, note=result.get("answer") or "Muse fixed it.")
+            else:
+                lesson.update(status="ready", note=f"The fix did not work, so the level is as it was: {result.get('error')}"[:300])
+            save_course(course)  # its seconds stay the build's
+            return
+        if not result.get("ok"):
+            raise RuntimeError(result.get("error") or "The level could not be built.")
+        lesson.update(status="ready", url=level_url(course["id"], index), model=result["model"], generatedAt=now_iso())
+    except Exception as exc:
+        if fix is not None:  # the level had a build before the fix: it keeps it
+            pi_build.restore_build(name)
+            lesson.pop("fixing", None)
+            lesson.update(status="ready", note=f"The fix did not work, so the level is as it was: {exc}"[:300])
+            save_course(course)
+            return
+        lesson.update(status="failed", error=str(exc)[:300])
+    lesson["seconds"] = js_round((time.time() * 1000 - started) / 1000)
+    if course["lessons"] and all(item.get("status") == "ready" for item in course["lessons"]):
+        course["status"] = "ready"
+    save_course(course)
+
+
 async def build_lesson(course: dict[str, Any], lesson: dict[str, Any]) -> None:
+    if lesson.get("builder") == "pi":
+        await _build_with_pi(course, lesson)
+        return
     started = time.time() * 1000
     try:
         index = course["lessons"].index(lesson)

@@ -36,11 +36,12 @@ export type Card = {
 const first = (title: string) => title.trim().charAt(0).toUpperCase() || '?';
 
 // How long one usually takes with Muse Ember on the deployed app: a game 15 to 45 minutes (the start page says so), a
-// course's level about 10. A card's picture fills with its colour by the time so far against its kind's time, kept
+// course's level about 10, or as long as a game when the pi runner builds it. A card's picture fills with its colour by the time so far against its kind's time, kept
 // within its step's share, so the fill and the step agree; a full picture is the finished card. The steps follow
 // services/live.py: plan, build, try it out, check.
 const GAME_S = 30 * 60;
 const LEVEL_S = 10 * 60;
+const levelS = (builder?: 'pi') => (builder === 'pi' ? GAME_S : LEVEL_S);
 const STEP_FILL = [[0.04, 0.12], [0.12, 0.8], [0.3, 0.9], [0.85, 0.97]] as const;
 const STEP_TEXT = ['planning it', 'building it', 'trying it out', 'checking it'] as const;
 
@@ -84,7 +85,7 @@ export function myCards(games: GameSummary[], courses: CourseSummary[], verb: 'T
   });
   for (const course of courses) {
     if (course.status === 'planning' || course.status === 'failed' || course.lessons.length === 0) {
-      const making = course.status === 'planning' ? makingOf(undefined, LEVEL_S) : undefined;
+      const making = course.status === 'planning' ? makingOf(undefined, levelS(course.builder)) : undefined;
       cards.push({
         key: `course-${course.id}`, title: course.title, mark: first(course.title), source: { kind: 'course', id: course.id },
         sub: making ? 'Planning its levels' : "Couldn't plan it",
@@ -97,7 +98,7 @@ export function myCards(games: GameSummary[], courses: CourseSummary[], verb: 'T
     const levels = course.lessons;
     const ready = levels.filter((lesson) => lesson.status === 'ready').length;
     const busy = levels.findIndex((lesson) => lesson.status === 'generating');
-    const making = busy >= 0 ? makingOf(levels[busy]!.live, LEVEL_S) : undefined;
+    const making = busy >= 0 ? makingOf(levels[busy]!.live, levelS(levels[busy]!.builder)) : undefined;
     cards.push({
       key: `course-${course.id}`,
       title: course.title,
@@ -115,7 +116,7 @@ export function myCards(games: GameSummary[], courses: CourseSummary[], verb: 'T
 /** The levels of one course, one card each, in order. */
 function levelCards(course: CourseSummary, verb: 'Tap' | 'Pinch', again: string): Card[] {
   return course.lessons.map((lesson, index) => {
-    const making = lesson.status === 'generating' ? makingOf(lesson.live, LEVEL_S) : undefined;
+    const making = lesson.status === 'generating' ? makingOf(lesson.live, levelS(lesson.builder)) : undefined;
     return {
       key: `course-${course.id}-${index}`,
       title: lesson.title,

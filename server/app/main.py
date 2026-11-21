@@ -268,6 +268,26 @@ async def polish(course_id: str, index: str, request: Request) -> JSONResponse:
     return JSONResponse({"started": courses.polish_lesson(course, int(index), pictures)}, status_code=202)
 
 
+@app.post("/api/courses/{course_id}/lessons/{index}/fix")
+async def post_lesson_fix(course_id: str, index: str, request: Request) -> JSONResponse:
+    """A player says what is wrong with a ready level (one the pi runner built); its own session fixes it."""
+    if not _HEX.fullmatch(course_id) or not re.fullmatch(r"\d", index):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    course = courses.get_course(course_id)
+    if course is None:
+        return JSONResponse({"error": "Unknown course"}, status_code=404)
+    body = await _json(request)
+    text = body["text"].strip() if isinstance(body.get("text"), str) else ""
+    if not text or len(text) > 500:
+        return JSONResponse({"error": 'Send { "text": "…" } (1–500 characters).'}, status_code=400)
+    refusal = await guard.admit(_visitor(request), text)
+    if refusal:
+        return JSONResponse({"ok": False, "error": refusal["error"], "reason": refusal["reason"]}, status_code=refusal["status"])
+    if not courses.fix_lesson(course, int(index), text):
+        return JSONResponse({"error": "Only a ready level that Muse built as its own page can be fixed."}, status_code=409)
+    return JSONResponse(courses.summary(course)["lessons"][int(index)])
+
+
 @app.get("/api/courses/{course_id}")
 async def get_course(course_id: str) -> JSONResponse:
     if not _HEX.fullmatch(course_id):
@@ -435,9 +455,10 @@ _PANEL = (
 _FIELD = "padding:10px 12px;border-radius:10px;border:0;font:500 16px system-ui,sans-serif;color:#14141c;background:#fff"
 _GO = "padding:10px 16px;border-radius:999px;border:0;background:#ffd21f;color:#14141c;font:700 16px system-ui,sans-serif;cursor:pointer"
 # The box asks the game's own record whether a fix is going on, its live line what Muse is doing now, and shows Muse's
-# answer in its own words when it is done (as text, never HTML).
+# answer in its own words when it is done (as text, never HTML). `box` says where (_game_box, _level_box): a level's
+# record is its course's, at its index.
 _FIX_SCRIPT = """<script>(() => {
-  const id = "__GAME__";
+  const box = __BOX__;
   const $ = (name) => document.getElementById("lab-fix" + name);
   const form = $(""), text = $("-text"), go = $("-go"), play = $("-play"), say = $("-say");
   let fixes = null;
@@ -445,11 +466,12 @@ _FIX_SCRIPT = """<script>(() => {
   $("-open").addEventListener("click", () => { form.hidden = !form.hidden; if (!form.hidden) text.focus(); });
   play.addEventListener("click", () => location.reload());
   const look = async () => {
-    const game = await (await fetch("/api/games/" + id, { cache: "no-store" })).json();
-    if (game.status === "writing" && game.fixing) {
+    const record = await (await fetch(box.record, { cache: "no-store" })).json();
+    const game = box.level === null ? record : record.lessons[box.level];
+    if (game.fixing) {
       if (fixes === null) fixes = game.fixes || 0;
       form.hidden = false; busy(true); play.hidden = true; text.value = game.fixing;
-      const live = await fetch("/api/live/game-" + id, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      const live = await fetch(box.live, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
       const now = !live ? "Starting" : live.stage === "checking" ? "Playing the whole game once more to check it" : live.detail || "Looking at the game";
       const min = live ? Math.floor(live.seconds / 60) : 0;
       say.textContent = `Muse is fixing it. Now: ${now} (${min ? min + " min so far" : "just started"}). It takes a few minutes; until then the game stays as it is.`;
@@ -470,7 +492,7 @@ _FIX_SCRIPT = """<script>(() => {
     if (!words) return;
     busy(true); say.textContent = "Sending it to Muse...";
     try {
-      const res = await fetch("/api/games/" + id + "/fix", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: words }) });
+      const res = await fetch(box.fix, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: words }) });
       const game = await res.json();
       if (!res.ok) throw new Error(game.error || res.statusText);
       fixes = game.fixes || 0;
@@ -481,12 +503,29 @@ _FIX_SCRIPT = """<script>(() => {
 })();</script>"""
 
 
-def _lab_bar(game_id: str | None = None) -> str:
-    """On a game page: the way back to the Lab, and for a game this server can fix (`game_id`), a box to tell Muse
-    what is wrong. The player is on this page when they leave the game, so the fix is asked for here, about this game;
-    the box follows the fix and offers the fixed game when it is ready."""
+def _game_box(game_id: str) -> dict[str, Any]:
+    return {"record": f"/api/games/{game_id}", "level": None, "fix": f"/api/games/{game_id}/fix", "live": f"/api/live/game-{game_id}"}
+
+
+def _level_box(course_id: str, index: int) -> dict[str, Any]:
+    return {"record": f"/api/courses/{course_id}", "level": index, "fix": f"/api/courses/{course_id}/lessons/{index}/fix",
+            "live": f"/api/live/course-{course_id}-{index}"}
+
+
+def _box_paths(box: dict[str, Any] | None) -> tuple[str, ...]:
+    """The Lab's API a page with this fix box reaches: its record, its fix and its live line."""
+    return tuple(box[name].lstrip("/") for name in ("record", "fix", "live")) if box else ()
+
+
+def _lab_bar(box: dict[str, Any] | None = None, next_url: str | None = None) -> str:
+    """On a game page: the way back to the Lab, on a course level's the next level once it is ready (`next_url`), and
+    for a game or level this server can fix (`box`), a box to tell Muse what is wrong. The player is on this page when
+    they leave the game, so the fix is asked for here, about this game; the box follows the fix and offers the fixed
+    game when it is ready."""
     back = f'<a href="/" style="{_LINK}">&larr; Back to the Lab</a>'
-    if game_id is None:
+    if next_url:
+        back += f'<a href="{next_url}" style="{_LINK}">Next level &rarr;</a>'  # a server-made path: hex and a digit
+    if box is None:
         return f'<div style="position:fixed;left:16px;top:16px;z-index:2147483647;display:flex;gap:8px">{back}</div>'
     return (
         "<style>#lab-fix[hidden]{display:none!important}</style>"  # its own display:flex would show it while hidden
@@ -502,7 +541,7 @@ def _lab_bar(game_id: str | None = None) -> str:
         f'<button type="button" id="lab-fix-play" hidden style="{_GO}">Play the fixed game</button></div>'
         '<p id="lab-fix-say" style="margin:0">Muse opens this game, looks at it from where you stand, fixes what you '
         "say and plays it again: a few minutes. Until then the game stays as it is.</p></form></div>"
-        + _FIX_SCRIPT.replace("__GAME__", game_id)
+        + _FIX_SCRIPT.replace("__BOX__", json.dumps(box))
     )
 
 
@@ -566,10 +605,36 @@ async def play(game_id: str, path: str, request: Request) -> Response:
     if game is None or not game.get("url"):
         return JSONResponse({"error": "Unknown game"}, status_code=404)
     # The fix box only where this server can run the fix (GAME_MODE=pi on the machine with the runner).
-    fixable = pi_build.enabled()
-    lab = (f"api/games/{game_id}", f"api/games/{game_id}/fix", f"api/live/game-{game_id}") if fixable else ()
-    policy = _page_policy(request, f"api/play/{game_id}/", lab)
-    return _page_file(pi_build.dist_dir(game_id), path, policy, _lab_bar(game_id if fixable else None))  # hex: safe in the page
+    box = _game_box(game_id) if pi_build.enabled() else None  # hex: safe in the page
+    policy = _page_policy(request, f"api/play/{game_id}/", _box_paths(box))
+    return _page_file(pi_build.dist_dir(game_id), path, policy, _lab_bar(box))
+
+
+@app.get("/api/learn/{course_id}/{index}")
+async def learn_root(course_id: str, index: str) -> Response:
+    if not _HEX.fullmatch(course_id) or not re.fullmatch(r"\d", index):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    return RedirectResponse(courses.level_url(course_id, int(index)), status_code=301)  # its files load relative to the slash
+
+
+@app.get("/api/learn/{course_id}/{index}/{path:path}")
+async def learn(course_id: str, index: str, path: str, request: Request) -> Response:
+    """A course level the pi runner built, a page of its own as a pi game is, with the next level once that is ready.
+    Opening its page opens the level, as in the Lab: the next one starts being made."""
+    if not _HEX.fullmatch(course_id) or not re.fullmatch(r"\d", index):
+        return JSONResponse({"error": "Not found"}, status_code=404)
+    course = courses.get_course(course_id)
+    lessons = (course or {}).get("lessons") or []
+    number = int(index)
+    if course is None or number >= len(lessons) or not lessons[number].get("url"):
+        return JSONResponse({"error": "Unknown level"}, status_code=404)
+    if path in ("", "index.html"):
+        courses.open_lesson(course, number)
+    following = lessons[number + 1] if number + 1 < len(lessons) else {}
+    next_url = following.get("url") if following.get("status") == "ready" else None
+    box = _level_box(course_id, number) if pi_build.enabled() else None
+    policy = _page_policy(request, f"api/learn/{course_id}/{number}/", _box_paths(box))
+    return _page_file(pi_build.dist_dir(courses.level_name(course_id, number)), path, policy, _lab_bar(box, next_url))
 
 
 _SHOWCASE = re.compile(r"[a-z0-9][a-z0-9-]{0,39}")

@@ -41,10 +41,11 @@ Runtime for Seated Mixed Reality and Walkable Virtual Worlds*](paper/muses-lab-p
   levels.
 - **The Studio.** Every build is recorded: the design, the planning pictures, each agent step, the play-test
   screenshots and the grader's verdicts.
-- **A game as a project of its own.** With `GAME_MODE=pi`, one continuous agent session builds each game as a full
-  IWSDK project, an independent check replays it with emulated hands, and it opens as a page of its own. A player
-  who finds something wrong says so on that page ("Something wrong? Tell Muse"): the same session looks at the game
-  from where the player stands, fixes it and checks it again, and the game stays as it was until the fix passes.
+- **A game as a project of its own.** With `GAME_MODE=pi`, one continuous agent session builds each game, and each
+  level of a course, as a full IWSDK project, an independent check replays it with emulated hands, and it opens as a
+  page of its own (a level's page leads on to the next level). A player who finds something wrong says so on that
+  page ("Something wrong? Tell Muse"): the same session looks at the game from where the player stands, fixes it and
+  checks it again, and the game stays as it was until the fix passes.
 
 ## Example games
 
@@ -123,8 +124,10 @@ With `GAME_MODE=pi` a game is built differently: the [pi runner](trial/pi-xr/REA
 starter IWSDK project, its own canvas for the design, picture and 3D model generation, and the headset emulator to
 play in ([`services/pi_build.py`](server/app/services/pi_build.py)). The agent records each working hand move; an
 independent check reloads the game, replays those moves with hands only and measures the first view, and only a game
-that passes is served, at `/api/play/<id>/`. A fix continues the same session with the player's sentence. The runner
-needs the emulator on the machine it runs on, so this mode runs on a workstation, not on the hosted demo.
+that passes is served, at `/api/play/<id>/`. A course's levels are built the same way, one by one as the one before
+is opened, and served at `/api/learn/<course>/<level>/`; one build runs at a time, games and levels alike. A fix
+continues the same session with the player's sentence. The runner needs the emulator on the machine it runs on, so
+this mode runs on a workstation, not on the hosted demo.
 
 ## Configuration
 
@@ -140,7 +143,7 @@ Settings are read from `.env` at the repository root; see [`.env.example`](.env.
 | `CODER_BUDGET_USD` | `3` | The most one coder attempt may spend. |
 | `DAILY_BUDGET_USD`, `RATE_LIMIT_PER_10_MIN` | `15`, `6` | The server's daily spending cap and the per-visitor rate limit. |
 | `COURSE_PLANNER`, `MODERATION_MODEL` | `LLM_MODEL` | The course planner's and the request screen's models. |
-| `GAME_MODE` | | `pi` builds each game as an IWSDK project of its own with the pi runner (on a machine with the emulator), and lets players fix a game by saying what is wrong. |
+| `GAME_MODE` | | `pi` builds each game and each course level as an IWSDK project of its own with the pi runner (on a machine with the emulator), and lets players fix one by saying what is wrong. |
 | `SHOWCASE_DIR` | `server/data/showcase` | Built game pages for the showcase tiles, one folder each. |
 
 ## Repository layout

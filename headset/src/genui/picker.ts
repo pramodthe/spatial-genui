@@ -563,7 +563,8 @@ class LessonPickerSystem extends createSystem({
     try {
       const lesson = await fetchCourseLesson(courseId, index);
       this.titles.set(lesson.prompt, lesson.title);
-      if (lesson.status === 'ready' && lesson.code) {
+      if (lesson.status === 'ready' && lesson.url) openGamePage(lesson.url);
+      else if (lesson.status === 'ready' && lesson.code) {
         handlers?.open(lesson.code, lesson.prompt);
         if (!lesson.polish) this.reviewLater(courseId, index, lesson.prompt);
       } else if (lesson.status === 'generating' || lesson.status === 'pending') {
@@ -572,6 +573,7 @@ class LessonPickerSystem extends createSystem({
           if (!now) return { failed: 'the level is gone' };
           if (now.status === 'failed') return { failed: now.error ?? 'the level could not be made' };
           if (now.status !== 'ready') return null;
+          if (now.url) return { page: now.url }; // a level the pi runner built: the watch ends and its page opens
           const written = await fetchCourseLesson(courseId, index);
           return written.code ? { code: written.code } : null;
         });
@@ -725,7 +727,8 @@ class LessonPickerSystem extends createSystem({
         this.courses = [course, ...this.courses.filter((c) => c.id !== course.id)];
         this.listCards();
         this.pollSoon();
-        return { ok: true, title: course.title, note: 'Planned. Its levels are being made now, each as a card under Your games; the first takes about 10 minutes.' };
+        const takes = course.builder === 'pi' ? '15 to 45 minutes' : 'about 10 minutes';
+        return { ok: true, title: course.title, note: `Planned. Its levels are being made now, each as a card under Your games; the first takes ${takes}.` };
       },
       listCourses: async () => {
         await this.refreshCourses();
@@ -738,7 +741,9 @@ class LessonPickerSystem extends createSystem({
         const lesson = course.lessons[number - 1];
         if (!lesson) return { ok: false, error: `"${course.title}" has ${course.lessons.length} levels.` };
         await this.openLevel(course.id, number - 1);
-        return { ok: true, course: course.title, lesson: lesson.title, state: lesson.status === 'ready' ? 'opened in the room' : 'being made; it takes about 10 minutes' };
+        const takes = lesson.builder === 'pi' || course.builder === 'pi' ? '15 to 45 minutes' : 'about 10 minutes';
+        const opened = lesson.url ? 'opened as a page of its own' : 'opened in the room';
+        return { ok: true, course: course.title, lesson: lesson.title, state: lesson.status === 'ready' ? opened : `being made; it takes ${takes}` };
       },
       currentLesson: () => {
         const prompt = this.status.prompt;

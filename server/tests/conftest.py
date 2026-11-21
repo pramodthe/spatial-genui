@@ -28,7 +28,7 @@ os.environ["COURSE_POLISH"] = "0"
 
 # The app reads these variables when it is imported.
 from app.core import config as config_mod, db, guard
-from app.services import courses, games
+from app.services import courses, games, pi_build
 
 
 @pytest.fixture(autouse=True)
@@ -39,4 +39,5 @@ def _fresh_memory():
     guard.reset()
     courses.reset()
     games.reset()
+    pi_build.reset()
     yield

@@ -20,7 +20,8 @@ import { makeCardGrabbable, type CardGrab } from './grab';
 import { boxAround, worldYaw } from './handle';
 import { capture, floorHeight, lessonCardsCentre, lessonModelBox, lessonPosition, roomFrame, zoomGame } from './host';
 import { EXAMPLE_LESSONS } from './lessons';
-import { createMuse3D, type Muse3D, type MuseMood } from './muse3d';
+import { MUSE_HELLO_CLIP, createMuse3D, type Muse3D, type MuseMood } from './muse3d';
+import { playAppClip } from './sound';
 import type { LessonKind, LessonStatus, LiveOutcome } from './overlay';
 import { cancelListening, isListening, microphoneState, startListening, stopAndTranscribe, voiceAvailable } from './voice';
 import { TutorUnavailable, VoiceTutor } from './voice-agent';
@@ -66,6 +67,12 @@ const BOARD_PX = 1120;
 const BAR_PX = 540;
 // Frames to wait after entering XR before placing: the first frames can still have the pre-session camera pose.
 const SETTLE_FRAMES = 20;
+// Muse's hello when the room first opens (seconds from its start): up big in front of the dashboard, a squash on
+// landing, two waves while the heading says hi, a turn, three hops home to its spot, and a settle.
+const HELLO = { rise: 0.6, land: 0.85, wave: 2.4, turn: 2.7, run: 3.9, settle: 4.2 };
+const HELLO_HOPS = 3;
+const HELLO_SIZE = 2.5; // how many times its spot's height Muse stands at the front
+const HEADING = 'What do you wonder about?';
 // The panel's lowest edge stays this far above the floor (its half height is a guess until it has laid out).
 const PICKER_FLOOR_CLEARANCE_M = 0.05;
 const PICKER_FALLBACK_HALF_HEIGHT_M = 0.3;
@@ -172,6 +179,10 @@ class LessonPickerSystem extends createSystem({
   private muse!: Muse3D;
   private readonly museBox = new Box3();
   private readonly museAt = new Vector3();
+  /** Muse's hello the first time the room opens in a visit: when it began (ms), or 0 when it is not playing. */
+  private helloStart = 0;
+  private greeted = false;
+  private helloWaves = 0;
   private poll = 0;
   /** What each panel element was last given (a picture, a colour): set again only when it changes. */
   private readonly shown = new Map<string, string | number>();
@@ -234,13 +245,20 @@ class LessonPickerSystem extends createSystem({
   update(delta: number): void {
     clearScrollMarks(this.world.input);
     this.stickScroll(delta);
-    if (this.placeIn > 0 && --this.placeIn === 0) this.place();
+    if (this.placeIn > 0 && --this.placeIn === 0) {
+      this.place();
+      try {
+        this.startHello();
+      } catch (err) {
+        console.warn('Muse hello did not start:', err); // never a throw out of an XR frame: it would stop the loop
+      }
+    }
     // Its content changes size (folding into the bar): the frame follows, a few times a second.
     if (++this.frames % 20 === 0) this.frame.refit();
     this.world.camera.getWorldPosition(this.eye);
     this.frame.tick(this.eye, floorHeight(this.eye));
     this.placeMuse();
-    if (this.muse.object.visible) this.muse.update(delta, this.museMood(), this.eye);
+    if (this.muse.object.visible) this.muse.update(delta, this.helloStart ? 'idle' : this.museMood(), this.eye);
     // The waves on cards being made roll: one whole period loops with no seam.
     if (this.waves.length) {
       const left = -(((performance.now() / WAVE_MS) * WAVE_PERIOD_PX) % WAVE_PERIOD_PX);
@@ -267,6 +285,95 @@ class LessonPickerSystem extends createSystem({
     this.muse.object.position.z += 0.03;
     // Muse is one unit tall.
     this.muse.object.scale.setScalar(height * 0.98);
+    if (this.helloStart) this.playHello(height * 0.98);
+  }
+
+  /** The first time the room opens in a visit, Muse says hello (never with reduced motion). */
+  private startHello() {
+    if (this.greeted || !this.document || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    this.greeted = true;
+    this.helloStart = performance.now();
+    this.helloWaves = 0;
+    this.document.getElementById('heading')?.setProperties({ text: `Hi! I'm ${MASCOT_NAME}!` });
+    // Said aloud as it lands ("Hi! I'm Muse! What do you wonder about?").
+    playAppClip(MUSE_HELLO_CLIP, 0.5);
+  }
+
+  /** The hello is over (or went wrong): Muse back on its spot, the heading back. */
+  private endHello() {
+    this.helloStart = 0;
+    this.muse.object.rotation.set(0, 0, 0);
+    this.document?.getElementById('heading')?.setProperties({ text: HEADING });
+  }
+
+  /**
+   * One frame of the hello, over Muse's place at home (its position and `size` there). An error ends the hello
+   * instead of leaving this frame: a throw here would stop the XR frame loop, and the room with it.
+   */
+  private playHello(size: number) {
+    try {
+      this.helloFrame(size);
+    } catch (err) {
+      console.warn('Muse hello stopped:', err);
+      this.endHello();
+    }
+  }
+
+  private helloFrame(size: number) {
+    const t = (performance.now() - this.helloStart) / 1000;
+    const o = this.muse.object;
+    if (t >= HELLO.settle) {
+      this.endHello();
+      return;
+    }
+    const seg = (a: number, b: number) => Math.min(1, Math.max(0, (t - a) / (b - a)));
+    const ease = (x: number) => x * x * (3 - 2 * x);
+    const big = size * HELLO_SIZE;
+    // At the front: across the dashboard's middle (the panel is centred on the holder), level with its spot near
+    // the top, a hand's width in front.
+    const hx = o.position.x, hy = o.position.y, hz = o.position.z;
+    const fx = 0, fy = hy - big * 0.5, fz = hz + 0.22;
+    let x = fx, y = fy, z = fz, scale = big, sy = 1, turn = 0, lean = 0;
+    if (t < HELLO.rise) {
+      const p = seg(0, HELLO.rise);
+      const back = 1 + 2.6 * (p - 1) ** 3 + 1.6 * (p - 1) ** 2; // overshoots, then settles
+      y = fy - big * 1.1 * (1 - back);
+      sy = 1.12 - 0.12 * p;
+    } else if (t < HELLO.land) {
+      const p = seg(HELLO.rise, HELLO.land);
+      sy = 1 - 0.16 * Math.sin(p * Math.PI) * (1 - p * 0.4);
+    } else if (t < HELLO.wave) {
+      if (this.helloWaves === 0 || (this.helloWaves === 1 && t > HELLO.land + 0.75)) {
+        this.muse.wave();
+        this.helloWaves += 1;
+      }
+    } else if (t < HELLO.turn) {
+      const p = ease(seg(HELLO.wave, HELLO.turn));
+      turn = -0.75 * p;
+      sy = 1 - 0.14 * p;
+    } else if (t < HELLO.run) {
+      const p = seg(HELLO.turn, HELLO.run);
+      const travel = ease(p);
+      x = fx + (hx - fx) * travel;
+      y = fy + (hy - fy) * travel;
+      z = fz + (hz - fz) * travel;
+      scale = big + (size - big) * travel;
+      const air = Math.sin(((p * HELLO_HOPS) % 1) * Math.PI);
+      y += air * scale * 0.55;
+      sy = 0.86 + 0.24 * air;
+      turn = -0.75 * (1 - travel * 0.5);
+      lean = 0.18;
+    } else {
+      // Home: a small squash, turning back to face the player.
+      const p = seg(HELLO.run, HELLO.settle);
+      x = hx; y = hy; z = hz; scale = size;
+      sy = 1 - 0.12 * Math.sin(p * Math.PI);
+      turn = -0.375 * (1 - p);
+    }
+    const sx = 1 / Math.sqrt(sy);
+    o.position.set(x, y, z);
+    o.scale.set(scale * sx, scale * sy, scale * sx);
+    o.rotation.set(0, turn, lean);
   }
 
   private museMood(): MuseMood {
@@ -369,7 +476,11 @@ class LessonPickerSystem extends createSystem({
     document.getElementById('mini-smaller')?.addEventListener('click', () => zoomGame(-1));
     document.getElementById('mini-bigger')?.addEventListener('click', () => zoomGame(1));
     // Muse waves when pinched.
-    document.getElementById('muse')?.addEventListener('click', () => this.muse.wave());
+    // A pinch on Muse: a wave and its hello, out loud (a pinch lets the page play sound).
+    document.getElementById('muse')?.addEventListener('click', () => {
+      this.muse.wave();
+      playAppClip(MUSE_HELLO_CLIP);
+    });
     this.renderCards();
     void this.refreshCourses();
   }

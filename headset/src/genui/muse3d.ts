@@ -1,15 +1,18 @@
 import {
-  BackSide,
   BufferGeometry,
+  CanvasTexture,
   CapsuleGeometry,
   CircleGeometry,
-  Color,
   DoubleSide,
   Group,
   LatheGeometry,
   Mesh,
   MeshBasicMaterial,
+  MeshMatcapMaterial,
+  PlaneGeometry,
+  SRGBColorSpace,
   SphereGeometry,
+  type Texture,
   TorusGeometry,
   Vector2,
   Vector3,
@@ -17,16 +20,23 @@ import {
 import { COLORS } from './brand';
 
 /**
- * Muse in 3D: the mascot's own design (mascot.ts) as a small toy, for the headset dashboard and the start page.
- * A white gumdrop body with big eyes, a smile and stubby arms, outlined in ink with a white rim, like the
- * stickers. Colours are flat with one baked shade (lit from the upper left), so Muse looks the same under any scene
- * light. One unit tall, standing on its origin, facing +Z.
+ * Muse in 3D: the mascot's own design (mascot.ts) as a small soft vinyl toy, for the headset dashboard and the start
+ * page. A white gumdrop body with big glossy eyes, a smile and stubby arms. Its shading is a matcap (a lit sphere
+ * drawn once on a canvas: a key light from the upper left, a cool shade, a glossy highlight and a rim of light), so
+ * Muse looks round and the same under any scene light, with no outline; a soft shadow sits under it. One unit tall,
+ * standing on its origin, facing +Z.
  *
  * It watches a point (the player's head, or the pointer), blinks, breathes, waves when asked, bobs and looks up
  * while a game is being made, and hops with an open mouth when one is ready.
  */
 
 export type MuseMood = 'idle' | 'thinking' | 'cheer';
+
+/**
+ * Muse's spoken hello, "Hi! I'm Muse! What do you wonder about?": a clip made once with the voice tutor's voice
+ * (Deepgram Aura, aura-2-asteria-en), played by both hellos (muse-intro.ts and the room view's dashboard).
+ */
+export const MUSE_HELLO_CLIP = `${import.meta.env.BASE_URL}audio/muse-hello.mp3`;
 
 export type Muse3D = {
   object: Group;
@@ -35,55 +45,76 @@ export type Muse3D = {
   wave(): void;
 };
 
-const LIGHT = new Vector3(-0.5, 0.8, 0.6).normalize();
-const OUTLINE = 0.03;
-const RIM = 0.035;
-
-/** A colour that turns to its shade (a colour, or how much darker) where the surface faces away from the light. */
-function shaded(geometry: BufferGeometry, colour: string, shade: number | string = 0.78): MeshBasicMaterial {
-  const base = new Color(colour);
-  const dark = typeof shade === 'string' ? new Color(shade) : base.clone().multiplyScalar(shade);
-  const normals = geometry.getAttribute('normal');
-  const colours = new Float32Array(normals.count * 3);
-  const n = new Vector3();
-  const mixed = new Color();
-  for (let i = 0; i < normals.count; i++) {
-    n.fromBufferAttribute(normals, i);
-    // A soft edge between the two tones: a hard one shows the mesh's triangles.
-    const c = mixed.copy(base).lerp(dark, Math.min(1, Math.max(0, (0.05 - n.dot(LIGHT)) / 0.45)));
-    colours.set([c.r, c.g, c.b], i * 3);
-  }
-  geometry.setAttribute('color', new (normals.constructor as typeof import('three').BufferAttribute)(colours, 3));
-  return new MeshBasicMaterial({ vertexColors: true, toneMapped: false });
-}
-
-/** An outline: the same shape pushed out along its normals, drawn from the inside. */
-function outline(geometry: BufferGeometry, width = OUTLINE, colour: string = COLORS.ink): Mesh {
-  const hull = geometry.clone();
-  hull.deleteAttribute('color');
-  const position = hull.getAttribute('position');
-  const normals = hull.getAttribute('normal');
-  for (let i = 0; i < position.count; i++) {
-    position.setXYZ(i, position.getX(i) + normals.getX(i) * width, position.getY(i) + normals.getY(i) * width, position.getZ(i) + normals.getZ(i) * width);
-  }
-  return new Mesh(hull, new MeshBasicMaterial({ color: colour, side: BackSide, toneMapped: false }));
-}
-
 /**
- * A part in its colour with the ink outline; `rim` adds the white sticker edge outside the ink. The rims are drawn
- * before the rest and write no depth, so the body's and the arms' rims join into one edge around the whole of Muse.
+ * A matcap: how a sphere of this surface looks, lit from the upper left. `base` is the lit colour, `shade` the cool
+ * colour it turns away from the light, `gloss` how strong the highlight is. Drawn once per surface, shared.
  */
-function part(geometry: BufferGeometry, colour: string, { shade, rim = false }: { shade?: number | string; rim?: boolean } = {}): Group {
-  const group = new Group();
-  group.add(new Mesh(geometry, shaded(geometry, colour, shade)));
-  group.add(outline(geometry));
-  if (rim) {
-    const edge = outline(geometry, OUTLINE + RIM, COLORS.paper);
-    (edge.material as MeshBasicMaterial).depthWrite = false;
-    edge.renderOrder = -1;
-    group.add(edge);
-  }
-  return group;
+function matcap(base: string, shade: string, gloss: number, rim: string): Texture {
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const g = canvas.getContext('2d')!;
+  const c = size / 2;
+  // The body of the light: bright toward the upper left, into the shade at the lower right.
+  const body = g.createRadialGradient(c * 0.72, c * 0.62, size * 0.02, c, c, c);
+  body.addColorStop(0, base);
+  body.addColorStop(0.55, base);
+  body.addColorStop(1, shade);
+  g.fillStyle = body;
+  g.fillRect(0, 0, size, size);
+  // A rim of reflected light along the lower right edge, so the silhouette reads round.
+  const edge = g.createRadialGradient(c * 1.18, c * 1.22, c * 0.6, c, c, c);
+  edge.addColorStop(0, 'rgba(0,0,0,0)');
+  edge.addColorStop(0.85, 'rgba(0,0,0,0)');
+  edge.addColorStop(1, rim);
+  g.fillStyle = edge;
+  g.fillRect(0, 0, size, size);
+  // The glossy highlight: a soft spot up and to the left.
+  const spot = g.createRadialGradient(c * 0.66, c * 0.52, 0, c * 0.66, c * 0.52, size * 0.2);
+  spot.addColorStop(0, `rgba(255,255,255,${gloss})`);
+  spot.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = spot;
+  g.fillRect(0, 0, size, size);
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  return texture;
+}
+
+let surfaces: { vinyl: Texture; gloss: Texture; white: Texture } | null = null;
+/** The three surfaces Muse is made of (drawn the first time a Muse is made). */
+function toy() {
+  surfaces ??= {
+    vinyl: matcap('#ffffff', '#b9cde3', 0.85, 'rgba(225,240,255,0.9)'),
+    gloss: matcap('#3a2f63', COLORS.ink, 0.95, 'rgba(120,110,170,0.6)'),
+    white: matcap('#ffffff', '#d7e2ee', 0.9, 'rgba(235,245,255,0.8)'),
+  };
+  return surfaces;
+}
+
+const lit = (surface: Texture) => new MeshMatcapMaterial({ matcap: surface, toneMapped: false });
+
+/** A part of the vinyl body. */
+function part(geometry: BufferGeometry): Mesh {
+  return new Mesh(geometry, lit(toy().vinyl));
+}
+
+/** A soft round shadow on the ground under Muse. */
+function groundShadow(): Mesh {
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const g = canvas.getContext('2d')!;
+  const fade = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  fade.addColorStop(0, 'rgba(18,6,59,0.32)');
+  fade.addColorStop(0.6, 'rgba(18,6,59,0.14)');
+  fade.addColorStop(1, 'rgba(18,6,59,0)');
+  g.fillStyle = fade;
+  g.fillRect(0, 0, size, size);
+  const shadow = new Mesh(new PlaneGeometry(1.15, 0.8), new MeshBasicMaterial({ map: new CanvasTexture(canvas), transparent: true, depthWrite: false, toneMapped: false }));
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.004;
+  shadow.renderOrder = -1;
+  return shadow;
 }
 
 const flat = (colour: string, opacity = 1) =>
@@ -101,11 +132,14 @@ export function createMuse3D(): Muse3D {
   for (let i = 0; i <= 6; i++) { const a = (i / 6) * (Math.PI / 2); profile.push(new Vector2(0.4 + Math.sin(a) * 0.08, 0.08 - Math.cos(a) * 0.08)); }
   for (let i = 1; i <= 4; i++) profile.push(new Vector2(0.48 - i * 0.003, 0.08 + i * 0.105));
   for (let i = 1; i <= 14; i++) { const a = (i / 14) * (Math.PI / 2); profile.push(new Vector2(Math.max(0.0001, 0.468 * Math.cos(a)), 0.5 + 0.47 * Math.sin(a))); }
+  // The lathe's own normals are smooth across the seam where it closes; turned, the seam is at the back.
   const shell = new LatheGeometry(profile, 56);
-  shell.computeVertexNormals();
-  const trunk = part(shell, COLORS.muse, { shade: COLORS.museShade, rim: true });
+  shell.rotateY(Math.PI);
+  const trunk = part(shell);
   trunk.scale.set(1, 1, 0.82);
   body.add(trunk);
+  // The shadow stays on the ground while the body hops.
+  object.add(groundShadow());
 
   // Eyes: two domes seated on the body and turned with its curve, an ink one with a smaller white one in front,
   // so an ink ring always frames the white (an outline drawn round one dome fell behind the curve of the white
@@ -120,16 +154,16 @@ export function createMuse3D(): Muse3D {
     eye.position.set(x, 0, 0.82 * Math.sqrt(0.463 ** 2 - x ** 2) + 0.012);
     eye.rotation.y = Math.sign(x) * 0.32;
     const dome = new SphereGeometry(1, 32, 20);
-    const ring = new Mesh(dome, flat(COLORS.ink));
+    const ring = new Mesh(dome, lit(toy().gloss));
     ring.scale.set(0.126, 0.151, 0.034);
     eye.add(ring);
     const sclera = new SphereGeometry(1, 32, 20);
-    const white = new Mesh(sclera, shaded(sclera, COLORS.paper, 0.92));
+    const white = new Mesh(sclera, lit(toy().white));
     white.scale.set(0.111, 0.136, 0.042);
     eye.add(white);
     const pupil = new Group();
     pupil.position.z = 0.038;
-    const dot = new Mesh(new SphereGeometry(0.055, 20, 14), flat(COLORS.ink));
+    const dot = new Mesh(new SphereGeometry(0.055, 20, 14), lit(toy().gloss));
     dot.scale.z = 0.4;
     pupil.add(dot);
     const glint = new Mesh(new SphereGeometry(0.018, 12, 8), flat(COLORS.paper));
@@ -154,7 +188,7 @@ export function createMuse3D(): Muse3D {
   const arm = (side: -1 | 1) => {
     const shoulder = new Group();
     shoulder.position.set(side * 0.43, 0.36, 0.05);
-    const limb = part(new CapsuleGeometry(0.055, 0.1, 6, 16), COLORS.muse, { shade: COLORS.museShade, rim: true });
+    const limb = part(new CapsuleGeometry(0.055, 0.1, 6, 16));
     limb.position.set(side * 0.06, -0.06, 0);
     limb.rotation.z = side * 0.75;
     shoulder.add(limb);

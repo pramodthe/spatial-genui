@@ -65,11 +65,15 @@ function audio(): { ctx: AudioContext; out: GainNode } | null {
 
 const appClips = new Map<string, Promise<AudioBuffer | null>>();
 
+const CLIP_WAIT_MS = 1500; // how long a clip waits for the audio to start; later it would be out of place
+
 /**
  * Play a sound file shipped with the app (under public/) once, `delay` seconds from now, through the app's audio:
- * Muse's spoken hello. Silent where the browser allows no sound yet (nothing has been tapped on the page).
+ * Muse's spoken hello. Silent where the browser allows no sound yet (nothing has been tapped on the page): a clip
+ * that cannot start within a moment is dropped, not played at the next tap.
  */
 export function playAppClip(url: string, delay = 0): void {
+  const asked = performance.now();
   const a = audio();
   if (!a) return;
   let pending = appClips.get(url);
@@ -89,7 +93,7 @@ export function playAppClip(url: string, delay = 0): void {
       source.start(a.ctx.currentTime + delay);
     };
     if (a.ctx.state === 'running') play();
-    else a.ctx.resume().then(() => { if (a.ctx.state === 'running') play(); }).catch(() => {});
+    else a.ctx.resume().then(() => { if (a.ctx.state === 'running' && performance.now() - asked < CLIP_WAIT_MS) play(); }).catch(() => {});
   });
 }
 

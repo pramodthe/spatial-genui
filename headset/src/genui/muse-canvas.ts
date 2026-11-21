@@ -1,11 +1,12 @@
 import { PerspectiveCamera, Scene, Vector3, WebGLRenderer } from 'three';
 import { MASCOT_NAME } from './brand';
-import { createMuse3D, type MuseMood } from './muse3d';
+import { MUSE_HELLO_CLIP, createMuse3D, type MuseMood } from './muse3d';
+import { playAppClip } from './sound';
 
 /**
  * Muse in 3D for the 2D start page: a small transparent canvas of its own. The eyes follow the pointer anywhere on
  * the page, or a thing it is attending to (the question box while the player types, with a nod at each word). Each
- * tap does something else (a wave, a happy hop, a spin), and it takes a mood: thinking while a game is being made, a
+ * tap does something else (a wave and its hello out loud, a happy hop, a spin), and it takes a mood: thinking while a game is being made, a
  * cheer when one is asked for or ready. It draws only while it is on screen; with reduced motion it stays still
  * apart from its eyes.
  */
@@ -67,7 +68,10 @@ export function createMuseCanvas(): MuseCanvas {
   element.addEventListener('click', () => {
     if (still) return;
     const reaction = taps++ % 3;
-    if (reaction === 0) muse.wave();
+    if (reaction === 0) {
+      muse.wave();
+      playAppClip(MUSE_HELLO_CLIP); // a tap lets the page play sound
+    }
     else if (reaction === 1) cheerFor = CHEER_S;
     else spinFor = SPIN_S;
   });

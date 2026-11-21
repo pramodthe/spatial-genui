@@ -476,7 +476,11 @@ class LessonPickerSystem extends createSystem({
     document.getElementById('mini-smaller')?.addEventListener('click', () => zoomGame(-1));
     document.getElementById('mini-bigger')?.addEventListener('click', () => zoomGame(1));
     // Muse waves when pinched.
-    document.getElementById('muse')?.addEventListener('click', () => this.muse.wave());
+    // A pinch on Muse: a wave and its hello, out loud (a pinch lets the page play sound).
+    document.getElementById('muse')?.addEventListener('click', () => {
+      this.muse.wave();
+      playAppClip(MUSE_HELLO_CLIP);
+    });
     this.renderCards();
     void this.refreshCourses();
   }

@@ -1,5 +1,6 @@
-"""Games built by the pi runner (trial/pi-xr): one continuous agent session makes the game as a full IWSDK project,
-an independent check plays it with emulated hands, and its production build is served at /api/play/<id>/.
+"""Games and course levels built by the pi runner (trial/pi-xr): one continuous agent session makes the game as a full
+IWSDK project, an independent check plays it with emulated hands, and its production build is served as a page of its
+own (a game at /api/play/<id>/, a level at /api/learn/<course>/<index>/). One is built at a time.
 
 Chosen with GAME_MODE=pi. The game's model and reasoning level are the app's own (LLM_MODEL, LLM_REASONING_EFFORT);
 the runner keeps its own limits in minutes and dollars. It works on this machine only: it needs its starter project
@@ -46,6 +47,20 @@ FIX_PROMPT = (
 ANSWER_MAX = 400  # characters of the agent's last message shown to the player
 DOING_EVERY_S = 3.0  # how often a fix's live line is brought up to date with what the agent is doing
 _LOOK = re.compile(r"\s*(cd [^&]+&&\s*)?(ls|cat|grep|rg|find|sed|head|tail)\b")
+_one: asyncio.Lock | None = None
+
+
+def reset() -> None:
+    global _one
+    _one = None
+
+
+def _one_at_a_time() -> asyncio.Lock:
+    """Games and course levels are queued apart, but this machine has one emulator window (port 8091) for a runner."""
+    global _one
+    if _one is None:
+        _one = asyncio.Lock()
+    return _one
 
 
 def enabled() -> bool:
@@ -211,8 +226,14 @@ async def _stop(process: asyncio.subprocess.Process) -> None:
 
 
 async def build(game: dict[str, Any], watcher: Live, follow_up: str | None = None) -> dict[str, Any]:
-    """Build one game with the runner, or with `follow_up` fix a built one in its own session. A fix that does not
-    pass the check leaves the game's build as it was. { ok, url?, title?, answer?, error?, model, usd }."""
+    """Build one game (or course level: its `id` is the runner's name for it) with the runner, or with `follow_up` fix a
+    built one in its own session, after any build already running. A fix that does not pass the check leaves the
+    build as it was. { ok, url?, title?, answer?, error?, model, usd }; `url` is a game's page."""
+    async with _one_at_a_time():
+        return await _build(game, watcher, follow_up)
+
+
+async def _build(game: dict[str, Any], watcher: Live, follow_up: str | None) -> dict[str, Any]:
     if not (archive() / "template" / ".pi-xr-template.json").exists():
         raise RuntimeError(
             "The pi runner has no starter project: run trial/pi-xr/runner/make-template.mjs once, "

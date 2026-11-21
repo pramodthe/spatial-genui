@@ -1,7 +1,9 @@
-"""Games built by the pi runner (GAME_MODE=pi), with a stand-in for the runner: no agent, no model, no emulator."""
+"""Games and course levels built by the pi runner (GAME_MODE=pi), with a stand-in for the runner: no agent, no model,
+no emulator."""
 
 from __future__ import annotations
 
+import asyncio
 import json
 import sqlite3
 import sys
@@ -12,11 +14,12 @@ from fastapi.testclient import TestClient
 
 from app.core import db, guard
 from app.core.clock import now_iso
-from app.core.db import save_game
-from app.services import games, pi_build
+from app.core.db import save_course, save_game
+from app.services import courses, games, pi_build
 
 # What the real runner leaves behind for a game: a production build, a design document, and a results row. With
 # --continue it is a follow-up in the game's session: it builds again, and its row's art total includes the build's.
+# Like the real one, it cannot run beside another runner (one emulator window); STAND_IN_SLOW keeps it running longer.
 STAND_IN = r'''
 import json, os, signal, sys, time
 from pathlib import Path
@@ -31,10 +34,17 @@ if os.environ.get("STAND_IN_CRASH") == "1":  # the runner throws before it start
     print("file:///runner/run.mjs:69\nthrow new Error(`Port 8091 is taken`);\n^\n\nError: Port 8091 is taken by another process: the trial's runtime cannot start.\n    at run.mjs:69:33\n\nNode.js v22.20.0", flush=True)
     sys.exit(1)
 archive = Path(os.environ["PI_XR_ARCHIVE"])
+busy = archive / "busy"
+try:  # made only if it is not there, in one step: two runners started together cannot both make it
+    os.close(os.open(busy, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+except FileExistsError:
+    print("Error: another runner is running", flush=True)
+    sys.exit(1)
+time.sleep(float(os.environ.get("STAND_IN_SLOW") or 0))
 if continuing:
     assert os.environ["STAND_IN_FIX"] in request and "screenshot" in request and "playtest_replay" in request, request
 else:
-    assert request == os.environ["STAND_IN_REQUEST"]
+    assert request in os.environ["STAND_IN_REQUEST"].split("\n|\n"), request
 passed = os.environ.get("STAND_IN_FAIL") != "1"
 print(f"[{game_id}] 1.0 min, 4 turns, 6 tool calls, $0.010 (0 pictures, 0 models), last tool: write", flush=True)
 print(f"[{game_id}] the agent stopped after 2.0 min (stop); checking the game ...", flush=True)
@@ -50,6 +60,7 @@ row = {"name": game_id, "continued": continuing, "started": f"{time.time():.6f}"
        "answer": "The legs made a V,\nso I turned them into an A." if continuing else "Built it."}
 with open(archive / "results.jsonl", "a") as rows:
     rows.write(json.dumps(row) + "\n")
+busy.unlink()
 sys.exit(0 if passed else 1)
 '''
 
@@ -158,7 +169,8 @@ def test_the_game_page_is_served_with_a_way_back(pi_mode: Path) -> None:
         assert "Back to the Lab" in page.text and "./assets/app.js" in page.text
         assert 'id="lab-fix"' in page.text and "Something wrong? Tell Muse" in page.text
         assert "#lab-fix[hidden]{display:none!important}" in page.text  # closed until its button opens it
-        assert f'const id = "{game["id"]}"' in page.text  # the box asks about this game, on its own page
+        assert f'"record": "/api/games/{game["id"]}", "level": null' in page.text  # the box asks about this game
+        assert "Next level" not in page.text
         policy = page.headers["content-security-policy"]
         assert f"connect-src testserver/api/play/{game['id']}/ " in policy and "'self'" not in policy.split("frame-ancestors")[0]
         # Of the Lab's API, the page reaches only its own record and fix.
@@ -184,6 +196,9 @@ def test_a_database_from_before_gets_the_new_columns(tmp_path: Path) -> None:
     opened = db._connect(old)
     columns = {row["name"] for row in opened.execute("PRAGMA table_info(games)")}
     assert {"builder", "url", "fixing", "fixes", "note"} <= columns
+    lessons = {row["name"] for row in opened.execute("PRAGMA table_info(lessons)")}
+    assert {"builder", "url", "fixing", "fixes", "note"} <= lessons
+    assert "builder" in {row["name"] for row in opened.execute("PRAGMA table_info(courses)")}
     assert opened.execute("SELECT code FROM games WHERE id = 'abcd1241'").fetchone()["code"] == "code"
     opened.close()
 
@@ -376,3 +391,210 @@ def test_a_showcase_page_is_served_with_a_way_back_and_nothing_to_fix(tmp_path: 
         assert client.get("/api/showcase/no-such-game/").status_code == 404
         assert client.get("/api/showcase/Fox_Trail/").status_code == 404
         assert client.get("/api/showcase/fox-trail/..%2F..%2Fsecret.txt").status_code in (403, 404)
+
+
+# ---- course levels ----
+
+LOOK = ("\nDraw it in the Soft clay look, like every level of this course: start with "
+        "`node /skills/play/learning-game/scripts/new-game.mjs soft-clay /work/module.js` and draw it with the soft-clay "
+        "skill; finish with `node /skills/play/learning-game/scripts/check.mjs /work/module.js`.")
+
+
+def _course(*lessons: dict, style: str | None = "soft-clay") -> dict:
+    """A planned course of two levels (as plan() leaves it), each as given over a pending one."""
+    rows = []
+    for index in range(2):
+        prompt = (f"Pump a tyre, level {index + 1}.\n(This is lesson {index + 1} of 2 in the course \"Pumps\": Push, "
+                  f"Pull. Cover only this lesson's idea.)") + (LOOK if style else "")
+        rows.append({"title": ["Push", "Pull"][index], "objective": "After this you can pump.", "prompt": prompt,
+                     "status": "pending", **(lessons[index] if index < len(lessons) else {})})
+    save_course({"id": "c0ffee01", "request": "pumps", "title": "Pumps", "subtitle": "", "status": "building",
+                 "createdAt": now_iso(), **({"style": style} if style else {}), "lessons": rows})
+    course = courses.get_course("c0ffee01")
+    assert course is not None
+    return course
+
+
+async def _level(course: dict, index: int) -> dict:
+    courses.queue(course, index, True)
+    assert courses._tail is not None
+    await courses._tail
+    return course["lessons"][index]
+
+
+def _page(name: str, text: str = "first") -> None:
+    dist = pi_build.dist_dir(name)
+    (dist / "assets").mkdir(parents=True, exist_ok=True)
+    (dist / "index.html").write_text(f"<html><body>{text}<script src='./assets/app.js'></script></body></html>")
+    (dist / "assets" / "app.js").write_text("console.log('level')")
+
+
+def test_a_level_asks_the_runner_for_its_look_in_plain_words(pi_mode: Path) -> None:
+    course = _course()
+    request = courses.pi_request(course["lessons"][1])
+    assert request.startswith("Pump a tyre, level 2.\n(This is lesson 2 of 2 in the course")
+    assert request.endswith("Cover only this lesson's idea.)\nDraw it in the Soft clay look, like every level of this course.")
+    assert "/skills/" not in request and "module.js" not in request
+    assert courses.pi_request({"prompt": "Pump a tyre.\n(This is lesson 1 of 2.)"}) == "Pump a tyre.\n(This is lesson 1 of 2.)"
+
+
+@pytest.mark.asyncio
+async def test_a_course_level_is_built_by_the_runner_as_a_page_of_its_own(pi_mode: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    course = _course()
+    monkeypatch.setenv("STAND_IN_REQUEST", courses.pi_request(course["lessons"][0]))
+    before = guard.spend_today()["usd"]
+    level = await _level(course, 0)
+    assert level["builder"] == "pi"
+    assert level["status"] == "ready", level.get("error")
+    assert level["url"] == "/api/learn/c0ffee01/0/" and "code" not in level
+    assert level["title"] == "Push" and level["model"] == "meta/muse-ember-1.0"
+    assert pi_build.dist_dir("c0ffee01-0").joinpath("index.html").exists()
+    assert guard.spend_today()["usd"] == pytest.approx(before + 0.25, abs=0.01)
+    assert course["status"] == "building"  # its second level is still to make
+    courses.reset()
+    again = courses.get_course("c0ffee01")
+    assert again is not None and again["lessons"][0]["url"] == level["url"] and again["lessons"][0]["builder"] == "pi"
+
+
+@pytest.mark.asyncio
+async def test_a_level_that_fails_its_check_fails_with_the_reason(pi_mode: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    course = _course()
+    monkeypatch.setenv("STAND_IN_REQUEST", courses.pi_request(course["lessons"][0]))
+    monkeypatch.setenv("STAND_IN_FAIL", "1")
+    level = await _level(course, 0)
+    assert level["status"] == "failed" and "GameState did not change" in level["error"]
+    assert "url" not in level
+
+
+@pytest.mark.asyncio
+async def test_a_game_and_a_level_are_built_one_after_the_other(pi_mode: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    course = _course()
+    monkeypatch.setenv("STAND_IN_REQUEST", f"teach me how a bike pump works\n|\n{courses.pi_request(course['lessons'][0])}")
+    monkeypatch.setenv("STAND_IN_SLOW", "0.5")
+    game = games.start_game("teach me how a bike pump works")
+    courses.queue(course, 0)
+    assert games._tail is not None and courses._tail is not None
+    await asyncio.gather(games._tail, courses._tail)
+    built = games.get_game(game["id"])
+    assert built is not None and built["status"] == "ready", built.get("error")
+    assert course["lessons"][0]["status"] == "ready", course["lessons"][0].get("error")
+
+
+@pytest.mark.asyncio
+async def test_without_the_setting_a_level_takes_the_usual_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GAME_MODE", raising=False)
+    monkeypatch.setenv("DESIGN_MODE", "json")
+
+    async def _usual(_request: str, **_kwargs):
+        return {"ok": False, "error": "the usual pipeline ran", "attempts": [], "model": "test"}
+
+    monkeypatch.setattr(courses, "run_lesson", _usual)
+    course = _course(style=None)
+    level = await _level(course, 0)
+    assert "builder" not in level and "the usual pipeline ran" in level["error"]
+
+
+def test_a_level_page_has_the_way_back_its_fix_box_and_the_next_level_once_ready(pi_mode: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _course({"status": "ready", "builder": "pi", "url": courses.level_url("c0ffee01", 0)})
+    _page("c0ffee01-0")
+    opened: list[tuple[int, bool]] = []
+    monkeypatch.setattr(courses, "queue", lambda _course, index, retry=False: opened.append((index, retry)))
+    db.close_db()
+    from app.main import app
+
+    with TestClient(app) as client:
+        page = client.get("/api/learn/c0ffee01/0/")
+        assert page.status_code == 200
+        assert "Back to the Lab" in page.text and "./assets/app.js" in page.text and "Next level" not in page.text
+        assert 'id="lab-fix"' in page.text and '"record": "/api/courses/c0ffee01", "level": 0' in page.text
+        policy = page.headers["content-security-policy"]
+        assert "connect-src testserver/api/learn/c0ffee01/0/ " in policy
+        assert (" testserver/api/courses/c0ffee01 testserver/api/courses/c0ffee01/lessons/0/fix "
+                "testserver/api/live/course-c0ffee01-0 ") in policy
+        assert "testserver/api/courses/ " not in policy and "testserver/api/ " not in policy
+        assert opened == [(0, True), (1, False)]  # opening its page opens the level: the next one starts
+        assert client.get("/api/learn/c0ffee01/0/assets/app.js").status_code == 200
+        assert opened == [(0, True), (1, False)]  # its files do not open it again
+        assert client.get("/api/learn/c0ffee01/0", follow_redirects=False).headers["location"] == "/api/learn/c0ffee01/0/"
+        assert client.get("/api/learn/c0ffee01/1/").status_code == 404  # not made yet
+        assert client.get("/api/learn/c0ffee01/7/").status_code == 404
+        assert client.get("/api/learn/not-hex!/0/").status_code == 404
+        assert client.get("/api/learn/c0ffee01/0/..%2F..%2F..%2Ftemplate%2F.pi-xr-template.json").status_code in (403, 404)
+        course = courses.get_course("c0ffee01")
+        assert course is not None
+        course["lessons"][1].update(status="ready", builder="pi", url=courses.level_url("c0ffee01", 1))
+        _page("c0ffee01-1")
+        page = client.get("/api/learn/c0ffee01/0/")
+        assert 'href="/api/learn/c0ffee01/1/"' in page.text and "Next level" in page.text
+        last = client.get("/api/learn/c0ffee01/1/")
+        assert last.status_code == 200 and "Next level" not in last.text  # the course's last level
+
+
+@pytest.mark.asyncio
+async def test_a_level_fix_continues_its_own_session(pi_mode: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    course = _course()
+    monkeypatch.setenv("STAND_IN_REQUEST", courses.pi_request(course["lessons"][0]))
+    level = await _level(course, 0)
+    text = "The nut does not crack when the pebble hits it."
+    monkeypatch.setenv("STAND_IN_FIX", text)
+    assert courses.fix_lesson(course, 0, text) is True
+    assert level["status"] == "generating" and level["fixing"] == text
+    assert courses._tail is not None
+    await courses._tail
+    assert level["status"] == "ready" and level["fixes"] == 1 and "fixing" not in level
+    assert level["note"] == "The legs made a V, so I turned them into an A."
+    assert level["url"] == "/api/learn/c0ffee01/0/"
+    assert "fixed" in pi_build.dist_dir("c0ffee01-0").joinpath("index.html").read_text()
+    assert text in (pi_mode / "requests" / "c0ffee01-0-fix-1.txt").read_text()
+
+
+@pytest.mark.asyncio
+async def test_a_level_fix_that_fails_leaves_the_level_as_it_was(pi_mode: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    course = _course()
+    monkeypatch.setenv("STAND_IN_REQUEST", courses.pi_request(course["lessons"][0]))
+    level = await _level(course, 0)
+    first = pi_build.dist_dir("c0ffee01-0").joinpath("index.html").read_text()
+    monkeypatch.setenv("STAND_IN_FIX", "make the nut softer")
+    monkeypatch.setenv("STAND_IN_FAIL", "1")
+    assert courses.fix_lesson(course, 0, "make the nut softer") is True
+    assert courses._tail is not None
+    await courses._tail
+    assert level["status"] == "ready" and "did not work" in level["note"] and not level.get("fixes")
+    assert pi_build.dist_dir("c0ffee01-0").joinpath("index.html").read_text() == first
+
+
+def test_only_a_ready_pi_level_can_be_fixed(pi_mode: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    course = _course({"status": "ready", "code": "export default function build() {}"})
+    assert courses.fix_lesson(course, 0, "anything") is False  # written by the agent writer
+    assert courses.fix_lesson(course, 1, "anything") is False  # not made yet
+    assert courses.fix_lesson(course, 5, "anything") is False
+    db.close_db()
+    from app.main import app
+
+    async def _admit(_visitor: str, _text: str) -> None:
+        return None
+
+    monkeypatch.setattr(guard, "admit", _admit)
+    with TestClient(app) as client:
+        assert client.post("/api/courses/c0ffee01/lessons/1/fix", json={"text": "fix it"}).status_code == 409
+        assert client.post("/api/courses/c0ffee01/lessons/1/fix", json={"text": " "}).status_code == 400
+        assert client.post("/api/courses/c0ffee01/lessons/1/fix", json={"text": "x" * 501}).status_code == 400
+        assert client.post("/api/courses/00000000/lessons/0/fix", json={"text": "fix it"}).status_code == 404
+        assert client.post("/api/courses/c0ffee01/lessons/12/fix", json={"text": "fix it"}).status_code == 404
+
+
+def test_a_level_cut_off_by_a_restart_is_failed_or_given_back_as_it_was(pi_mode: Path) -> None:
+    _page("c0ffee01-1", "half built")
+    previous = pi_mode / "games" / "c0ffee01-1" / "dist-previous"
+    previous.mkdir()
+    (previous / "index.html").write_text("as it was")
+    course = _course({"status": "generating", "builder": "pi"},  # saved as the server left it, then loaded
+                     {"status": "generating", "builder": "pi", "url": courses.level_url("c0ffee01", 1), "fixing": "softer nut"})
+    built, fixed = course["lessons"]
+    assert built["status"] == "failed" and "restarted" in built["error"]
+    assert fixed["status"] == "ready" and "restarted" in fixed["note"] and "fixing" not in fixed
+    assert pi_build.dist_dir("c0ffee01-1").joinpath("index.html").read_text() == "as it was"
+    assert courses._tail is None and not courses._deferred  # nothing is built again until it is opened
+    courses.reset()
+    again = courses.get_course("c0ffee01")
+    assert again is not None and again["lessons"][0]["status"] == "failed"  # saved as such

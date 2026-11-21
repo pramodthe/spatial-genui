@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS courses (
   status TEXT NOT NULL,
   error TEXT,
   created_at TEXT NOT NULL,
-  model TEXT
+  model TEXT,
+  builder TEXT
 );
 CREATE TABLE IF NOT EXISTS lessons (
   course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
@@ -36,6 +37,11 @@ CREATE TABLE IF NOT EXISTS lessons (
   polish TEXT,
   first_code TEXT,
   critique TEXT,
+  builder TEXT,
+  url TEXT,
+  fixing TEXT,
+  fixes INTEGER,
+  note TEXT,
   PRIMARY KEY (course_id, idx)
 );
 CREATE TABLE IF NOT EXISTS games (
@@ -56,7 +62,8 @@ CREATE TABLE IF NOT EXISTS games (
 );
 """
 # Columns added after the first release, with their types: a database made before them gets them when it opens.
-LATER_COLUMNS = {"games": {"builder": "TEXT", "url": "TEXT", "fixing": "TEXT", "fixes": "INTEGER", "note": "TEXT"}}
+PAGE_COLUMNS = {"builder": "TEXT", "url": "TEXT", "fixing": "TEXT", "fixes": "INTEGER", "note": "TEXT"}  # a pi build
+LATER_COLUMNS = {"games": PAGE_COLUMNS, "lessons": PAGE_COLUMNS, "courses": {"builder": "TEXT"}}
 
 _conn: sqlite3.Connection | None = None
 
@@ -110,6 +117,11 @@ def _lesson_from_row(row: sqlite3.Row) -> dict[str, Any]:
         "polish": row["polish"],
         "firstCode": row["first_code"],
         "critique": row["critique"],
+        "builder": row["builder"],
+        "url": row["url"],
+        "fixing": row["fixing"],
+        "fixes": row["fixes"],
+        "note": row["note"],
     }))
     return lesson
 
@@ -130,7 +142,7 @@ def load_courses() -> list[dict[str, Any]]:
             "createdAt": row["created_at"],
         }
         model = json.loads(row["model"]) if row["model"] else None
-        course.update(omit_null({"error": row["error"], "model": model}))
+        course.update(omit_null({"error": row["error"], "model": model, "builder": row["builder"]}))
         course["lessons"] = lessons.get(row["id"], [])
         courses.append(course)
     return courses
@@ -141,24 +153,26 @@ def save_course(course: dict[str, Any]) -> None:
     conn.execute("BEGIN")
     try:
         conn.execute(
-            """INSERT INTO courses (id, request, title, subtitle, status, error, created_at, model) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """INSERT INTO courses (id, request, title, subtitle, status, error, created_at, model, builder) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(id) DO UPDATE SET request = excluded.request, title = excluded.title, subtitle = excluded.subtitle,
-                 status = excluded.status, error = excluded.error, model = excluded.model""",
+                 status = excluded.status, error = excluded.error, model = excluded.model, builder = excluded.builder""",
             (
                 course["id"], course["request"], course["title"], course.get("subtitle") or "", course["status"],
                 course.get("error"), course["createdAt"],
-                json.dumps(course["model"]) if course.get("model") is not None else None,
+                json.dumps(course["model"]) if course.get("model") is not None else None, course.get("builder"),
             ),
         )
         conn.execute("DELETE FROM lessons WHERE course_id = ?", (course["id"],))
         for index, lesson in enumerate(course.get("lessons") or []):
             conn.execute(
-                """INSERT INTO lessons (course_id, idx, title, kind, objective, prompt, status, error, code, model, seconds, generated_at, polish, first_code, critique)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                """INSERT INTO lessons (course_id, idx, title, kind, objective, prompt, status, error, code, model, seconds, generated_at, polish, first_code, critique,
+                                        builder, url, fixing, fixes, note)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     course["id"], index, lesson["title"], None, lesson.get("objective") or "", lesson.get("prompt") or "",
                     lesson["status"], lesson.get("error"), lesson.get("code"), lesson.get("model"), lesson.get("seconds"),
                     lesson.get("generatedAt"), lesson.get("polish"), lesson.get("firstCode"), lesson.get("critique"),
+                    lesson.get("builder"), lesson.get("url"), lesson.get("fixing"), lesson.get("fixes"), lesson.get("note"),
                 ),
             )
         conn.execute("COMMIT")

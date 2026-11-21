@@ -1,4 +1,5 @@
-"""Saved games. One is written at a time, on its own queue, apart from course lessons.
+"""Saved games. One is written at a time, on its own queue, apart from course lessons (but a pi build waits for one of
+a course level: pi_build.build runs one at a time).
 
 A game started with GAME_MODE=pi is built by the pi runner (services/pi_build.py) and is a page of its own, served
 at its `url`. Such a build is not repeated without being asked for: a failed or interrupted one stays failed. A ready

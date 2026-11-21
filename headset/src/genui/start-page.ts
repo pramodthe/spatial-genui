@@ -277,8 +277,9 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
   const muse = createMuseCanvas();
   find('muse').appendChild(muse.element);
 
-  // Muse says hello: big in the middle, then home to its face on the logo (muse-intro.ts). Once a visit, and again
-  // from the logo; never with reduced motion. The Muse beside the question waits out of sight, then waves.
+  // Muse says hello: big in the middle, then home to its face on the logo (muse-intro.ts). Every time the Lab opens,
+  // once the page is on screen, and again from the logo; never with reduced motion. The Muse beside the question
+  // waits out of sight, then waves.
   const logo = find<HTMLButtonElement>('logo');
   const logoPicture = logo.querySelector('img')!;
   const hello = () => {
@@ -290,17 +291,14 @@ export function createStartPage(world: World, developerTools: HTMLElement) {
     });
   };
   logo.addEventListener('click', hello);
-  let greeted = false;
-  try {
-    greeted = sessionStorage.getItem('muse-hello') === '1';
-    sessionStorage.setItem('muse-hello', '1');
-  } catch {
-    // no storage (a private window): say hello anyway
-  }
-  if (!greeted) {
-    if (logoPicture.complete) hello();
-    else logoPicture.addEventListener('load', hello, { once: true });
-  }
+  // Once the logo has loaded (Muse runs to it) and the page is in front of the player (a tab opened behind, or a
+  // headset taken off, waits).
+  const helloWhenSeen = () => {
+    if (document.visibilityState === 'visible') hello();
+    else document.addEventListener('visibilitychange', helloWhenSeen, { once: true });
+  };
+  if (logoPicture.complete) helloWhenSeen();
+  else logoPicture.addEventListener('load', helloWhenSeen, { once: true });
 
   // Muse watches the question box while the player types, and nods along.
   const askInput = find<HTMLInputElement>('ask-input');
